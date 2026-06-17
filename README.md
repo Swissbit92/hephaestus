@@ -7,6 +7,7 @@ A small workshop of [Claude Code](https://code.claude.com) tools to keep your cr
 | **cms** | skill + hook | Context Management System — standardizes docs across repos for AI-agent token efficiency. Frontmatter linting, ADR scaffolding, drift detection, staleness-based archival. Enforces frontmatter on `docs/*.md` edits via a `PreToolUse` hook. |
 | **grill-me** | skill | Adversarial sparring partner — stress-tests a decision/plan before you commit (assumption audit, pre-mortem, outside view, falsifiable tripwires). |
 | **develop** | command | A structured development workflow — classify → research → architect → implement → QA → docs → completion, with gates between phases. |
+| **qa-gatekeeper** | agent | Skeptical QA gate used by `develop`'s Phase 4 — verifies stated changes, hunts bugs/orphaned code, runs tests, and returns PASS / CONDITIONAL PASS / REJECT. |
 
 ## Install
 
@@ -32,8 +33,9 @@ Then the tools are namespaced under the plugin:
   live in `state/sync_facts.yaml` and ship empty — add your own.
 - **develop** — the workflow *structure* is generic; the per-repo specifics
   (critical-logic paths, test commands, alignment questions) are marked `<...>`
-  for you to fill in. It uses a `qa-gatekeeper` agent if your project provides
-  one, otherwise it does QA directly.
+  for you to fill in. Its Phase 4 uses the bundled **qa-gatekeeper** agent.
+- **qa-gatekeeper** — generic; infers the project's test command from the repo.
+  Augment its quality standards with your repo's CLAUDE.md.
 
 ## cms state & persistence
 
@@ -59,7 +61,8 @@ whetstone/
     ├── skills/
     │   ├── cms/                         # SKILL.md + scripts/ + templates/ + state/
     │   └── grill-me/SKILL.md
-    └── commands/develop.md
+    ├── commands/develop.md
+    └── agents/qa-gatekeeper.md
 ```
 
 ## License
