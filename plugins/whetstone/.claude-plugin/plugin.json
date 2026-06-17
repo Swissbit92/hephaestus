@@ -1,0 +1,25 @@
+{
+  "name": "whetstone",
+  "description": "Keep your craft sharp: doc-discipline (cms), decision stress-testing (grill-me), and a structured development workflow (develop).",
+  "version": "0.1.0",
+  "author": {
+    "name": "Swissbit92"
+  },
+  "homepage": "https://github.com/Swissbit92/whetstone",
+  "repository": "https://github.com/Swissbit92/whetstone",
+  "license": "MIT",
+  "keywords": ["documentation", "workflow", "code-review", "adr", "claude-code"],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/cms/scripts/hook.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+# Runtime CMS state (size history). Ships the empty sync_facts.yaml starter only.
+plugins/whetstone/skills/cms/state/size_history.json

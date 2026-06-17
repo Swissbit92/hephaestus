@@ -1,0 +1,20 @@
+# CMS drift-detection facts.
+#
+# Each fact is a canonical value that tends to drift across docs (version
+# numbers, status strings, counts). `/whetstone:cms sync` scans every *.md
+# under the root and flags any captured value that disagrees with
+# expected_value, or any fact with multiple distinct values across files.
+#
+# Add facts as you discover drift. Format:
+#
+# facts:
+#   - name: portfolio-version
+#     pattern: 'portfolio v(\d+\.\d+\.\d+)'   # one capture group = the value
+#     expected_value: "1.13.1"                 # or null to only check internal consistency
+#     note: |
+#       Bump here whenever the deployed portfolio version changes.
+#
+# This starter ships empty — `sync` will report "no facts defined" until you
+# add some.
+
+facts:

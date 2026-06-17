@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "whetstone",
+  "owner": {
+    "name": "Swissbit92"
+  },
+  "description": "A small workshop of Claude Code tools to keep your craft sharp.",
+  "plugins": [
+    {
+      "name": "whetstone",
+      "source": "./plugins/whetstone",
+      "description": "Doc-discipline (cms), decision stress-testing (grill-me), and a structured development workflow (develop).",
+      "category": "productivity",
+      "tags": ["documentation", "workflow", "review"]
+    }
+  ]
+}
