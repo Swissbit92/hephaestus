@@ -65,6 +65,24 @@ whetstone/
     └── agents/qa-gatekeeper.md
 ```
 
+## Releasing
+
+The `version` in `plugin.json` is what triggers updates for installed users —
+pushing commits without bumping it does nothing for them. Use the helper, which
+keeps the manifest version and git tag in lockstep:
+
+```bash
+scripts/release.sh patch              # 0.1.0 -> 0.1.1
+scripts/release.sh minor              # 0.1.0 -> 0.2.0
+scripts/release.sh major              # 0.1.0 -> 1.0.0
+scripts/release.sh 1.2.3              # explicit version
+scripts/release.sh patch --dry-run    # preview, change nothing
+```
+
+It refuses to run unless you're on `main` with a clean tree, validates the
+plugin, then commits, tags `vX.Y.Z`, pushes, and creates a GitHub release with
+notes drawn from the commits since the last tag.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
