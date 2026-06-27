@@ -13,6 +13,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CMS_SCRIPTS = REPO_ROOT / "plugins" / "whetstone" / "skills" / "cms" / "scripts"
 SCRIPTS = REPO_ROOT / "scripts"
+SQLITE_RO = REPO_ROOT / "plugins" / "sqlite-readonly" / "servers" / "sqlite-readonly"
 
 # Isolate cms state writes (common.py creates STATE_DIR at import time).
 import os
@@ -26,3 +27,7 @@ if str(CMS_SCRIPTS) not in sys.path:
 # Make repo-level scripts importable (bump_version, ...).
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
+
+# Make the sqlite-readonly package importable (sqlite_readonly.validator, ...).
+if str(SQLITE_RO) not in sys.path:
+    sys.path.insert(0, str(SQLITE_RO))

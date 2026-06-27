@@ -1,0 +1,47 @@
+{
+  "name": "mcp-starter",
+  "description": "A minimal, working template for packaging a Python MCP server as a Claude Code plugin — userConfig credential injection, inline mcpServers, uv-isolated server, first-run hook, and a /setup wizard. Copy it to start your own.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Swissbit92"
+  },
+  "homepage": "https://github.com/Swissbit92/whetstone",
+  "repository": "https://github.com/Swissbit92/whetstone",
+  "license": "MIT",
+  "keywords": ["mcp", "template", "starter", "scaffold", "claude-code"],
+  "userConfig": {
+    "api_key": {
+      "type": "string",
+      "title": "Example API key",
+      "description": "Demo field showing how plugin config is injected into the server's environment. Optional; leave empty.",
+      "required": false
+    }
+  },
+  "mcpServers": {
+    "example": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}/servers/example",
+        "example-server"
+      ],
+      "env": {
+        "EXAMPLE_API_KEY": "${user_config.api_key}"
+      }
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/first-run.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

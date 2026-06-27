@@ -12,7 +12,8 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 | Plugin | Scope |
 |--------|-------|
 | **whetstone** | Generic, vendor-neutral craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper` |
-| *(more plugins land here as the marketplace grows)* | |
+| **sqlite-readonly** | Zero-config read-only SQLite MCP server (3-layer read-only, NL→SQL) |
+| **mcp-starter** | Template for packaging a Python MCP server as a plugin |
 
 ## Branch model (read before starting work)
 
@@ -73,11 +74,13 @@ whetstone/
 ├── CLAUDE.md                         # this file
 ├── CONTRIBUTING.md
 └── plugins/
-    └── whetstone/
-        ├── .claude-plugin/plugin.json
-        ├── skills/{cms,grill-me,start-branch,finish-branch}/
-        ├── commands/develop.md
-        └── agents/qa-gatekeeper.md
+    ├── whetstone/
+    │   ├── .claude-plugin/plugin.json
+    │   ├── skills/{cms,grill-me,start-branch,finish-branch}/
+    │   ├── commands/develop.md
+    │   └── agents/qa-gatekeeper.md
+    ├── sqlite-readonly/         # read-only SQLite MCP server (uv project under servers/)
+    └── mcp-starter/             # MCP-plugin packaging template
 ```
 
 ## Conventions

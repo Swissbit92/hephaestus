@@ -12,6 +12,20 @@
       "description": "Doc-discipline (cms), decision stress-testing (grill-me), a structured development workflow (develop), and a safe branch lifecycle (start-branch / finish-branch).",
       "category": "productivity",
       "tags": ["documentation", "workflow", "review"]
+    },
+    {
+      "name": "sqlite-readonly",
+      "source": "./plugins/sqlite-readonly",
+      "description": "Zero-config read-only SQLite MCP server — safely query any local .db (3-layer read-only enforcement, schema introspection, natural-language→SQL).",
+      "category": "data",
+      "tags": ["sqlite", "mcp", "read-only", "sql", "database"]
+    },
+    {
+      "name": "mcp-starter",
+      "source": "./plugins/mcp-starter",
+      "description": "A minimal, working template for packaging a Python MCP server as a Claude Code plugin — userConfig injection, inline mcpServers, uv-isolated server, first-run hook, /setup wizard.",
+      "category": "productivity",
+      "tags": ["mcp", "template", "starter", "scaffold"]
     }
   ]
 }

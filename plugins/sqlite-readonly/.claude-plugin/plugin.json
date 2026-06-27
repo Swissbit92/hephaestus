@@ -1,0 +1,47 @@
+{
+  "name": "sqlite-readonly",
+  "description": "Zero-config read-only SQLite MCP server — safely query any local .db (3-layer read-only enforcement, schema introspection, natural-language→SQL).",
+  "version": "0.1.0",
+  "author": {
+    "name": "Swissbit92"
+  },
+  "homepage": "https://github.com/Swissbit92/whetstone",
+  "repository": "https://github.com/Swissbit92/whetstone",
+  "license": "MIT",
+  "keywords": ["sqlite", "mcp", "read-only", "sql", "database"],
+  "userConfig": {
+    "db_path": {
+      "type": "string",
+      "title": "SQLite database path",
+      "description": "Absolute path to a .db file to serve read-only. Leave empty to use the bundled sample database (zero-config).",
+      "required": false
+    }
+  },
+  "mcpServers": {
+    "sqlite-readonly": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}/servers/sqlite-readonly",
+        "sqlite-readonly"
+      ],
+      "env": {
+        "SQLITE_DB_PATH": "${user_config.db_path}"
+      }
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/first-run.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

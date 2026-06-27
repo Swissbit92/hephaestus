@@ -1,6 +1,16 @@
 # whetstone
 
-A small workshop of [Claude Code](https://code.claude.com) tools to keep your craft sharp.
+A small workshop of [Claude Code](https://code.claude.com) plugins to keep your craft sharp.
+
+## Plugins in this marketplace
+
+| Plugin | What it is |
+|--------|------------|
+| **whetstone** | Generic craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper` (detailed below). |
+| **sqlite-readonly** | Zero-config read-only SQLite MCP server — query any local `.db` safely (3-layer read-only, schema introspection, NL→SQL). See [its README](plugins/sqlite-readonly/README.md). |
+| **mcp-starter** | A minimal, working template for packaging a Python MCP server as a plugin (userConfig injection, inline servers, uv, first-run hook, `/setup`). See [its README](plugins/mcp-starter/README.md). |
+
+## whetstone plugin
 
 | Tool | Type | What it does |
 |------|------|--------------|
@@ -15,7 +25,9 @@ A small workshop of [Claude Code](https://code.claude.com) tools to keep your cr
 
 ```
 /plugin marketplace add Swissbit92/whetstone
-/plugin install whetstone@whetstone
+/plugin install whetstone@whetstone            # generic craft tools
+/plugin install sqlite-readonly@whetstone      # read-only SQLite MCP server (needs uv)
+/plugin install mcp-starter@whetstone          # MCP-plugin template
 ```
 
 Then the tools are namespaced under the plugin:
