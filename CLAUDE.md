@@ -11,7 +11,7 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 
 | Plugin | Scope |
 |--------|-------|
-| **whetstone** | Generic, vendor-neutral craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper` |
+| **whetstone** | Generic, vendor-neutral craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill` |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server (3-layer read-only, NL→SQL) |
 | **mcp-starter** | Template for packaging a Python MCP server as a plugin |
 
@@ -69,6 +69,8 @@ whetstone/
 ├── .claude-plugin/marketplace.json   # marketplace catalog (lists all plugins)
 ├── scripts/
 │   ├── release.sh                    # per-plugin version bump + tag + GitHub release
+│   ├── bump_version.py               # semver math (used by release.sh; unit-tested)
+│   ├── new_skill.py                  # scaffold a new skill (used by author-skill)
 │   └── check-public-safe.sh          # private-token guard
 ├── tests/                            # pytest suite (cms scripts under test)
 ├── CLAUDE.md                         # this file

@@ -12,6 +12,17 @@ Thanks for sharpening the workshop. A few rules keep the marketplace clean and r
   merge or PR. See the branch model in [CLAUDE.md](CLAUDE.md).
 - **Tests green.** `pytest -q` must pass with no regression before you open a PR.
 
+## Adding a skill
+
+Run `/whetstone:author-skill` — it scaffolds a pre-structured `SKILL.md` (via
+`scripts/new_skill.py`) and coaches each section against the repo's authoring patterns
+(exemplar-first negatives, hard-gate vs. best-effort, code-backed helpers, progressive
+disclosure, …), citing shipped skills as examples. Or run the scaffolder directly:
+
+```bash
+python3 scripts/new_skill.py <kebab-name> --description "<trigger-focused one-liner>"
+```
+
 ## Adding a plugin
 
 1. Create `plugins/<name>/.claude-plugin/plugin.json` (`name`, `description`, `version`,
