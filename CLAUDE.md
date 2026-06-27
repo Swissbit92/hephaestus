@@ -15,6 +15,7 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server (3-layer read-only, NL→SQL) |
 | **mcp-starter** | Template for packaging a Python MCP server as a plugin |
 | **second-brain** | Obsidian inbox processor (suggest-then-confirm; skills-only) |
+| **deck-builder** | Code-backed .pptx deck builder (python-pptx; outline-approval gate) |
 
 ## Branch model (read before starting work)
 

@@ -1,0 +1,12 @@
+{
+  "name": "deck-builder",
+  "description": "Build polished .pptx decks from source material — code-backed (the model calls named layout methods, never hand-rolls geometry), with a mandatory outline-approval gate and research-backed design rules.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Swissbit92"
+  },
+  "homepage": "https://github.com/Swissbit92/whetstone",
+  "repository": "https://github.com/Swissbit92/whetstone",
+  "license": "MIT",
+  "keywords": ["pptx", "powerpoint", "slides", "presentation", "claude-code"]
+}

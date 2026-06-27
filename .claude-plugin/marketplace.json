@@ -33,6 +33,13 @@
       "description": "Obsidian inbox processor — proposes tags, links, filing, and action items for your notes, but never commits without your per-item approval. Suggest-then-confirm.",
       "category": "productivity",
       "tags": ["obsidian", "notes", "pkm", "second-brain"]
+    },
+    {
+      "name": "deck-builder",
+      "source": "./plugins/deck-builder",
+      "description": "Build polished .pptx decks from source material — code-backed (named layout methods, never hand-rolled geometry), mandatory outline-approval gate, research-backed design rules.",
+      "category": "productivity",
+      "tags": ["pptx", "powerpoint", "slides", "presentation"]
     }
   ]
 }
