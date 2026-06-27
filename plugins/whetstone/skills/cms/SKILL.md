@@ -7,9 +7,9 @@ description: Context Management System — standardizes documentation structure 
 
 Standardizes documentation across one or many repos so AI agents load the least context for the most signal. Enforces:
 
-- **Per-repo skeleton**: README + CLAUDE.md + CHANGELOG + `docs/{ARCHITECTURE,ROADMAP,LESSONS_LEARNED,decisions/,archive/YYYY-MM/}.md`
+- **Per-repo skeleton**: README + CLAUDE.md + CHANGELOG + SECURITY.md + `docs/{ARCHITECTURE,ROADMAP,LESSONS_LEARNED,THREAT_LEVEL,decisions/,archive/YYYY-MM/}.md`
 - **Root canonical**: shared facts live ONCE at `<root>/docs/shared/`. Repos reference them via **plain markdown links** (never `@path`).
-- **Frontmatter**: `title, status, created, last_reviewed_on, review_in, applies_to, supersedes`
+- **Frontmatter** (required fields; canonical source is `scripts/common.py:FRONTMATTER_REQUIRED`): `title, status, created, last_reviewed_on, review_in, applies_to`. Optional controlled-vocabulary fields, validated only when present: `status` ∈ {active, completed, deprecated, Proposed, Accepted, Deprecated, Superseded}; `threat_level` ∈ {Low, Medium, High, Critical} (CVSS-aligned; used by `docs/THREAT_LEVEL.md`). Root files (README, CLAUDE, CHANGELOG, SECURITY) are frontmatter-exempt; `docs/*` always require it.
 - **Archive rule**: `status: completed` OR filename matches `*_MIGRATION.md|*_PLAN.md|*_COMPLETE.md|RUNBOOK_*|*_ASSESSMENT.md|*_REVIEW.md|PHASE*_*.md` AND >60 days old AND not in protected allowlist
 - **CLAUDE.md discipline**: keep lean; front-load invariants; use plain links for reference content — not `@path`
 

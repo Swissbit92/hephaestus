@@ -1,7 +1,7 @@
 {
   "name": "whetstone",
-  "description": "Keep your craft sharp: doc-discipline (cms), decision stress-testing (grill-me), and a structured development workflow (develop).",
-  "version": "0.1.0",
+  "description": "Keep your craft sharp: doc-discipline (cms), decision stress-testing (grill-me), a structured development workflow (develop), and a safe branch lifecycle (start-branch / finish-branch).",
+  "version": "0.2.0",
   "author": {
     "name": "Swissbit92"
   },

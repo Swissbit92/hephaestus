@@ -31,9 +31,10 @@ SKILL_SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SKILL_SCRIPTS))
 
 from common import (  # noqa: E402
-    ARCHIVE_ALLOWLIST,
+    FRONTMATTER_EXEMPT,
     FRONTMATTER_REQUIRED,
     FRONTMATTER_STATUSES,
+    FRONTMATTER_THREAT_LEVELS,
     find_atpath_imports,
     parse_frontmatter,
     parse_iso_date,
@@ -68,7 +69,7 @@ def is_archive(path: Path) -> bool:
 
 
 def requires_frontmatter(path: Path) -> bool:
-    if path.name in ARCHIVE_ALLOWLIST:
+    if path.name in FRONTMATTER_EXEMPT:
         return False
     if is_archive(path):
         return False
@@ -84,7 +85,7 @@ def simulate_write(tool_name: str, tool_input: dict, existing: str) -> str | Non
         new = tool_input.get("new_string", "")
         replace_all = tool_input.get("replace_all", False)
         if old == "":
-            return None  # unsupported edge case; skip
+            return existing  # no-op edit; validate existing content rather than skip
         if replace_all:
             return existing.replace(old, new)
         return existing.replace(old, new, 1)
@@ -93,27 +94,33 @@ def simulate_write(tool_name: str, tool_input: dict, existing: str) -> str | Non
 
 def check_content(path: Path, content: str) -> list[str]:
     errors: list[str] = []
-    # Frontmatter check
-    if requires_frontmatter(path):
-        fm, _ = parse_frontmatter(content)
-        if not fm:
+    fm, _ = parse_frontmatter(content)
+    # Missing-frontmatter is only an error where frontmatter is required (docs/, not
+    # exempted). But any frontmatter that IS present is validated regardless — so
+    # controlled-vocab fields like status on an exempt file still get checked.
+    if not fm:
+        if requires_frontmatter(path):
             errors.append(
                 f"Missing frontmatter in {path.name}. "
                 f"Files under docs/ must start with --- ... --- block containing: "
                 f"{sorted(FRONTMATTER_REQUIRED)}."
             )
-        else:
+    else:
+        if requires_frontmatter(path):
             missing = FRONTMATTER_REQUIRED - set(fm)
             if missing:
                 errors.append(f"Frontmatter missing fields: {sorted(missing)}")
-            status = fm.get("status")
-            if status and status not in FRONTMATTER_STATUSES:
-                errors.append(f"Invalid status {status!r}; expected one of {sorted(FRONTMATTER_STATUSES)}")
-            for fld in ("created", "last_reviewed_on"):
-                if fld in fm and parse_iso_date(fm[fld]) is None:
-                    errors.append(f"Frontmatter {fld!r} must be YYYY-MM-DD (got {fm[fld]!r})")
-            if "review_in" in fm and parse_review_in(fm["review_in"]) is None:
-                errors.append(f"Frontmatter 'review_in' unparseable: {fm['review_in']!r} (try '6 months', '12 months', '24 months')")
+        status = fm.get("status")
+        if status and status not in FRONTMATTER_STATUSES:
+            errors.append(f"Invalid status {status!r}; expected one of {sorted(FRONTMATTER_STATUSES)}")
+        threat_level = fm.get("threat_level")
+        if threat_level and threat_level not in FRONTMATTER_THREAT_LEVELS:
+            errors.append(f"Invalid threat_level {threat_level!r}; expected one of {sorted(FRONTMATTER_THREAT_LEVELS)}")
+        for fld in ("created", "last_reviewed_on"):
+            if fld in fm and parse_iso_date(fm[fld]) is None:
+                errors.append(f"Frontmatter {fld!r} must be YYYY-MM-DD (got {fm[fld]!r})")
+        if "review_in" in fm and parse_review_in(fm["review_in"]) is None:
+            errors.append(f"Frontmatter 'review_in' unparseable: {fm['review_in']!r} (try '6 months', '12 months', '24 months')")
     # @path validity
     for raw, target in find_atpath_imports(content, path.parent):
         if not target.exists():

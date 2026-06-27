@@ -24,12 +24,21 @@ else:
     STATE_DIR = SKILL_ROOT / "state"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Allowlist: files that must never be auto-archived.
-ARCHIVE_ALLOWLIST = {
+# Base allowlist: canonical doc names that must never be auto-archived. The full
+# ARCHIVE_ALLOWLIST is derived below to also cover every REQUIRED_FILES entry — so a
+# required doc can never be flagged as an archive candidate, and the two lists cannot
+# silently drift apart.
+_BASE_ALLOWLIST = {
     "README.md", "CLAUDE.md", "CHANGELOG.md",
     "VISION.md", "ARCHITECTURE.md", "ROADMAP.md",
     "LESSONS_LEARNED.md",
 }
+
+# Files that legitimately carry NO frontmatter — the root special files. This is a
+# SEPARATE concern from archiving: docs under docs/ (ARCHITECTURE, ROADMAP, ...) are
+# archive-allowlisted but still REQUIRE frontmatter, so they must NOT be exempted here.
+# Keyed by basename; only meaningful for files under docs/ (root files are never gated).
+FRONTMATTER_EXEMPT = {"README.md", "CLAUDE.md", "CHANGELOG.md", "SECURITY.md"}
 
 # Archive-candidate filename patterns (case-insensitive match on name).
 ARCHIVE_PATTERNS = [
@@ -47,9 +56,11 @@ REQUIRED_FILES = [
     "README.md",
     "CLAUDE.md",
     "CHANGELOG.md",
+    "SECURITY.md",
     "docs/ARCHITECTURE.md",
     "docs/ROADMAP.md",
     "docs/LESSONS_LEARNED.md",
+    "docs/THREAT_LEVEL.md",
 ]
 
 REQUIRED_DIRS = [
@@ -58,9 +69,16 @@ REQUIRED_DIRS = [
     "docs/archive",
 ]
 
+# Full allowlist: base names + the basename of every required file. Deriving it from
+# REQUIRED_FILES means new required docs are auto-protected from archiving.
+ARCHIVE_ALLOWLIST = _BASE_ALLOWLIST | {Path(f).name for f in REQUIRED_FILES}
+
 # Frontmatter required fields for files under docs/.
 FRONTMATTER_REQUIRED = {"title", "status", "created", "last_reviewed_on", "review_in", "applies_to"}
 FRONTMATTER_STATUSES = {"active", "completed", "deprecated", "Proposed", "Accepted", "Deprecated", "Superseded"}
+# Controlled vocabulary for the optional `threat_level` frontmatter field (CVSS-aligned).
+# Validated only when present, so docs that omit it are unaffected; used by docs/THREAT_LEVEL.md.
+FRONTMATTER_THREAT_LEVELS = {"Low", "Medium", "High", "Critical"}
 
 FENCE = "---"
 

@@ -14,6 +14,8 @@ import pytest
 
 import common
 import check
+import hook
+import init
 
 
 # --------------------------------------------------------------------------- helpers
@@ -171,17 +173,111 @@ def test_archive_candidate_recent_pattern_match_silent(tmp_path):
     assert check.check_archive_candidate(f) == []
 
 
-# --------------------------------------------------------------------------- KNOWN BUG (Phase 1A target)
-@pytest.mark.xfail(
-    strict=True,
-    reason="cms bug: canonical docs/ files (ARCHITECTURE/ROADMAP/LESSONS_LEARNED) are in "
-    "ARCHIVE_ALLOWLIST, which is wrongly reused as the frontmatter-exempt set, so they skip "
-    "frontmatter validation. Fixed in Phase 1A (FRONTMATTER_EXEMPT split) — when fixed this "
-    "xpasses and strict mode forces removal of the marker.",
-)
+# --------------------------------------------------------------------------- Phase 1A: frontmatter-exempt split
 def test_docs_canonical_file_requires_frontmatter(tmp_path):
+    """Regression: canonical docs/ files (ARCHITECTURE/ROADMAP/LESSONS_LEARNED) are
+    archive-allowlisted but must STILL require frontmatter. Was the Phase 1A bug."""
     f = write(tmp_path / "docs" / "ARCHITECTURE.md", "no frontmatter\n")
     findings = check.run_mechanical_check(f)
     assert any(
         x.level == "error" and "missing frontmatter" in x.message for x in findings
     ), "docs/ARCHITECTURE.md without frontmatter should be an error"
+
+
+def test_archive_allowlist_and_frontmatter_exempt_are_distinct():
+    # Canonical docs are archive-protected...
+    assert "ARCHITECTURE.md" in common.ARCHIVE_ALLOWLIST
+    assert "ROADMAP.md" in common.ARCHIVE_ALLOWLIST
+    # ...but NOT frontmatter-exempt.
+    assert "ARCHITECTURE.md" not in common.FRONTMATTER_EXEMPT
+    assert "ROADMAP.md" not in common.FRONTMATTER_EXEMPT
+    # Root special files are both.
+    assert common.FRONTMATTER_EXEMPT <= common.ARCHIVE_ALLOWLIST
+
+
+def test_archive_allowlist_derived_from_required_files():
+    # Every required file's basename is auto-protected from archiving (can't drift).
+    for rel in common.REQUIRED_FILES:
+        from pathlib import Path as _P
+        assert _P(rel).name in common.ARCHIVE_ALLOWLIST
+
+
+def test_present_frontmatter_validated_even_when_not_required(tmp_path):
+    """A bad status on an exempt/non-required file is still caught, but missing
+    required fields are not demanded (those gate on `required`)."""
+    bad = "---\ntitle: x\nstatus: bogus\n---\nbody\n"
+    f = write(tmp_path / "doc.md", bad)
+    findings = check.check_frontmatter(f, required=False)
+    assert any("invalid status" in x.message for x in findings if x.level == "error")
+    assert not any("missing fields" in x.message for x in findings if x.level == "error")
+
+
+# --------------------------------------------------------------------------- hook.check_content
+def test_hook_blocks_docs_file_without_frontmatter(tmp_path):
+    f = tmp_path / "docs" / "GUIDE.md"
+    errors = hook.check_content(f, "no frontmatter\n")
+    assert any("Missing frontmatter" in e for e in errors)
+
+
+def test_hook_validates_present_frontmatter_on_exempt_file(tmp_path):
+    # README is frontmatter-exempt, but a bad status it DOES carry is still flagged.
+    f = tmp_path / "README.md"
+    errors = hook.check_content(f, "---\nstatus: bogus\n---\nbody\n")
+    assert any("Invalid status" in e for e in errors)
+
+
+def test_hook_allows_clean_docs_file(tmp_path):
+    f = tmp_path / "docs" / "GUIDE.md"
+    assert hook.check_content(f, VALID_FM) == []
+
+
+# --------------------------------------------------------------------------- Phase 1C: threat_level
+THREAT_FM = (
+    "---\ntitle: x\nstatus: active\ncreated: 2026-01-01\n"
+    "last_reviewed_on: 2026-06-01\nreview_in: 6 months\napplies_to: w\n"
+    "threat_level: {level}\n---\nbody\n"
+)
+
+
+@pytest.mark.parametrize("level", ["Low", "Medium", "High", "Critical"])
+def test_threat_level_valid_when_present(tmp_path, level):
+    f = write(tmp_path / "doc.md", THREAT_FM.format(level=level))
+    findings = check.check_frontmatter(f, required=True)
+    assert [x for x in findings if x.level == "error"] == []
+
+
+def test_threat_level_invalid_is_error(tmp_path):
+    f = write(tmp_path / "doc.md", THREAT_FM.format(level="Severe"))
+    findings = check.check_frontmatter(f, required=True)
+    assert any("invalid threat_level" in x.message for x in findings if x.level == "error")
+
+
+def test_threat_level_omitted_is_fine(tmp_path):
+    f = write(tmp_path / "doc.md", VALID_FM)  # no threat_level
+    findings = check.check_frontmatter(f, required=True)
+    assert [x for x in findings if x.level == "error"] == []
+
+
+def test_hook_validates_threat_level(tmp_path):
+    f = tmp_path / "docs" / "T.md"
+    errors = hook.check_content(f, THREAT_FM.format(level="Severe"))
+    assert any("Invalid threat_level" in e for e in errors)
+
+
+# --------------------------------------------------------------------------- Phase 1C: init round-trip
+def test_security_and_threat_in_required_files():
+    assert "SECURITY.md" in common.REQUIRED_FILES
+    assert "docs/THREAT_LEVEL.md" in common.REQUIRED_FILES
+    assert "SECURITY.md" in common.FRONTMATTER_EXEMPT  # root file, no frontmatter
+    assert "THREAT_LEVEL.md" not in common.FRONTMATTER_EXEMPT  # under docs/, needs it
+
+
+def test_init_scaffold_produces_valid_security_and_threat_docs(tmp_path):
+    init.scaffold(tmp_path, repo_name="demo", purpose="demo repo")
+    assert (tmp_path / "SECURITY.md").exists()
+    assert (tmp_path / "docs" / "THREAT_LEVEL.md").exists()
+    # All required files now present.
+    assert [f for f in check.check_required_files(tmp_path) if f.level == "error"] == []
+    # The generated THREAT_LEVEL.md has valid frontmatter (incl. a valid threat_level).
+    findings = check.run_mechanical_check(tmp_path / "docs" / "THREAT_LEVEL.md")
+    assert [f for f in findings if f.level == "error"] == []

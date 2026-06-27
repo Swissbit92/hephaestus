@@ -21,8 +21,10 @@ from pathlib import Path
 from common import (
     ARCHIVE_ALLOWLIST,
     ARCHIVE_PATTERNS,
+    FRONTMATTER_EXEMPT,
     FRONTMATTER_REQUIRED,
     FRONTMATTER_STATUSES,
+    FRONTMATTER_THREAT_LEVELS,
     REQUIRED_DIRS,
     REQUIRED_FILES,
     Finding,
@@ -46,12 +48,20 @@ def check_frontmatter(path: Path, required: bool) -> list[Finding]:
         if required:
             findings.append(Finding("error", rel, "missing frontmatter (required for files under docs/)"))
         return findings
-    missing = FRONTMATTER_REQUIRED - set(fm)
-    if missing:
-        findings.append(Finding("error", rel, f"frontmatter missing fields: {sorted(missing)}"))
+    # Required-field completeness only applies where frontmatter is required. But any
+    # frontmatter that IS present is validated for controlled-vocab + field validity even
+    # on exempt files — a bad status/date on README should still be caught.
+    if required:
+        missing = FRONTMATTER_REQUIRED - set(fm)
+        if missing:
+            findings.append(Finding("error", rel, f"frontmatter missing fields: {sorted(missing)}"))
     status = fm.get("status")
     if status and status not in FRONTMATTER_STATUSES:
         findings.append(Finding("error", rel, f"invalid status '{status}'; expected one of {sorted(FRONTMATTER_STATUSES)}"))
+    # threat_level controlled vocabulary (only validated when present)
+    threat_level = fm.get("threat_level")
+    if threat_level and threat_level not in FRONTMATTER_THREAT_LEVELS:
+        findings.append(Finding("error", rel, f"invalid threat_level '{threat_level}'; expected one of {sorted(FRONTMATTER_THREAT_LEVELS)}"))
     # Date validity
     for fld in ("created", "last_reviewed_on"):
         if fld in fm and parse_iso_date(fm[fld]) is None:
@@ -137,7 +147,7 @@ def run_repo_check(repo: Path) -> list[Finding]:
     findings.extend(check_claude_md_size_trend(repo))
     # Per-file checks
     for md in iter_md_files(repo, include_archive=False):
-        required_fm = "/docs/" in str(md).replace("\\", "/") and md.name not in ARCHIVE_ALLOWLIST
+        required_fm = "/docs/" in str(md).replace("\\", "/") and md.name not in FRONTMATTER_EXEMPT
         findings.extend(check_frontmatter(md, required=required_fm))
         findings.extend(check_atpath_imports(md))
         findings.extend(check_archive_candidate(md))
@@ -149,7 +159,7 @@ def run_mechanical_check(file: Path) -> list[Finding]:
     findings: list[Finding] = []
     if not file.exists():
         return []  # new file; other rules caught at save time
-    required_fm = "/docs/" in str(file).replace("\\", "/") and file.name not in ARCHIVE_ALLOWLIST
+    required_fm = "/docs/" in str(file).replace("\\", "/") and file.name not in FRONTMATTER_EXEMPT
     findings.extend(check_frontmatter(file, required=required_fm))
     findings.extend(check_atpath_imports(file))
     return findings

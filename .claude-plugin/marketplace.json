@@ -9,7 +9,7 @@
     {
       "name": "whetstone",
       "source": "./plugins/whetstone",
-      "description": "Doc-discipline (cms), decision stress-testing (grill-me), and a structured development workflow (develop).",
+      "description": "Doc-discipline (cms), decision stress-testing (grill-me), a structured development workflow (develop), and a safe branch lifecycle (start-branch / finish-branch).",
       "category": "productivity",
       "tags": ["documentation", "workflow", "review"]
     }

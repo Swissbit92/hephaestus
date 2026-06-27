@@ -5,8 +5,8 @@ Usage:
     init.py <repo-path> [--repo-name NAME] [--purpose "one-liner"] [--ecosystem-root PATH]
 
 Creates:
-    README.md, CLAUDE.md, CHANGELOG.md,
-    docs/ARCHITECTURE.md, docs/ROADMAP.md, docs/LESSONS_LEARNED.md,
+    README.md, CLAUDE.md, CHANGELOG.md, SECURITY.md,
+    docs/ARCHITECTURE.md, docs/ROADMAP.md, docs/LESSONS_LEARNED.md, docs/THREAT_LEVEL.md,
     docs/decisions/, docs/archive/
 """
 from __future__ import annotations
@@ -22,9 +22,11 @@ TEMPLATE_MAP = [
     ("README.md", "README.md"),
     ("CLAUDE.md", "CLAUDE.md"),
     ("CHANGELOG.md", "CHANGELOG.md"),
+    ("SECURITY.md", "SECURITY.md"),
     ("docs/ARCHITECTURE.md", "ARCHITECTURE.md"),
     ("docs/ROADMAP.md", "ROADMAP.md"),
     ("docs/LESSONS_LEARNED.md", "LESSONS_LEARNED.md"),
+    ("docs/THREAT_LEVEL.md", "THREAT_LEVEL.md"),
 ]
 
 
@@ -89,7 +91,7 @@ def main() -> int:
     print()
     print(f"Summary: {len(created)} created, {len(skipped)} skipped (already present)")
     print("Next steps:")
-    print(f"  1. Fill in TBD placeholders in README.md, CLAUDE.md, docs/ARCHITECTURE.md")
+    print(f"  1. Fill in TBD placeholders in README.md, CLAUDE.md, SECURITY.md, docs/ARCHITECTURE.md, docs/THREAT_LEVEL.md")
     scripts = Path(__file__).resolve().parent
     print(f"  2. Run: python3 {scripts}/check.py {repo}")
     print(f"  3. Add your first ADR: python3 {scripts}/new_adr.py \"<title>\" --path {repo}/docs/decisions")

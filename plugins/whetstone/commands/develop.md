@@ -35,17 +35,17 @@ Triggers when the task modifies **critical logic** — the parts where a subtle 
 - Anything other code or repos depend on
 - Auth, payments, migrations, anything with a blast radius
 
-**Phases:** 0 → 1 → 2 → 3 → 4 → 5 → 6
+**Phases:** 0 → 1 → 2 → 2.5 → 3 → 4 → 5 → 6 → 6.5
 
 ### LIGHT workflow
 Everything else: infrastructure, CLI cosmetics, docs, tests, config, reporting, refactoring non-critical code.
 
-**Phases:** 0 → 3 → 4 → 5 → 6 (skips Research and Architecture)
+**Phases:** 0 → 2.5 → 3 → 4 → 5 → 6 → 6.5 (skips Research and Architecture)
 
 ### TRIVIAL
 Typos, 1-line fixes, formatting, comment updates.
 
-**No ceremony.** Just do it, verify, done.
+**No ceremony.** Just do it, verify, done. No isolate/integrate (Phases 2.5/6.5 skipped).
 
 ---
 
@@ -87,6 +87,24 @@ Run a `Plan` agent. Feed it: Phase 1 exploration results, web-research findings,
 It should produce: implementation milestones (ordered), files to create/modify (paths), existing utilities to reuse (paths), test strategy, and risk areas.
 
 **Gate:** present the plan to the user for approval. Do NOT implement without explicit approval.
+
+---
+
+## 4.5 PHASE 2.5 — ISOLATE (FULL + LIGHT; TRIVIAL skips)
+
+Put the work in its own workspace before touching code, so changes never land
+uncommitted on a shared or deploy branch.
+
+Invoke the `start-branch` skill. It detects the repo's integration target (never
+hardcoded), auto-chooses a plain branch vs. a worktree, names the branch in Conventional
+Branch form, records a clean test baseline, and proposes a one-line plan you confirm
+before anything is created.
+
+- **On confirm:** implement (Phase 3) in the isolated branch/worktree.
+- **On decline:** continue in place — no branch. Integration (Phase 6.5) then has nothing
+  to finish.
+
+Keep all branch logic in the skill; this phase only invokes it.
 
 ---
 
@@ -149,6 +167,20 @@ Rules: incremental only; bump test counts if changed materially; bump version nu
 
 ---
 
+## 8.5 PHASE 6.5 — INTEGRATE (FULL + LIGHT; TRIVIAL skips)
+
+Close out the isolated work. Skip if Phase 2.5 was declined (nothing was isolated) or for
+TRIVIAL tasks.
+
+Invoke the `finish-branch` skill. It gates on tests (no green, no merge), presents
+**merge / open PR / keep / discard**, defaults to a PR for deploy/protected targets (never
+pushing to them by surprise), and cleans up without losing unmerged work (`git branch -d`
+never `-D`; informed discard; prompt on dirty/unmerged).
+
+Run this after Phase 6's version bump so the bump commit is part of what integrates.
+
+---
+
 ## CROSS-CUTTING TASKS
 
 When a task spans multiple repos/packages:
@@ -167,13 +199,15 @@ When a task spans multiple repos/packages:
 |-------|--------|-----------|------|
 | 1 — Research | Explore (1–3) + web research (1) | Yes | FULL only |
 | 2 — Architecture | Plan (1) | After Phase 1 | FULL only |
+| 2.5 — Isolate | `start-branch` skill | Before Implement | FULL + LIGHT (TRIVIAL skips) |
 | 3 — Implement | Direct or concurrent teams | When independent | All |
 | 4 — QA | qa-gatekeeper or direct | After each milestone | All |
 | 5 — Docs | Direct (via `cms`) | After QA pass | All |
 | 6 — Completion | Direct | After all milestones | All |
+| 6.5 — Integrate | `finish-branch` skill | After Completion | FULL + LIGHT (TRIVIAL skips) |
 
 ## CHECKLIST (every task)
 
-Before: target identified · classified · alignment stated · task list visible · starting test count recorded.
+Before: target identified · classified · alignment stated · task list visible · starting test count recorded · work isolated via `start-branch` (FULL/LIGHT; target auto-detected + confirmed) — or isolation explicitly declined.
 During: QA after each milestone · docs updated after each QA pass · task list current.
-After: final test count verified · version bumped (per tier) · lessons captured · tasks complete · debrief delivered (FULL only).
+After: final test count verified · version bumped (per tier) · lessons captured · tasks complete · branch integrated via `finish-branch` (merge/PR/keep/discard + safe cleanup, FULL/LIGHT) · debrief delivered (FULL only).
