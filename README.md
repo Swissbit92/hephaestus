@@ -63,7 +63,9 @@ overwrite the cached plugin dir, so state resolves in this order:
 
 ```
 whetstone/
-├── .claude-plugin/marketplace.json     # marketplace catalog
+├── .claude-plugin/marketplace.json     # marketplace catalog (lists all plugins)
+├── scripts/                            # release.sh · bump_version.py · check-public-safe.sh
+├── tests/                              # pytest suite
 └── plugins/whetstone/
     ├── .claude-plugin/plugin.json      # plugin manifest + cms hook
     ├── skills/
@@ -82,16 +84,18 @@ pushing commits without bumping it does nothing for them. Use the helper, which
 keeps the manifest version and git tag in lockstep:
 
 ```bash
-scripts/release.sh patch              # 0.1.0 -> 0.1.1
-scripts/release.sh minor              # 0.1.0 -> 0.2.0
-scripts/release.sh major              # 0.1.0 -> 1.0.0
-scripts/release.sh 1.2.3              # explicit version
-scripts/release.sh patch --dry-run    # preview, change nothing
+scripts/release.sh <plugin> patch            # 0.1.0 -> 0.1.1
+scripts/release.sh <plugin> minor            # 0.1.0 -> 0.2.0
+scripts/release.sh <plugin> major            # 0.1.0 -> 1.0.0
+scripts/release.sh <plugin> 1.2.3            # explicit version
+scripts/release.sh <plugin> patch --dry-run  # preview, change nothing
 ```
 
-It refuses to run unless you're on `main` with a clean tree, validates the
-plugin, then commits, tags `vX.Y.Z`, pushes, and creates a GitHub release with
-notes drawn from the commits since the last tag.
+`<plugin>` is a directory under `plugins/` (e.g. `whetstone`). Each plugin versions
+independently under its own tag namespace `<plugin>-v<x.y.z>`. The script refuses to run
+unless you're on `main` with a clean tree, validates the plugin, then commits, tags,
+pushes, and creates a GitHub release with notes drawn from that plugin's commits since its
+last tag. The version math lives in `scripts/bump_version.py` (unit-tested).
 
 ## License
 

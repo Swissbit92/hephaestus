@@ -43,22 +43,30 @@ confirmation that names the branch and states the consequence.
 
 **Informed discard:** before discarding, enumerate exactly what will be lost — list the
 uncommitted files and the unmerged commits (`git log --oneline <target>..HEAD`). Only
-proceed on explicit confirmation.
+proceed on explicit confirmation. On confirmation, the discard may use `git branch -D`
+(an unmerged branch is the whole point of discarding, and `-d` will refuse it) — but
+*only* here, *only* after this confirmation.
 
 ## Phase 4 — Clean up safely
 
-- Delete the branch with `git branch -d` (it refuses to delete a branch not merged into
-  its upstream or HEAD). **Never** `git branch -D` / `--force` — that bypasses the merge
-  check and is how unmerged work is lost.
-- Remove a worktree with `git worktree remove` (no `--force`). If it refuses because the
-  worktree is dirty, surface that rather than forcing.
+- **Merge / Keep paths:** delete a merged branch with `git branch -d`, which refuses to
+  delete a branch not merged into its upstream or HEAD — a safety net that catches "I
+  thought this was merged." Never use `git branch -D` on these paths.
+- **Discard path only:** discarding an *unmerged* branch genuinely requires
+  `git branch -D` (`-d` will refuse it). Use `-D` **only** after the Phase 3 informed-
+  discard confirmation that listed the commits being lost — never silently, never on any
+  other path.
+- Remove a worktree with `git worktree remove`. A dirty worktree needs `--force`, which —
+  like `-D` — is allowed only on the confirmed Discard path; otherwise surface the dirt
+  rather than forcing.
 - Leave remote-branch deletion to the forge's auto-delete-on-merge setting rather than
   scripting a force-delete.
 
 ## Guardrails
 
 - **No green, no merge.** A failing or regressed test run blocks merge and PR, every time.
-- **Never lose work silently.** Dirty tree or unmerged commits → prompt, never force.
+- **Never lose work silently.** Dirty tree or unmerged commits → prompt first; force-delete
+  (`-D` / `--force`) only on the confirmed Discard path.
 - **Never push to a protected/deploy branch by surprise.** PR by default; direct push
   only on explicit, named confirmation.
 - **Never choose the action for the user.** Present the options; let them decide.

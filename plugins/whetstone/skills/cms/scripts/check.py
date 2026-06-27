@@ -176,7 +176,8 @@ def main() -> int:
         findings = run_mechanical_check(Path(args.mechanical))
     elif args.file:
         f = Path(args.file)
-        findings = check_frontmatter(f, required=("/docs/" in str(f).replace("\\", "/"))) + check_atpath_imports(f) + check_archive_candidate(f)
+        required_fm = "/docs/" in str(f).replace("\\", "/") and f.name not in FRONTMATTER_EXEMPT
+        findings = check_frontmatter(f, required=required_fm) + check_atpath_imports(f) + check_archive_candidate(f)
     else:
         repo = Path(args.path).resolve()
         if not repo.is_dir():

@@ -19,7 +19,8 @@ Thanks for sharpening the workshop. A few rules keep the marketplace clean and r
 2. Add the plugin's content (`skills/`, `commands/`, `agents/`, `servers/` …).
 3. Register it in `.claude-plugin/marketplace.json` (`name`, `source`, `description`,
    `category`, `tags`).
-4. Give it a README and, if it needs external config, a `/setup` command + first-run hook.
+4. Give it a README (the top-level `whetstone` plugin is the exception — it uses the
+   repo-root README) and, if it needs external config, a `/setup` command + first-run hook.
 5. Keep it vendor-neutral and, where possible, zero-config so anyone can try it instantly.
 
 ## Releasing

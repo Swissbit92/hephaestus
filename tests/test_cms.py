@@ -7,6 +7,8 @@ as a strict xfail so the fix flips it red and forces removal of the marker.
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -270,6 +272,30 @@ def test_security_and_threat_in_required_files():
     assert "docs/THREAT_LEVEL.md" in common.REQUIRED_FILES
     assert "SECURITY.md" in common.FRONTMATTER_EXEMPT  # root file, no frontmatter
     assert "THREAT_LEVEL.md" not in common.FRONTMATTER_EXEMPT  # under docs/, needs it
+
+
+# --------------------------------------------------------------------------- check.py --file CLI mode
+CHECK_PY = Path(common.__file__).parent / "check.py"
+
+
+def _run_check_file(target: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(CHECK_PY), "--file", str(target)],
+        capture_output=True, text=True,
+    )
+
+
+def test_check_file_mode_respects_frontmatter_exempt(tmp_path):
+    # CHANGELOG.md is exempt even directly under docs/ — --file must not demand frontmatter.
+    f = write(tmp_path / "docs" / "CHANGELOG.md", "# Changelog\n")
+    r = _run_check_file(f)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_check_file_mode_requires_frontmatter_for_normal_docs(tmp_path):
+    f = write(tmp_path / "docs" / "GUIDE.md", "# Guide, no frontmatter\n")
+    r = _run_check_file(f)
+    assert r.returncode == 1, r.stdout + r.stderr
 
 
 def test_init_scaffold_produces_valid_security_and_threat_docs(tmp_path):

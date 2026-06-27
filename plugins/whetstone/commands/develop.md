@@ -174,8 +174,8 @@ TRIVIAL tasks.
 
 Invoke the `finish-branch` skill. It gates on tests (no green, no merge), presents
 **merge / open PR / keep / discard**, defaults to a PR for deploy/protected targets (never
-pushing to them by surprise), and cleans up without losing unmerged work (`git branch -d`
-never `-D`; informed discard; prompt on dirty/unmerged).
+pushing to them by surprise), and cleans up without losing unmerged work (`-d` for merged
+branches; `-D`/`--force` only via the informed-discard path; prompt on dirty/unmerged).
 
 Run this after Phase 6's version bump so the bump commit is part of what integrates.
 
