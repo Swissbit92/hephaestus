@@ -10,7 +10,11 @@ Thanks for sharpening the workshop. A few rules keep the marketplace clean and r
   it from scratch in this repo's voice: **patterns in, private content out.**
 - **`main` stays releasable.** Do feature work on short-lived branches and integrate via
   merge or PR. See the branch model in [CLAUDE.md](CLAUDE.md).
-- **Tests green.** `pytest -q` must pass with no regression before you open a PR.
+- **Tests green.** `pytest -q` must pass with no regression before you open a PR. CI
+  (`.github/workflows/ci.yml`) runs the suite + `validate_manifests.py` +
+  `check-public-safe.sh` on every push/PR to `main`. The live skill-eval tier is a
+  separate, opt-in CI job (needs an `ANTHROPIC_API_KEY` secret) — see the workflow comments
+  and `evals/README.md`.
 - **Skills make behavioral claims → add an eval.** When a skill gains a falsifiable
   behavior (e.g. "refuses X", "never writes without approval"), add a scenario to
   `evals/scenarios.json` (see [evals/README.md](evals/README.md)). The eval harness asserts

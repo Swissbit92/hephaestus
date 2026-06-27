@@ -1,5 +1,7 @@
 # whetstone
 
+[![CI](https://github.com/Swissbit92/whetstone/actions/workflows/ci.yml/badge.svg)](https://github.com/Swissbit92/whetstone/actions/workflows/ci.yml)
+
 A small workshop of [Claude Code](https://code.claude.com) plugins to keep your craft sharp.
 
 ## Plugins in this marketplace

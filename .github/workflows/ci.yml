@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Tier 1 — fast, hermetic, no API/credentials. Runs on every push + PR.
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test deps
+        run: pip install pytest
+
+      - name: Unit + eval-core suite (pytest)
+        # The live skill-eval tests are marked `requires_claude` and auto-skip here
+        # (no claude CLI in stock CI); everything pure/headless runs.
+        run: pytest -q
+
+      - name: Validate plugin + marketplace manifests
+        run: python3 scripts/validate_manifests.py
+
+      - name: Public-safety guard (no private/employer tokens)
+        run: bash scripts/check-public-safe.sh
+
+  # Tier 2 (DISABLED by default) — the live skill-eval suite. It drives the real `claude`
+  # CLI against the plugins, so it needs the CLI installed and an API key, and it spends
+  # tokens. Enable by (a) removing `if: false`, (b) adding an ANTHROPIC_API_KEY repo secret,
+  # and (c) running the harness in hermetic mode (bare=True uses ANTHROPIC_API_KEY instead
+  # of an interactive login). Consider gating it to PRs that touch skills/ to control cost.
+  live-eval:
+    if: false
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install claude CLI + uv + pytest
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          pip install pytest
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Run the skill-eval suite (k=3, hermetic)
+        # The runner must be invoked with bare=True so it authenticates via ANTHROPIC_API_KEY
+        # rather than a logged-in session. See evals/README.md.
+        run: python3 evals/run_evals.py -k 3 --json evals/baselines/ci.json
