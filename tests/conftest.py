@@ -15,6 +15,7 @@ CMS_SCRIPTS = REPO_ROOT / "plugins" / "whetstone" / "skills" / "cms" / "scripts"
 SCRIPTS = REPO_ROOT / "scripts"
 SQLITE_RO = REPO_ROOT / "plugins" / "sqlite-readonly" / "servers" / "sqlite-readonly"
 DECK_LIB = REPO_ROOT / "plugins" / "deck-builder" / "skills" / "deck-builder"
+EVALS = REPO_ROOT / "evals"
 
 # Isolate cms state writes (common.py creates STATE_DIR at import time).
 import os
@@ -36,3 +37,22 @@ if str(SQLITE_RO) not in sys.path:
 # Make deck_lib importable (pure helpers; python-pptx imported lazily inside Deck).
 if str(DECK_LIB) not in sys.path:
     sys.path.insert(0, str(DECK_LIB))
+
+# Make the eval harness importable (from harness import scoring, reliability, ...).
+if str(EVALS) not in sys.path:
+    sys.path.insert(0, str(EVALS))
+
+
+def pytest_collection_modifyitems(config, items):
+    """Auto-skip tests marked `requires_claude` when the claude CLI is absent (so the live
+    skill-eval tests don't fail in a headless CI that only runs the pure suite)."""
+    import shutil
+
+    import pytest
+
+    if shutil.which("claude"):
+        return
+    skip = pytest.mark.skip(reason="claude CLI not available")
+    for item in items:
+        if "requires_claude" in item.keywords:
+            item.add_marker(skip)

@@ -11,6 +11,10 @@ Thanks for sharpening the workshop. A few rules keep the marketplace clean and r
 - **`main` stays releasable.** Do feature work on short-lived branches and integrate via
   merge or PR. See the branch model in [CLAUDE.md](CLAUDE.md).
 - **Tests green.** `pytest -q` must pass with no regression before you open a PR.
+- **Skills make behavioral claims → add an eval.** When a skill gains a falsifiable
+  behavior (e.g. "refuses X", "never writes without approval"), add a scenario to
+  `evals/scenarios.json` (see [evals/README.md](evals/README.md)). The eval harness asserts
+  it against a real fixture rather than trusting the prose.
 
 ## Adding a skill
 

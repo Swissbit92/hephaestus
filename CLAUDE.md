@@ -37,7 +37,22 @@ pytest -q                 # run the suite
 pytest --collect-only -q  # count tests (baseline check)
 ```
 
-Tests live in `tests/`. The `cms` scripts are the main code under test.
+Tests live in `tests/`. The `cms` scripts and the eval-harness core are the main code under
+test.
+
+## Skill-eval harness
+
+`evals/` measures whether the plugins actually behave as their `SKILL.md` specifies —
+deterministic-first (asserts git/file state + tool-call traces against throwaway fixtures),
+with an optional pinned-Claude rubric judge. The pure core is unit-tested headless; the live
+runner drives the `claude` CLI.
+
+```bash
+python3 evals/run_evals.py          # run the behavioral scenarios (needs the claude CLI)
+```
+
+See [evals/README.md](evals/README.md). Add a behavioral scenario whenever a skill makes a
+new falsifiable claim.
 
 ## Public-safety rule (non-negotiable)
 
@@ -74,7 +89,8 @@ whetstone/
 │   ├── bump_version.py               # semver math (used by release.sh; unit-tested)
 │   ├── new_skill.py                  # scaffold a new skill (used by author-skill)
 │   └── check-public-safe.sh          # private-token guard
-├── tests/                            # pytest suite (cms scripts under test)
+├── evals/                            # skill-eval harness (behavioral scenarios; see its README)
+├── tests/                            # pytest suite (cms scripts + eval core under test)
 ├── CLAUDE.md                         # this file
 ├── CONTRIBUTING.md
 └── plugins/

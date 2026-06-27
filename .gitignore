@@ -6,3 +6,6 @@ __pycache__/
 
 # Runtime CMS state (size history). Ships the empty sync_facts.yaml starter only.
 plugins/whetstone/skills/cms/state/size_history.json
+
+# eval baseline reports (frozen on demand; keep the dir, not the run artifacts)
+evals/baselines/*.json
