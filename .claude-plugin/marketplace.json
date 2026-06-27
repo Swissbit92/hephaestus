@@ -26,6 +26,13 @@
       "description": "A minimal, working template for packaging a Python MCP server as a Claude Code plugin — userConfig injection, inline mcpServers, uv-isolated server, first-run hook, /setup wizard.",
       "category": "productivity",
       "tags": ["mcp", "template", "starter", "scaffold"]
+    },
+    {
+      "name": "second-brain",
+      "source": "./plugins/second-brain",
+      "description": "Obsidian inbox processor — proposes tags, links, filing, and action items for your notes, but never commits without your per-item approval. Suggest-then-confirm.",
+      "category": "productivity",
+      "tags": ["obsidian", "notes", "pkm", "second-brain"]
     }
   ]
 }

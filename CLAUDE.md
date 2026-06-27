@@ -14,6 +14,7 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 | **whetstone** | Generic, vendor-neutral craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill` |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server (3-layer read-only, NL→SQL) |
 | **mcp-starter** | Template for packaging a Python MCP server as a plugin |
+| **second-brain** | Obsidian inbox processor (suggest-then-confirm; skills-only) |
 
 ## Branch model (read before starting work)
 

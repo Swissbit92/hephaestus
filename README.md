@@ -9,6 +9,7 @@ A small workshop of [Claude Code](https://code.claude.com) plugins to keep your 
 | **whetstone** | Generic craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper` (detailed below). |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server — query any local `.db` safely (3-layer read-only, schema introspection, NL→SQL). See [its README](plugins/sqlite-readonly/README.md). |
 | **mcp-starter** | A minimal, working template for packaging a Python MCP server as a plugin (userConfig injection, inline servers, uv, first-run hook, `/setup`). See [its README](plugins/mcp-starter/README.md). |
+| **second-brain** | Obsidian inbox processor — proposes tags/links/filing/actions per note, applies only what you approve (suggest-then-confirm). See [its README](plugins/second-brain/README.md). |
 
 ## whetstone plugin
 
