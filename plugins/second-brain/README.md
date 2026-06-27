@@ -13,11 +13,14 @@ is good suggestions plus the restraint to skip when unsure.
 
 ## What it does
 
-- Reads your inbox (default `Inbox/`) and your controlled tag vocabulary first.
-- For each note, proposes a fixed, auditable block: summary, kind, tags (with reasons),
-  links (only real conceptual matches), extracted actions, and a filing destination.
-- Applies per-item on your explicit approval; **merges** by appending a dated section rather
-  than overwriting; never invents tags or links on surface word overlap.
+Three actions:
+- **process** (default) — reads your inbox (default `Inbox/`) and tag vocabulary, then for
+  each note proposes a fixed, auditable block (summary, kind, tags-with-reasons, links —
+  only real conceptual matches, extracted actions, filing destination). Applies per-item on
+  your explicit approval; **merges** by appending a dated section, never overwriting.
+- **review** — a read-only health report: orphans, stale notes, tag drift, broken links.
+  Writes nothing.
+- **capture** — drafts one new inbox note from a URL/snippet/idea, on confirmation.
 
 ## Install
 

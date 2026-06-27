@@ -29,6 +29,15 @@ Building a deck needs `python-pptx` (`pip install python-pptx`). The skill's pur
 (palette, `image_fit`, text fitting) need nothing — `python-pptx` is imported lazily only
 when a `Deck` is actually constructed.
 
+## Figures from PDFs
+
+`extract_diagrams.py` pulls figures out of a PDF as slide-ready PNGs (300 dpi, whitespace
+trimmed, long edge capped ~2000px). Needs `pip install pymupdf pillow`:
+
+```
+python3 skills/deck-builder/extract_diagrams.py paper.pdf --out figs/ --pages 2,5 --names arch,results
+```
+
 ## Make it your brand
 
 Edit `PALETTE` / `FOOTER` in `deck_lib.py`, or pass `Deck(palette={...}, footer="...")`.

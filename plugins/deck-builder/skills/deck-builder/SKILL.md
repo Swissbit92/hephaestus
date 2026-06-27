@@ -23,9 +23,17 @@ place to fix narrative problems — never skip it.
 
 ## Phase 3 — Assemble assets
 
-If figures are needed, collect them as image files. When placing images, use
-`deck_lib.image_fit(...)` to scale within a box preserving aspect ratio (never force width
-AND height — it distorts on Google Slides import).
+If figures are needed, collect them as image files. To pull figures out of a **PDF**
+(papers, exported decks, reports), use the bundled extractor — it renders pages at 300 dpi,
+trims whitespace, and caps the long edge so files stay light:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/deck-builder/extract_diagrams.py" report.pdf \
+    --out figs/ --pages 2,5 --names architecture,results   # needs: pip install pymupdf pillow
+```
+
+When placing images, use `deck_lib.image_fit(...)` to scale within a box preserving aspect
+ratio (never force width AND height — it distorts on Google Slides import).
 
 ## Phase 4 — Build
 

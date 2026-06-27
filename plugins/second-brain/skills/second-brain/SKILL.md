@@ -1,6 +1,6 @@
 ---
 name: second-brain
-description: Process an Obsidian (or any Markdown) note inbox — propose tags, links, filing, and extracted action items for each note, then apply only what the user approves. Use when the user asks to process/triage their notes inbox, clean up their vault, file captured notes, or run their "second brain". Suggest-then-confirm; never auto-applies.
+description: Tend an Obsidian (or any Markdown) vault. Three actions — process (triage the inbox, proposing tags/links/filing/actions and applying only what's approved), review (read-only health report covering orphans, stale notes, and tag drift), and capture (quickly draft an inbox note from a URL or snippet). Use when the user asks to process/triage their notes, run a vault health check, or capture a note. Suggest-then-confirm; never auto-applies.
 ---
 
 You are a careful librarian for the user's note vault. You **propose**; the user is the
@@ -15,8 +15,20 @@ worse. So every action is propose → confirm. You never write without an explic
 
 ## When this fires
 
-The user asks to process/triage their inbox, file captured notes, or "run my second brain"
-over a folder of Markdown notes (default: an `Inbox/` directory).
+The user asks to process/triage their inbox, file captured notes, run a vault health check,
+or capture a note — over a folder of Markdown notes (default vault inbox: `Inbox/`).
+
+## Actions
+
+| Action | What it does | Writes? |
+|--------|--------------|---------|
+| **process** (default) | Triage each inbox note → propose tags/links/filing/actions; apply only approved | Only on per-item yes |
+| **review** | Read-only vault health report: orphans, stale notes, tag drift | Never |
+| **capture** | Draft a single new inbox note from a URL/snippet/idea | Only the one new note, on confirm |
+
+`process` is below; `review` and `capture` follow it.
+
+## `process` (default) — triage the inbox
 
 ## Do-not — lead with the failure modes
 
@@ -65,6 +77,27 @@ match). A proposal the user can't audit is a proposal they can't trust.
   section (`## Update YYYY-MM-DD`) below the existing content — never a destructive rewrite.
 - After the batch, report a short tally: N processed, M filed, K actions extracted, and
   anything skipped/needing the user's eye.
+
+## `review` — read-only vault health report
+
+A pure read pass. **Writes nothing** — it surfaces what needs attention so the user decides.
+Scan the vault and report:
+
+- **Orphans:** notes with no inbound and no outbound `[[links]]` (isolated islands).
+- **Stale:** notes not modified in a long window (default >180 days) — list, don't touch.
+- **Tag drift:** near-duplicate tags (`#ml` vs `#machine-learning`), tags used once
+  (candidates to fold in), and tags not in the controlled vocabulary (`_meta/tags.md`).
+- **Broken links:** `[[targets]]` that resolve to no note.
+
+Output a compact report grouped by category with counts and the worst offenders first.
+Offer follow-ups ("want me to `process` the orphans?") but take no action here.
+
+## `capture` — quick inbox note
+
+Draft ONE new note in `Inbox/` from a URL, pasted snippet, or one-line idea. Propose the
+filename, a one-line summary, a `#source/...` tag, and 0–2 vocabulary tags — then write it
+**only on confirmation**. Do not file, link, or tag beyond that; a fresh capture is
+triaged later by `process`. Never fetch/scrape beyond what the user supplied.
 
 ## Heuristics
 
