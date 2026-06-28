@@ -25,7 +25,11 @@ This repo began as **whetstone**, a public Claude Code marketplace of generic cr
 
 3. **Build the factory as restricted-agents + deterministic gates — not role-play.** A "role" is a tool-restricted subagent (read-only where it should be) with domain knowledge in its system prompt, gated by deterministic hooks (`PreToolUse`/`Stop`/`TaskCompleted`, exit 2). Parallelism only for genuinely independent sub-tasks. Unit of autonomy = well-scoped ticket → PR, human at the epic/merge boundary. Explicitly do not build a sequential 7-role waterfall.
 
-4. **Three-tier seam.** Tier A generic craft (**crucible** — cms, grill-me, develop, branch lifecycle, qa-gatekeeper, author-skill, and the graduated **eval-first** / **flag-gate** as skills; `safety-middleware` TBD) · Tier B domain factory (quant-factory, kucoin-safety-gate) · Tier C per-repo `.claude/`. Graduation: C → B when 2+ repos need it and it generalizes; B → A never. **Within Tier A, generic capabilities are crucible skills, not separate plugins** — a plugin boundary is earned by the generic↔domain seam or by heavy/independent deps, not by splitting craft tools at solo scale.
+4. **The seam is generic vs domain (the primary classifier).** Everything else is packaging.
+   - **Generic** (domain-free, reusable by anyone) → a **crucible artifact by default — skill, command, hook, agent, or sub-agent** (crucible already bundles all types: skills cms/grill-me/branch-lifecycle/author-skill + graduated eval-first/flag-gate, command `develop`, hook cms-PreToolUse, agent `qa-gatekeeper`). It earns its *own* generic plugin **only** when it can't be a lightweight bundled artifact — heavy/independent deps, an MCP server, or a large standalone tool with its own lifecycle (e.g. `sqlite-readonly`, `deck-builder`, `mcp-starter`, `second-brain`).
+   - **Domain** (carries ecosystem judgment) → **never in crucible.** Cross-repo domain → a domain plugin (`quant-factory`, `kucoin-safety-gate`); single-repo → per-repo `.claude/`.
+   - Graduation: per-repo → domain plugin when 2+ repos need it and it generalizes; domain → generic never (domain-bound by definition).
+   - The "Tier A/B/C" labels are just names for the resulting buckets, not the classifier. `test_seam.py` enforces the seam: no generic plugin may carry a domain token.
 
 Phased roadmap in [ROADMAP.md](../ROADMAP.md). Pattern source for Phase 3: `cobusgreyling/loop-engineering`. Rejected: cloud-hosted unattended agents over the codebase (MaxHermes/MiniMax-style) — same security grounds as the ecosystem's cloud-LLM and OpenClaw rejections.
 
