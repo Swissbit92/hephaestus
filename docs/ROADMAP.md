@@ -13,12 +13,13 @@ Near-term dated items only. Strategic direction: [VISION.md](../VISION.md). Arch
 
 The factory is built in value-first phases — each ships standalone value and is independently abandonable. Premortem: this fails if it becomes infrastructure-gardening (meta-work that feels productive while the income engine stalls). Guard: Phase 1 banks live-capital safety + a real eval harness before any speculative orchestration.
 
-## Phase 0 — consolidate + recognize (in progress)
+## Phase 0 — consolidate + recognize
 
 - [x] Rename marketplace `whetstone` → `hephaestus`; craft plugin → `crucible` (tests green, plugin validate passes).
-- [ ] Make the GitHub repo private.
-- [ ] Own docs: VISION, ROADMAP, SECURITY, THREAT_LEVEL, ADR-001 (this scaffolding).
-- [ ] Seam linter: repurpose `check-public-safe.sh` + add `test_seam.py` (assert no generic plugin imports domain content).
+- [x] Make the GitHub repo private.
+- [x] Own docs: VISION, ROADMAP, SECURITY, THREAT_LEVEL, ADR-001.
+- [x] Seam linter `test_seam.py` (assert no generic plugin carries domain tokens) + `check-public-safe.sh` reframed as the secret guard + cms `templates/` exclusion (cms check now 0 errors).
+- [ ] **Cutover to the marketplace** — make hephaestus the single source of truth and remove local duplicates. Gated on the private-marketplace install being verified working (auth bug [#17201](https://github.com/anthropics/claude-code/issues/17201) → manual-clone workaround). Steps: (1) `/plugin marketplace add Swissbit92/hephaestus` + install `crucible`; (2) repoint the nephilim cms `PreToolUse` hook from local `~/.claude/skills/cms/scripts/hook.py` → the crucible plugin; (3) remove now-duplicated locals — `~/.claude/skills/{cms,grill-me}`, `~/nephilim/.claude/commands/develop.md`, `~/nephilim/.claude/agents/qa-gatekeeper.md`, `start-branch`/`finish-branch`/`author-skill`; (4) verify `/crucible:*` commands + the hook fire from the plugin. Best done after Phase 1 so `eval-first` is in the marketplace and cut over in the same pass.
 
 ## Phase 1 — bank the certain value (pays for itself, no role-agents)
 
