@@ -2,13 +2,30 @@
 
 [![CI](https://github.com/Swissbit92/hephaestus/actions/workflows/ci.yml/badge.svg)](https://github.com/Swissbit92/hephaestus/actions/workflows/ci.yml)
 
-A small workshop of [Claude Code](https://code.claude.com) plugins to keep your craft sharp.
+**hephaestus** is a public [Claude Code](https://code.claude.com) marketplace of small, sharp
+plugins — a workshop for keeping your craft sharp. Each plugin is self-contained, vendor-neutral,
+and versioned independently, so you install only what you need and update it on its own cadence.
+
+The flagship is **crucible**: a bundle of generic, domain-free craft tools that make AI-assisted
+development *disciplined* rather than chaotic — a structured `develop` workflow with QA gates
+between phases, a safe branch lifecycle (`start-branch` / `finish-branch` that never merges on a
+red suite), documentation discipline (`cms`), an adversarial decision-tester (`grill-me`),
+eval-first change-gating (`eval-first` + `flag-gate`, so a change has to match-or-beat its baseline
+before it ships), a skill-authoring guide (`author-skill`), and `loop-harness` — a bounded,
+single-threaded, **read-only** agent-loop primitive (turn/budget ceilings, a `LOOP-STATE` ledger,
+a worktree-only safety hook, and a one-command CI sweep). Around it sit focused standalone plugins:
+a zero-config read-only SQLite MCP server, an Obsidian inbox processor, a code-backed `.pptx` deck
+builder, and a template for packaging your own MCP-server plugin.
+
+One principle runs through all of it: **small, composable tools that earn their place** — pure
+stdlib where possible, no hidden dependencies, each one tested and documented so an agent (or a
+human) can pick it up cold.
 
 ## Plugins in this marketplace
 
 | Plugin | What it is |
 |--------|------------|
-| **crucible** | Generic craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper` (detailed below). |
+| **crucible** | Generic craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `eval-first`, `flag-gate`, `author-skill`, `loop-harness` (detailed below). |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server — query any local `.db` safely (3-layer read-only, schema introspection, NL→SQL). See [its README](plugins/sqlite-readonly/README.md). |
 | **mcp-starter** | A minimal, working template for packaging a Python MCP server as a plugin (userConfig injection, inline servers, uv, first-run hook, `/setup`). See [its README](plugins/mcp-starter/README.md). |
 | **second-brain** | Obsidian inbox processor — proposes tags/links/filing/actions per note, applies only what you approve (suggest-then-confirm). See [its README](plugins/second-brain/README.md). |
@@ -27,6 +44,7 @@ A small workshop of [Claude Code](https://code.claude.com) plugins to keep your 
 | **eval-first** | skill | Eval-first development — freeze a baseline, then gate every change on match-or-beat-or-revert. Deterministic-first checks → swap-augmented blind A/B judge (with self-grading guard) → `verdict`. Generic stdlib scripts + scaffolding templates; domain scorers plug in via injected `judge_fn`/`embed_fn`. |
 | **flag-gate** | skill | Default-OFF feature-flag rollout with instant revert — ship behind a flag, keep the legacy path byte-identical, flip only on an eval-first gate, revert by flipping off, retire after soak. Pairs with `eval-first`. |
 | **author-skill** | skill | Guide + scaffolder for writing a high-quality skill/plugin — lays out the authoring patterns (with real exemplars) and creates a pre-structured `SKILL.md` via `scripts/new_skill.py`. User-invoked. |
+| **loop-harness** | skill | Run a bounded, single-threaded, **read-only** agent loop safely — hard turn/budget ceilings + cost log (`loop_budget`), a `LOOP-STATE` ledger for memory (`loop_ledger`), a `PreToolUse` safety hook that blocks merge/push/out-of-worktree while a loop is armed (`loop_hook`), a test-log summarizer (`loop_logscan`), and `loop_sweep` — one command for a read-only CI sweep → needs-me report. Single-threaded, *not* role-teams (evidence-backed). |
 
 ## Install
 
