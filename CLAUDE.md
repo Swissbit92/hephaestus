@@ -37,8 +37,8 @@ pytest -q                 # run the suite
 pytest --collect-only -q  # count tests (baseline check)
 ```
 
-Tests live in `tests/`. The `cms` scripts and the eval-harness core are the main code under
-test.
+Tests live in `tests/`. The `cms` scripts, the eval-harness core, and the `loop-harness`
+scripts (budget/ledger/safety-hook/logscan) are the main code under test.
 
 ## Skill-eval harness
 
@@ -90,17 +90,19 @@ hephaestus/
 │   ├── new_skill.py                  # scaffold a new skill (used by author-skill)
 │   └── check-public-safe.sh          # private-token guard
 ├── evals/                            # skill-eval harness (behavioral scenarios; see its README)
-├── tests/                            # pytest suite (cms scripts + eval core under test)
+├── tests/                            # pytest suite (cms + eval core + loop-harness under test)
 ├── CLAUDE.md                         # this file
 ├── CONTRIBUTING.md
 └── plugins/
     ├── crucible/
     │   ├── .claude-plugin/plugin.json
-    │   ├── skills/{cms,grill-me,start-branch,finish-branch}/
+    │   ├── skills/{cms,grill-me,start-branch,finish-branch,author-skill,eval-first,flag-gate,loop-harness}/
     │   ├── commands/develop.md
     │   └── agents/qa-gatekeeper.md
     ├── sqlite-readonly/         # read-only SQLite MCP server (uv project under servers/)
-    └── mcp-starter/             # MCP-plugin packaging template
+    ├── mcp-starter/             # MCP-plugin packaging template
+    ├── second-brain/            # Obsidian inbox processor (suggest-then-confirm; skills-only)
+    └── deck-builder/            # code-backed .pptx deck builder (python-pptx)
 ```
 
 ## Conventions
