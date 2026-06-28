@@ -1,0 +1,17 @@
+# LOOP-STATE: {run_id}
+
+- **Goal:** {goal}
+- **Status:** {status}
+- **Updated:** {updated}
+
+## Open hypotheses
+_(none yet)_
+
+## Decisions
+_(none yet)_
+
+## Timeline
+_(none yet)_
+
+## Needs-me
+_(none yet)_

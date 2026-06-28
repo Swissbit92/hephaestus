@@ -5,6 +5,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 ## [Unreleased]
 
 ### Added
+- **crucible 0.6.0 — `loop-harness` skill.** Bounded, single-threaded, read-only agent-loop primitive (the CI Sweeper spine). `loop_budget` (hard turn ceiling + optional token/cost budget + per-run cost log), `loop_ledger` (a `LOOP-STATE.md` memory file with structural compaction), and a PreToolUse safety `loop_hook` that is **inert unless a loop is armed** and otherwise blocks `git push`/`merge`/`rebase`/`reset --hard`/`branch -d|-D`/`worktree remove` and writes outside the worktree (tokenizer-based — resists `git -C`/`-c`/env-prefix bypass). Single-threaded-not-role-teams, evidence-backed by `docs/research/loop-engineering-2025.md`. Pure stdlib; 60 tests.
 - **crucible 0.5.0 — `flag-gate` skill.** Default-OFF feature-flag rollout with instant revert (legacy path byte-identical, flip on an eval-first gate, revert by flipping off, retire after soak). Pure methodology skill; pairs with `eval-first`.
 - **crucible 0.4.0 — `eval-first` skill.** Eval-first methodology + generic stdlib scripts (`ab_harness`, `baseline`, `judge`, `deterministic`, `reliability`) and scaffolding templates. Freeze an immutable baseline → deterministic-first checks → swap-augmented blind A/B judge (pinned, self-grading-guarded) → match-or-beat-or-revert verdict. 38 tests.
 
