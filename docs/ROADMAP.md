@@ -32,7 +32,7 @@ The factory is built in value-first phases — each ships standalone value and i
 ## Phase 2 — first restricted role-agents
 
 - [ ] **`blast-radius-reviewer`** (read-only; carries the ecosystem ADR-001/002/003/004) + **`quant-architect`** (read-only).
-- [ ] Wire `qa-gatekeeper`'s test baseline to read ground truth live (kill the stale-baseline false-alarm → loop-trustworthy gate).
+- [x] Wire `qa-gatekeeper`'s test baseline to read ground truth live ✅ 2026-06-28 — the gate now re-derives the baseline from the branch-point commit (`git merge-base HEAD <target>`, counted in a throwaway worktree) instead of trusting a stated count; regression = fewer passing tests or a newly failing test, added tests are not. Aligned `develop` + `start-branch` baseline wording. crucible 0.5.0→0.5.1.
 
 ## Phase 3 — close one loop (safest surface; first loop = CI Sweeper)
 
