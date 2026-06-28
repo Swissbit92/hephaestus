@@ -9,7 +9,7 @@
     {
       "name": "crucible",
       "source": "./plugins/crucible",
-      "description": "Doc-discipline (cms), decision stress-testing (grill-me), a structured development workflow (develop), a safe branch lifecycle (start-branch / finish-branch), and eval-first development (freeze a baseline, gate on match-or-beat-or-revert).",
+      "description": "Doc-discipline (cms), decision stress-testing (grill-me), a structured development workflow (develop), a safe branch lifecycle (start-branch / finish-branch), eval-first development (freeze a baseline, gate on match-or-beat-or-revert), and flag-gate (default-OFF rollout with instant revert).",
       "category": "productivity",
       "tags": ["documentation", "workflow", "review"]
     },
