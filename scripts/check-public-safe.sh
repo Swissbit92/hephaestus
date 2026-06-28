@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 #
-# Public-safety guard for the hephaestus marketplace.
+# Secret / employer-content guard for the hephaestus marketplace.
 #
-# This repo is PUBLIC. It must contain zero references to any private/employer system.
-# This script greps the tracked tree for known private tokens and exits non-zero on any
-# hit, so it can gate commits and releases.
+# This repo is PRIVATE, but must still contain zero references to any employer/secret system
+# (the generic plugins were extracted clean-room from a private fork). This script greps the
+# tracked tree for known private tokens and exits non-zero on any hit, so it can gate commits
+# and releases. The generic<->domain seam is enforced separately by tests/test_seam.py.
 #
 # Usage:
 #   scripts/check-public-safe.sh            # scan tracked files (or whole tree if not a git repo)
