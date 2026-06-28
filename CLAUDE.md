@@ -1,4 +1,4 @@
-# whetstone — repo guide
+# hephaestus — repo guide
 
 A public [Claude Code](https://code.claude.com) **marketplace** of small, sharp plugins.
 This file orients contributors and AI agents working in this repo.
@@ -11,7 +11,7 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 
 | Plugin | Scope |
 |--------|-------|
-| **whetstone** | Generic, vendor-neutral craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill` |
+| **crucible** | Generic, vendor-neutral craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill` |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server (3-layer read-only, NL→SQL) |
 | **mcp-starter** | Template for packaging a Python MCP server as a plugin |
 | **second-brain** | Obsidian inbox processor (suggest-then-confirm; skills-only) |
@@ -23,7 +23,7 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 - **Work happens on short-lived feature branches** named Conventional-Branch style:
   `<type>/<short-description>` in kebab-case — `feature/…`, `bugfix/…`, `hotfix/…`, `chore/…`.
 - **Integrate via merge or PR back into `main`.** Never commit feature work directly to `main`.
-- Tags are per-plugin: `<plugin>-v<x.y.z>` (e.g. `whetstone-v0.2.0`).
+- Tags are per-plugin: `<plugin>-v<x.y.z>` (e.g. `crucible-v0.2.0`).
 
 > The `start-branch` / `finish-branch` skills detect this model from this file — keep the
 > section above accurate.
@@ -70,7 +70,7 @@ patterns in, private content out.
 
 ## Development workflow (dogfood)
 
-We build whetstone *using* whetstone. For non-trivial work:
+We build hephaestus *using* crucible. For non-trivial work:
 
 1. `develop` — classify (FULL / LIGHT / TRIVIAL) and run the matching phases.
 2. `start-branch` (FULL/LIGHT) — isolate on a feature branch before touching code.
@@ -82,7 +82,7 @@ Do **not** push or cut a release without an explicit go from the maintainer.
 ## Layout
 
 ```
-whetstone/
+hephaestus/
 ├── .claude-plugin/marketplace.json   # marketplace catalog (lists all plugins)
 ├── scripts/
 │   ├── release.sh                    # per-plugin version bump + tag + GitHub release
@@ -94,7 +94,7 @@ whetstone/
 ├── CLAUDE.md                         # this file
 ├── CONTRIBUTING.md
 └── plugins/
-    ├── whetstone/
+    ├── crucible/
     │   ├── .claude-plugin/plugin.json
     │   ├── skills/{cms,grill-me,start-branch,finish-branch}/
     │   ├── commands/develop.md

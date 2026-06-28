@@ -1,4 +1,4 @@
-# Contributing to whetstone
+# Contributing to hephaestus
 
 Thanks for sharpening the workshop. A few rules keep the marketplace clean and releasable.
 
@@ -22,7 +22,7 @@ Thanks for sharpening the workshop. A few rules keep the marketplace clean and r
 
 ## Adding a skill
 
-Run `/whetstone:author-skill` — it scaffolds a pre-structured `SKILL.md` (via
+Run `/crucible:author-skill` — it scaffolds a pre-structured `SKILL.md` (via
 `scripts/new_skill.py`) and coaches each section against the repo's authoring patterns
 (exemplar-first negatives, hard-gate vs. best-effort, code-backed helpers, progressive
 disclosure, …), citing shipped skills as examples. Or run the scaffolder directly:
@@ -38,7 +38,7 @@ python3 scripts/new_skill.py <kebab-name> --description "<trigger-focused one-li
 2. Add the plugin's content (`skills/`, `commands/`, `agents/`, `servers/` …).
 3. Register it in `.claude-plugin/marketplace.json` (`name`, `source`, `description`,
    `category`, `tags`).
-4. Give it a README (the top-level `whetstone` plugin is the exception — it uses the
+4. Give it a README (the top-level `crucible` plugin is the exception — it uses the
    repo-root README) and, if it needs external config, a `/setup` command + first-run hook.
 5. Keep it vendor-neutral and, where possible, zero-config so anyone can try it instantly.
 

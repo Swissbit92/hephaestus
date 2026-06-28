@@ -21,8 +21,8 @@ to preserve aspect ratio.
 ## Install & requirements
 
 ```
-/plugin marketplace add Swissbit92/whetstone
-/plugin install deck-builder@whetstone
+/plugin marketplace add Swissbit92/hephaestus
+/plugin install deck-builder@hephaestus
 ```
 
 Building a deck needs `python-pptx` (`pip install python-pptx`). The skill's pure helpers

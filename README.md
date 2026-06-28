@@ -1,6 +1,6 @@
-# whetstone
+# hephaestus
 
-[![CI](https://github.com/Swissbit92/whetstone/actions/workflows/ci.yml/badge.svg)](https://github.com/Swissbit92/whetstone/actions/workflows/ci.yml)
+[![CI](https://github.com/Swissbit92/hephaestus/actions/workflows/ci.yml/badge.svg)](https://github.com/Swissbit92/hephaestus/actions/workflows/ci.yml)
 
 A small workshop of [Claude Code](https://code.claude.com) plugins to keep your craft sharp.
 
@@ -8,13 +8,13 @@ A small workshop of [Claude Code](https://code.claude.com) plugins to keep your 
 
 | Plugin | What it is |
 |--------|------------|
-| **whetstone** | Generic craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper` (detailed below). |
+| **crucible** | Generic craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper` (detailed below). |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server — query any local `.db` safely (3-layer read-only, schema introspection, NL→SQL). See [its README](plugins/sqlite-readonly/README.md). |
 | **mcp-starter** | A minimal, working template for packaging a Python MCP server as a plugin (userConfig injection, inline servers, uv, first-run hook, `/setup`). See [its README](plugins/mcp-starter/README.md). |
 | **second-brain** | Obsidian inbox processor — proposes tags/links/filing/actions per note, applies only what you approve (suggest-then-confirm). See [its README](plugins/second-brain/README.md). |
 | **deck-builder** | Build polished `.pptx` decks from source material — code-backed (named layout methods, never hand-rolled geometry), with an outline-approval gate. See [its README](plugins/deck-builder/README.md). |
 
-## whetstone plugin
+## crucible plugin
 
 | Tool | Type | What it does |
 |------|------|--------------|
@@ -29,18 +29,18 @@ A small workshop of [Claude Code](https://code.claude.com) plugins to keep your 
 ## Install
 
 ```
-/plugin marketplace add Swissbit92/whetstone
-/plugin install whetstone@whetstone            # generic craft tools
-/plugin install sqlite-readonly@whetstone      # read-only SQLite MCP server (needs uv)
-/plugin install mcp-starter@whetstone          # MCP-plugin template
+/plugin marketplace add Swissbit92/hephaestus
+/plugin install crucible@hephaestus            # generic craft tools
+/plugin install sqlite-readonly@hephaestus      # read-only SQLite MCP server (needs uv)
+/plugin install mcp-starter@hephaestus          # MCP-plugin template
 ```
 
 Then the tools are namespaced under the plugin:
 
-- `/whetstone:cms` — run any CMS command (see the skill for subcommands)
-- `/whetstone:grill-me` — start a grilling session
-- `/whetstone:develop` — run the development workflow
-- `/whetstone:start-branch` · `/whetstone:finish-branch` — isolate / integrate work safely
+- `/crucible:cms` — run any CMS command (see the skill for subcommands)
+- `/crucible:grill-me` — start a grilling session
+- `/crucible:develop` — run the development workflow
+- `/crucible:start-branch` · `/crucible:finish-branch` — isolate / integrate work safely
 
 `cms` and `grill-me` are also model-invoked: Claude triggers them automatically when their description matches what you're doing (editing docs, validating a decision).
 
@@ -79,11 +79,11 @@ overwrite the cached plugin dir, so state resolves in this order:
 ## Layout
 
 ```
-whetstone/
+hephaestus/
 ├── .claude-plugin/marketplace.json     # marketplace catalog (lists all plugins)
 ├── scripts/                            # release.sh · bump_version.py · check-public-safe.sh
 ├── tests/                              # pytest suite
-└── plugins/whetstone/
+└── plugins/crucible/
     ├── .claude-plugin/plugin.json      # plugin manifest + cms hook
     ├── skills/
     │   ├── cms/                         # SKILL.md + scripts/ + templates/ + state/
@@ -108,7 +108,7 @@ scripts/release.sh <plugin> 1.2.3            # explicit version
 scripts/release.sh <plugin> patch --dry-run  # preview, change nothing
 ```
 
-`<plugin>` is a directory under `plugins/` (e.g. `whetstone`). Each plugin versions
+`<plugin>` is a directory under `plugins/` (e.g. `crucible`). Each plugin versions
 independently under its own tag namespace `<plugin>-v<x.y.z>`. The script refuses to run
 unless you're on `main` with a clean tree, validates the plugin, then commits, tags,
 pushes, and creates a GitHub release with notes drawn from that plugin's commits since its

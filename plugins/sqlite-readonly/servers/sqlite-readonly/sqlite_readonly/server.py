@@ -38,7 +38,7 @@ def _resolve_db_path() -> tuple[str, bool]:
     configured = os.environ.get("SQLITE_DB_PATH", "").strip()
     if configured:
         return configured, False
-    dest = Path(tempfile.gettempdir()) / "whetstone-sqlite-sample.db"
+    dest = Path(tempfile.gettempdir()) / "hephaestus-sqlite-sample.db"
     return db.materialize_sample(_SAMPLE_SQL, dest), True
 
 

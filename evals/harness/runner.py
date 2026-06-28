@@ -1,4 +1,4 @@
-"""Drive a whetstone skill headlessly and capture what it did. LIVE — needs the `claude`
+"""Drive a crucible skill headlessly and capture what it did. LIVE — needs the `claude`
 CLI (default) or the Claude Agent SDK; skipped in headless CI.
 
 Flow per run: snapshot the fixture -> invoke the skill non-interactively in the fixture

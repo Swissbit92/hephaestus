@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Semver bump helper for the whetstone release flow. Pure stdlib.
+"""Semver bump helper for the hephaestus release flow. Pure stdlib.
 
 Extracted from release.sh so the version math is unit-testable. Given a current
 X.Y.Z version and a bump spec, returns/prints the next version.

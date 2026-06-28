@@ -71,8 +71,8 @@ processes only re-read configuration on a fresh start.
 ## Install (try the example)
 
 ```
-/plugin marketplace add Swissbit92/whetstone
-/plugin install mcp-starter@whetstone
+/plugin marketplace add Swissbit92/hephaestus
+/plugin install mcp-starter@hephaestus
 /mcp-starter:setup
 ```
 

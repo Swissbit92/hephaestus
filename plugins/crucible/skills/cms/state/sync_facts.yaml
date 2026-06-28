@@ -1,7 +1,7 @@
 # CMS drift-detection facts.
 #
 # Each fact is a canonical value that tends to drift across docs (version
-# numbers, status strings, counts). `/whetstone:cms sync` scans every *.md
+# numbers, status strings, counts). `/crucible:cms sync` scans every *.md
 # under the root and flags any captured value that disagrees with
 # expected_value, or any fact with multiple distinct values across files.
 #
