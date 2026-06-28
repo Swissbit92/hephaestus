@@ -4,10 +4,12 @@ Thanks for sharpening the workshop. A few rules keep the marketplace clean and r
 
 ## Ground rules
 
-- **Public-safe, always.** This repo is public. It must contain no references to any
-  private or employer system. Run `scripts/check-public-safe.sh` before every commit — a
-  non-zero exit blocks the change. When porting a pattern from a private source, re-author
-  it from scratch in this repo's voice: **patterns in, private content out.**
+- **No secrets, ever.** This repo is private, but must still contain no references to any
+  employer/secret system (the generic plugins were extracted clean-room from a private
+  fork). Run `scripts/check-public-safe.sh` before every commit — a non-zero exit blocks the
+  change. The generic↔domain seam is enforced separately by `tests/test_seam.py`. When
+  porting a pattern from a private source, re-author it from scratch: **patterns in, private
+  content out.**
 - **`main` stays releasable.** Do feature work on short-lived branches and integrate via
   merge or PR. See the branch model in [CLAUDE.md](CLAUDE.md).
 - **Tests green.** `pytest -q` must pass with no regression before you open a PR. CI
@@ -41,6 +43,33 @@ python3 scripts/new_skill.py <kebab-name> --description "<trigger-focused one-li
 4. Give it a README (the top-level `crucible` plugin is the exception — it uses the
    repo-root README) and, if it needs external config, a `/setup` command + first-run hook.
 5. Keep it vendor-neutral and, where possible, zero-config so anyone can try it instantly.
+
+## Local development (live-load)
+
+Marketplace-installed plugins load from a **version-pinned cache copy**, so edits to the
+source don't appear on `/reload-plugins` until you bump the version and reinstall. For fast
+iteration, load the plugin **directly** from your clone with `--plugin-dir` — no cache, no
+reinstall, no git pull (and the private-repo auth bug is irrelevant, since nothing touches
+git):
+
+```bash
+claude --plugin-dir /absolute/path/to/hephaestus/plugins/crucible
+# edit the plugin, then in-session:
+/reload-plugins   # changes are live immediately
+```
+
+A `--plugin-dir` plugin takes precedence over the same-named installed one for that
+session, so the marketplace install stays in place as your released fallback. To have it on
+by default, bake the flag into a shell alias (escape hatch: `command claude` runs without
+it):
+
+```bash
+alias claude='claude --plugin-dir /absolute/path/to/hephaestus/plugins/crucible'
+```
+
+This is **per-developer** — the path is your local clone, so it is not (and cannot be) part
+of the plugin's distributed setup. End users install the released version from the
+marketplace and never need it.
 
 ## Releasing
 
