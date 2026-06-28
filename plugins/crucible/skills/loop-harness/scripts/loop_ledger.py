@@ -102,6 +102,19 @@ def _set_updated(lines: list[str], when: str) -> None:
             return
 
 
+def set_status(text: str, status: str, *, updated: str | None = None) -> str:
+    """Update the ledger's header `Status` field (and optionally `Updated`). Used at disarm so the
+    ledger reflects the final run state instead of staying 'armed'."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("- **Status:**"):
+            lines[i] = f"- **Status:** {status}"
+            break
+    if updated is not None:
+        _set_updated(lines, updated)
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def append_entry(text: str, section: str, entry: str, *, when: str | None = None) -> str:
     canonical = resolve_section(section)
     when = when or _now_iso()

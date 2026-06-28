@@ -18,10 +18,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timezone
 
 import loop_common
+import loop_ledger
 
 EXIT_OVER_BUDGET = 3  # `charge`/`status` use this so the driver knows to stop
 
@@ -37,6 +39,7 @@ def new_run(
     max_tokens: int | None = None,
     max_cost_usd: float | None = None,
     worktree: str | None = None,
+    ledger: str | None = None,
     run_id: str | None = None,
     started_at: str | None = None,
 ) -> dict:
@@ -47,6 +50,7 @@ def new_run(
         "run_id": run_id or f"loop-{started}",
         "goal": goal,
         "worktree": worktree,
+        "ledger": ledger,
         "started_at": started,
         "max_turns": int(max_turns),
         "max_tokens": int(max_tokens) if max_tokens is not None else None,
@@ -94,12 +98,16 @@ def _cmd_arm(args) -> int:
     if loop_common.load_run() is not None:
         print("[loop-budget] a run is already armed; disarm first", file=sys.stderr)
         return 1
+    ledger = args.ledger
+    if ledger is None and args.worktree:
+        ledger = os.path.join(args.worktree, "LOOP-STATE.md")  # convention
     run = new_run(
         args.goal,
         args.max_turns,
         max_tokens=args.max_tokens,
         max_cost_usd=args.max_cost_usd,
         worktree=args.worktree,
+        ledger=ledger,
     )
     loop_common.save_json(loop_common.RUN_STATE_FILE, run)
     print(json.dumps({"armed": True, "run_id": run["run_id"], "remaining": remaining(run)}))
@@ -132,6 +140,20 @@ def _cmd_status(args) -> int:
     return 0 if ok else EXIT_OVER_BUDGET
 
 
+def _sync_ledger_status(run: dict) -> bool:
+    """Stamp the run's final status into its ledger so it stops reading 'armed'. No-op if the
+    ledger path is unknown or missing."""
+    path = run.get("ledger")
+    if not path or not os.path.exists(path):
+        return False
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    text = loop_ledger.set_status(text, run.get("final_status", "stopped"), updated=run.get("ended_at"))
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return True
+
+
 def _cmd_disarm(args) -> int:
     run = loop_common.load_run()
     if run is None:
@@ -140,8 +162,9 @@ def _cmd_disarm(args) -> int:
     run["ended_at"] = _now_iso()
     run["final_status"] = args.status
     loop_common.append_cost_log(run)
+    synced = _sync_ledger_status(run)
     loop_common.clear_state(loop_common.RUN_STATE_FILE)
-    print(json.dumps({"disarmed": True, "run_id": run["run_id"], "final_status": args.status}))
+    print(json.dumps({"disarmed": True, "run_id": run["run_id"], "final_status": args.status, "ledger_synced": synced}))
     return 0
 
 
@@ -155,6 +178,7 @@ def main(argv=None) -> int:
     p_arm.add_argument("--max-tokens", type=int, default=None, dest="max_tokens")
     p_arm.add_argument("--max-cost-usd", type=float, default=None, dest="max_cost_usd")
     p_arm.add_argument("--worktree", default=None)
+    p_arm.add_argument("--ledger", default=None, help="LOOP-STATE.md path (defaults to <worktree>/LOOP-STATE.md)")
     p_arm.set_defaults(func=_cmd_arm)
 
     p_charge = sub.add_parser("charge", help="record turns/tokens/cost; exit 3 if over budget")
