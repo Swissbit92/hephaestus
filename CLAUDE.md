@@ -38,7 +38,7 @@ pytest --collect-only -q  # count tests (baseline check)
 ```
 
 Tests live in `tests/`. The `cms` scripts, the eval-harness core, and the `loop-harness`
-scripts (budget/ledger/safety-hook/logscan) are the main code under test.
+scripts (budget/ledger/safety-hook/logscan/sweep) are the main code under test.
 
 ## Skill-eval harness
 

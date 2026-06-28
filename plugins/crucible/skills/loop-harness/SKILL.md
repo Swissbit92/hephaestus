@@ -65,6 +65,20 @@ don't design around being blocked).
    This removes the armed marker (hook goes inert again), appends a cost-log record, and stamps
    the ledger's `Status` with the final status so it stops reading `armed`.
 
+### Shortcut: one-command read-only sweep
+
+For the **diagnosis half** (watch → detect → report, no fixing), `loop_sweep.py` does the whole
+arm → run-tests → logscan → ledger → report → disarm cycle in one command — cron/CI-friendly:
+
+```
+python3 scripts/loop_sweep.py --test-cmd "pytest" [--worktree "$WT"] [--report needs-me.md]
+```
+
+It runs the project's test command, summarizes via `loop_logscan`, writes findings to the ledger,
+and emits a **needs-me report**. Exit **0 = green, 1 = red, 2 = couldn't parse** (so a scheduler
+can act). It is **read-only — it never drafts a fix, commits, or merges.** Drafting the fix is the
+agent's triage step (below), run as a deliberate follow-up on what the sweep surfaces.
+
 The ledger — not the context window — is the loop's memory. Context is a finite attention budget
 ("context rot"); write decisions/findings/open-hypotheses to `LOOP-STATE.md` so a compacted or
 restarted run loses nothing.
