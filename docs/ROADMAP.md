@@ -43,11 +43,12 @@ The factory is built in value-first phases — each ships standalone value and i
 Evidence-backed by [research/loop-engineering-2025](research/loop-engineering-2025.md) (deep-research, 2026-06-28). **Architecture: a single-threaded linear agent with shared full-trace context + minimal scaffolding — NOT a persona role-team** (consensus across Cognition + Anthropic; minimal scaffolds match heavy ones on SWE-bench). **Run the unattended sweep on a cheaper model / lower effort, not max-Opus-max-effort** — HAL found higher reasoning effort *reduced* accuracy in most runs, and accuracy↔cost spans ~100×.
 
 - [ ] Borrow the read-only **CI Sweeper** pattern from [`cobusgreyling/loop-engineering`](https://github.com/cobusgreyling/loop-engineering): a `/goal`-style loop watching test suites + launchd logs + the freshness watchdog, triaging failures and drafting fixes **in a worktree only**, **never emit-signals / never live-Mongo / never merge**, surfacing a needs-me report. Read-only diagnosis, no capital path. Monthly-review → remediation handoff is the *second* loop.
-- [ ] **Build order (highest-leverage primitives first):**
-  1. Loop-driver spine — single-threaded, `LOOP-STATE.md` ledger (note-taking/compaction for context rot) + **budget/turn ceilings + per-run cost log**.
-  2. **PreToolUse safety hook** (deterministic, not CLAUDE.md prose) enforcing never-merge / never-leave-worktree / never-touch-live (copy the cms-hook pattern).
-  3. Gate drafted fixes through **`eval-first` + `flag-gate`** — *already built in crucible*; this is the trust gate the loop literature requires.
-  4. Triage skill: read failure → root-cause → draft-in-worktree → adversarial verify → append to ledger. Add **LLM-aided log inspection** to the needs-me report.
+- [x] **Build order (highest-leverage primitives first)** ✅ 2026-06-28 — shipped as the generic crucible **`loop-harness`** skill (0.5.1→0.6.0; 60 tests; qa-gatekeeper PASS after catching + fixing a `git -C` safety-hook bypass):
+  1. ✅ Loop-driver spine — `loop_budget` (hard turn ceiling + optional token/cost + cost log) + `loop_ledger` (`LOOP-STATE.md` note-taking/structural compaction).
+  2. ✅ **PreToolUse safety hook** (`loop_hook`) — inert unless a loop is armed; otherwise blocks push/merge/rebase/reset --hard/branch -d|-D/worktree remove + writes outside the worktree (tokenizer-based, option-prefix-proof).
+  3. ✅ Trust gate — `SKILL.md` wires drafted fixes through **`eval-first` + `flag-gate`** (already built).
+  4. ✅ Triage flow + **LLM-aided log inspection** → needs-me report (SKILL.md methodology).
+- [ ] **Point `loop-harness` at a real target** — wire the actual CI Sweeper instance (a real test suite / job logs / freshness watchdog). The generic primitive exists; the instance + its real stop-conditions/ledger-schema come from a real target (see the research note's open questions). Dogfood candidate: hephaestus's own pytest suite.
 - [ ] **Skip:** persona/role multi-agent teams (net liability — documented). **Defer:** parallel fan-out until there is genuinely independent, shared-context-free work; even then scope it read-only like Anthropic's research fan-out, never a coding crew.
 
 ## Phase 4 — conditional orchestration (only if Phases 1–3 prove out)

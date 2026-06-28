@@ -11,7 +11,7 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 
 | Plugin | Scope |
 |--------|-------|
-| **crucible** | Generic, vendor-neutral craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill`, `eval-first`, `flag-gate` |
+| **crucible** | Generic, vendor-neutral craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill`, `eval-first`, `flag-gate`, `loop-harness` |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server (3-layer read-only, NL→SQL) |
 | **mcp-starter** | Template for packaging a Python MCP server as a plugin |
 | **second-brain** | Obsidian inbox processor (suggest-then-confirm; skills-only) |

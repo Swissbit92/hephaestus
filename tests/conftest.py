@@ -17,11 +17,14 @@ SQLITE_RO = REPO_ROOT / "plugins" / "sqlite-readonly" / "servers" / "sqlite-read
 DECK_LIB = REPO_ROOT / "plugins" / "deck-builder" / "skills" / "deck-builder"
 EVALS = REPO_ROOT / "evals"
 EVAL_FIRST_SCRIPTS = REPO_ROOT / "plugins" / "crucible" / "skills" / "eval-first" / "scripts"
+LOOP_HARNESS_SCRIPTS = REPO_ROOT / "plugins" / "crucible" / "skills" / "loop-harness" / "scripts"
 
 # Isolate cms state writes (common.py creates STATE_DIR at import time).
 import os
 
 os.environ.setdefault("CMS_STATE_DIR", tempfile.mkdtemp(prefix="hephaestus-cms-state-"))
+# Isolate loop-harness state writes (loop_common resolves STATE_DIR at import time).
+os.environ.setdefault("LOOP_HARNESS_STATE_DIR", tempfile.mkdtemp(prefix="hephaestus-loop-state-"))
 
 # Make the cms scripts importable as top-level modules (common, check, hook, ...).
 if str(CMS_SCRIPTS) not in sys.path:
@@ -46,6 +49,10 @@ if str(EVALS) not in sys.path:
 # Make the eval-first crucible skill scripts importable (ab_harness, baseline, judge, ...).
 if str(EVAL_FIRST_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(EVAL_FIRST_SCRIPTS))
+
+# Make the loop-harness crucible skill scripts importable (loop_common, loop_budget, ...).
+if str(LOOP_HARNESS_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(LOOP_HARNESS_SCRIPTS))
 
 
 def pytest_collection_modifyitems(config, items):
