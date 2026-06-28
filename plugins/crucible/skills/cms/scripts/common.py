@@ -143,7 +143,9 @@ def find_atpath_imports(text: str, base: Path) -> list[tuple[str, Path]]:
 def iter_md_files(root: Path, include_archive: bool = False) -> Iterator[Path]:
     for dirpath, dirnames, filenames in os.walk(root):
         # Prune
-        dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in {"node_modules", ".venv", "venv", "__pycache__"}]
+        # "templates" holds scaffolding sources with placeholder frontmatter ({{TODAY}}),
+        # not real docs — exclude so a repo bundling the cms skill doesn't lint its own templates.
+        dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in {"node_modules", ".venv", "venv", "__pycache__", "templates"}]
         if not include_archive:
             dirnames[:] = [d for d in dirnames if d != "archive"]
         for name in filenames:

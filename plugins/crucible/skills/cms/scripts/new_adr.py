@@ -31,7 +31,7 @@ def next_number(adr_dir: Path) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Create the next ADR from template")
-    ap.add_argument("title", help="ADR title (e.g. \"Kucoin Futures as primary venue\")")
+    ap.add_argument("title", help="ADR title (e.g. \"Postgres as the primary datastore\")")
     ap.add_argument("--path", default="docs/decisions", help="ADR directory (default: docs/decisions)")
     ap.add_argument("--repo-name", default=None, help="applies_to field (default: parent repo dir name)")
     args = ap.parse_args()
