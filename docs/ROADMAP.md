@@ -23,7 +23,7 @@ The factory is built in value-first phases — each ships standalone value and i
 
 ## Phase 1 — bank the certain value (pays for itself, no role-agents)
 
-- [ ] **`eval-first`** plugin (Tier A) — extract from nephilim ADR-005: baseline-freeze, match-or-beat-or-revert, blind-judge. **Primary Phase-1 deliverable** (generic, no live-system risk; closes the "no eval for the fabric" gap).
+- [ ] **`eval-first`** — a **crucible skill** (`plugins/crucible/skills/eval-first/`, sibling to grill-me/cms), extracted from nephilim ADR-005: baseline-freeze, match-or-beat-or-revert, blind-judge. **Primary Phase-1 deliverable** (generic, no live-system risk; closes the "no eval for the fabric" gap). Not a separate plugin — Tier-A capabilities are crucible skills.
 
 ## Parked / optional (do last)
 
