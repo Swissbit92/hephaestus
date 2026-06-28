@@ -154,17 +154,26 @@ def _sync_ledger_status(run: dict) -> bool:
     return True
 
 
+def disarm_run(run: dict, status: str) -> dict:
+    """Finalize an armed run: stamp end + status, append a cost-log record, sync the ledger
+    status, and clear the armed marker. Returns the finalized run (with `ledger_synced`).
+    Shared by the `disarm` CLI and the loop_sweep driver."""
+    run = dict(run)
+    run["ended_at"] = _now_iso()
+    run["final_status"] = status
+    loop_common.append_cost_log(run)
+    run["ledger_synced"] = _sync_ledger_status(run)
+    loop_common.clear_state(loop_common.RUN_STATE_FILE)
+    return run
+
+
 def _cmd_disarm(args) -> int:
     run = loop_common.load_run()
     if run is None:
         print("[loop-budget] no armed run", file=sys.stderr)
         return 1
-    run["ended_at"] = _now_iso()
-    run["final_status"] = args.status
-    loop_common.append_cost_log(run)
-    synced = _sync_ledger_status(run)
-    loop_common.clear_state(loop_common.RUN_STATE_FILE)
-    print(json.dumps({"disarmed": True, "run_id": run["run_id"], "final_status": args.status, "ledger_synced": synced}))
+    run = disarm_run(run, args.status)
+    print(json.dumps({"disarmed": True, "run_id": run["run_id"], "final_status": run["final_status"], "ledger_synced": run["ledger_synced"]}))
     return 0
 
 

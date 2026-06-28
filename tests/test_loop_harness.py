@@ -16,12 +16,14 @@ import loop_common
 import loop_hook
 import loop_ledger
 import loop_logscan
+import loop_sweep
 import pytest
 
 BUDGET_PY = Path(loop_budget.__file__)
 LEDGER_PY = Path(loop_ledger.__file__)
 HOOK_PY = Path(loop_hook.__file__)
 LOGSCAN_PY = Path(loop_logscan.__file__)
+SWEEP_PY = Path(loop_sweep.__file__)
 
 
 def _run_cli(script: Path, args, state_dir: Path) -> subprocess.CompletedProcess:
@@ -466,3 +468,59 @@ def test_logscan_cli_reads_stdin(tmp_path):
     r = subprocess.run([sys.executable, str(LOGSCAN_PY)], input="3 failed, 7 passed in 1s",
                        capture_output=True, text=True, env=env)
     assert r.returncode == 0 and json.loads(r.stdout)["failed"] == 3
+
+
+# --- loop_sweep: read-only CI Sweeper driver ---
+
+def test_classify_maps_summary_to_status():
+    assert loop_sweep.classify({"matched": True, "failed": 0, "errors": 0}) == ("green", 0)
+    assert loop_sweep.classify({"matched": True, "failed": 2, "errors": 0}) == ("red", 1)
+    assert loop_sweep.classify({"matched": True, "failed": 0, "errors": 1}) == ("red", 1)
+    assert loop_sweep.classify({"matched": False}) == ("unparsed", 2)
+
+
+def test_build_report_contains_key_fields():
+    run = {"run_id": "r1", "goal": "diagnose: pytest"}
+    summary = {"summary": "1 failed, 2 passed", "passed": 2, "failed": 1, "errors": 0,
+               "skipped": 0, "failing_tests": ["tests/x.py::t"]}
+    rep = loop_sweep.build_report(run, summary, "red")
+    assert "RED" in rep and "tests/x.py::t" in rep and "1 failed, 2 passed" in rep
+
+
+def _run_sweep_cli(test_cmd, tmp_path, extra=None):
+    env = dict(os.environ); env["LOOP_HARNESS_STATE_DIR"] = str(tmp_path / "state")
+    ledger = tmp_path / "LOOP-STATE.md"
+    args = [sys.executable, str(SWEEP_PY), "--test-cmd", test_cmd, "--ledger", str(ledger), *(extra or [])]
+    return subprocess.run(args, capture_output=True, text=True, env=env), ledger
+
+
+def test_sweep_green_exits_0_and_ledger_converged(tmp_path):
+    # fake test command that prints a green summary
+    r, ledger = _run_sweep_cli("printf '%s\\n' '5 passed in 0.1s'", tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert "GREEN" in r.stdout
+    assert "- **Status:** green" in ledger.read_text()  # disarm synced the ledger
+    # state cleared (not left armed)
+    assert not (tmp_path / "state" / loop_common.RUN_STATE_FILE).exists()
+
+
+def test_sweep_red_exits_1_and_reports_failing(tmp_path):
+    cmd = "printf '%s\\n' 'FAILED tests/x.py::test_a - boom' '1 failed, 4 passed in 0.2s'"
+    r, ledger = _run_sweep_cli(cmd, tmp_path)
+    assert r.returncode == 1
+    assert "RED" in r.stdout and "tests/x.py::test_a" in r.stdout
+    led = ledger.read_text()
+    assert "failing: tests/x.py::test_a" in led and "- **Status:** red" in led
+
+
+def test_sweep_unparsed_exits_2(tmp_path):
+    r, ledger = _run_sweep_cli("printf '%s\\n' '..... [100%]'", tmp_path)  # no summary line
+    assert r.returncode == 2
+    assert "UNPARSED" in r.stdout
+    assert "- **Status:** unparsed" in ledger.read_text()
+
+
+def test_sweep_writes_report_file(tmp_path):
+    report = tmp_path / "report.md"
+    r, _ = _run_sweep_cli("printf '%s\\n' '3 passed in 0.1s'", tmp_path, extra=["--report", str(report)])
+    assert r.returncode == 0 and report.exists() and "GREEN" in report.read_text()
