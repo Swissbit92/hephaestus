@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scaffold a new Claude Code skill, pre-structured with whetstone's authoring patterns.
+"""Scaffold a new Claude Code skill, pre-structured with crucible's authoring patterns.
 
 The emitted SKILL.md is not blank boilerplate — it lays out the high-leverage patterns
 (exemplar-first negatives, good/bad pairs, hard-gate vs best-effort, visible reasoning,
@@ -10,7 +10,7 @@ Usage:
     new_skill.py <name> [--skills-dir DIR] [--description TEXT] [--force]
 
 `<name>` is kebab-case (lowercase letters, digits, single hyphens). Default skills-dir is
-the whetstone plugin's skills/ directory.
+the crucible plugin's skills/ directory.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ _NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 _DEFAULT_SKILLS_DIR = (
     Path(__file__).resolve().parent.parent
-    / "plugins" / "whetstone" / "skills"
+    / "plugins" / "crucible" / "skills"
 )
 
 STUB = """\
@@ -32,7 +32,7 @@ name: {name}
 description: {description}
 ---
 
-<!-- Authoring guide: run `/whetstone:author-skill` for the patterns + real exemplars.
+<!-- Authoring guide: run `/crucible:author-skill` for the patterns + real exemplars.
      Delete these comments as you fill each section in. -->
 
 You are <role>. <One sentence on the job this skill does and the outcome it produces.>
@@ -103,7 +103,7 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Scaffold a new Claude Code skill")
     ap.add_argument("name", help="skill name (kebab-case)")
     ap.add_argument("--skills-dir", default=str(_DEFAULT_SKILLS_DIR),
-                    help="directory to create the skill under (default: whetstone plugin skills/)")
+                    help="directory to create the skill under (default: crucible plugin skills/)")
     ap.add_argument("--description", default="TODO: one-line, trigger-focused description",
                     help="skill description (the trigger the model matches on)")
     ap.add_argument("--force", action="store_true", help="overwrite an existing SKILL.md")
@@ -115,7 +115,7 @@ def main(argv: list[str]) -> int:
         sys.stderr.write(f"error: {e}\n")
         return 1
     print(f"created {path}")
-    print("Next: open it, run /whetstone:author-skill for the patterns, fill the sections.")
+    print("Next: open it, run /crucible:author-skill for the patterns, fill the sections.")
     return 0
 
 

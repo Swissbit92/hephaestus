@@ -1,14 +1,14 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
-  "name": "whetstone",
+  "name": "hephaestus",
   "owner": {
     "name": "Swissbit92"
   },
   "description": "A small workshop of Claude Code tools to keep your craft sharp.",
   "plugins": [
     {
-      "name": "whetstone",
-      "source": "./plugins/whetstone",
+      "name": "crucible",
+      "source": "./plugins/crucible",
       "description": "Doc-discipline (cms), decision stress-testing (grill-me), a structured development workflow (develop), and a safe branch lifecycle (start-branch / finish-branch).",
       "category": "productivity",
       "tags": ["documentation", "workflow", "review"]

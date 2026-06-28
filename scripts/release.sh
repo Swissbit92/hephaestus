@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# whetstone marketplace release helper (multi-plugin).
+# hephaestus marketplace release helper (multi-plugin).
 #
 # Bumps a plugin's version, validates, commits, tags, pushes, and creates a GitHub
 # release. The version pin in plugin.json is what actually triggers updates for installed
 # users, so every release MUST bump it — this script keeps the manifest version and the
 # git tag in lockstep.
 #
-# Each plugin has its own tag namespace: <plugin>-v<version> (e.g. whetstone-v0.2.0,
+# Each plugin has its own tag namespace: <plugin>-v<version> (e.g. crucible-v0.2.0,
 # sqlite-readonly-v0.1.0), so plugins version independently.
 #
 # Usage:
@@ -17,7 +17,7 @@
 #   scripts/release.sh <plugin> 1.2.3            # set an explicit version
 #   scripts/release.sh <plugin> patch --dry-run  # show what would happen, change nothing
 #
-# <plugin> is a directory name under plugins/ (e.g. whetstone).
+# <plugin> is a directory name under plugins/ (e.g. crucible).
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

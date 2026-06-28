@@ -174,7 +174,7 @@ def main() -> int:
     sys.stderr.write(
         "\nHelp:\n"
         f"  - Frontmatter template: {tmpl}\n"
-        "  - Full standard + rationale: run `/whetstone:cms`\n"
+        "  - Full standard + rationale: run `/crucible:cms`\n"
         "  - Hook scope: .md files under docs/ within CMS_ROOTS or cwd (CLAUDE/README/CHANGELOG exempted)\n"
     )
     return 2

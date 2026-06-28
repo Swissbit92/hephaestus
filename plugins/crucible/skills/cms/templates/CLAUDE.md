@@ -32,7 +32,7 @@ python3 -m {{REPO_NAME}}
 # Tests (fast gate)
 pytest -m "not e2e and not slow" -v
 
-# Lint docs (via the whetstone cms skill)
+# Lint docs (via the crucible cms skill)
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/cms/scripts/check.py" .
 ```
 

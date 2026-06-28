@@ -1,4 +1,4 @@
-# whetstone skill-eval harness
+# hephaestus skill-eval harness
 
 Measures whether the plugins **actually behave** as their `SKILL.md` specifies — turning
 asserted maturity into measured maturity. Deterministic-first: it runs a skill against a

@@ -25,8 +25,8 @@ Three actions:
 ## Install
 
 ```
-/plugin marketplace add Swissbit92/whetstone
-/plugin install second-brain@whetstone
+/plugin marketplace add Swissbit92/hephaestus
+/plugin install second-brain@hephaestus
 /second-brain        # point it at your vault's inbox
 ```
 

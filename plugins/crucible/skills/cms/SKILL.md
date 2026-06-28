@@ -34,7 +34,7 @@ runtime), substitute the absolute path to this skill's `scripts/` directory.
 | `/cms sync` | `sync.py [<root>]` | Cross-repo drift detector (regex allowlist of known-drift facts in `state/sync_facts.yaml`) |
 | `/cms migrate <path>` | `migrate.py <path>` | Propose-and-approve structural migration (extract to docs/, archive stale) |
 
-Invoke this skill with `/whetstone:cms`. The `/cms <subcommand>` forms above are
+Invoke this skill with `/crucible:cms`. The `/cms <subcommand>` forms above are
 the conceptual interface — map them to the scripts as shown.
 
 ## Invocation rules

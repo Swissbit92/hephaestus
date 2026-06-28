@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the whetstone skill-eval suite.
+"""Run the hephaestus skill-eval suite.
 
 For each scenario: build a throwaway git fixture, run the skill k times via the `claude`
 CLI, score each run with the deterministic checks (plus optional judge criteria), then
@@ -74,7 +74,7 @@ def run_scenario(scenario: dict, k: int, model: str | None, judge_fn) -> dict:
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description="Run the whetstone skill-eval suite")
+    ap = argparse.ArgumentParser(description="Run the hephaestus skill-eval suite")
     ap.add_argument("--scenario", help="run only this scenario id (default: all)")
     ap.add_argument("-k", type=int, default=3, help="runs per scenario (pass^k); default 3")
     ap.add_argument("--model", help="pin the model under test (e.g. claude-sonnet-4-6)")

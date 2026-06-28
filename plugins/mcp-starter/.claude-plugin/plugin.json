@@ -5,8 +5,8 @@
   "author": {
     "name": "Swissbit92"
   },
-  "homepage": "https://github.com/Swissbit92/whetstone",
-  "repository": "https://github.com/Swissbit92/whetstone",
+  "homepage": "https://github.com/Swissbit92/hephaestus",
+  "repository": "https://github.com/Swissbit92/hephaestus",
   "license": "MIT",
   "keywords": ["mcp", "template", "starter", "scaffold", "claude-code"],
   "userConfig": {

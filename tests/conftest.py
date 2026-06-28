@@ -1,4 +1,4 @@
-"""Pytest setup for the whetstone suite.
+"""Pytest setup for the hephaestus suite.
 
 The cms scripts are written as flat modules that do `from common import ...`, so the
 scripts directory must be importable. We also redirect cms state to a temp dir so importing
@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-CMS_SCRIPTS = REPO_ROOT / "plugins" / "whetstone" / "skills" / "cms" / "scripts"
+CMS_SCRIPTS = REPO_ROOT / "plugins" / "crucible" / "skills" / "cms" / "scripts"
 SCRIPTS = REPO_ROOT / "scripts"
 SQLITE_RO = REPO_ROOT / "plugins" / "sqlite-readonly" / "servers" / "sqlite-readonly"
 DECK_LIB = REPO_ROOT / "plugins" / "deck-builder" / "skills" / "deck-builder"
@@ -20,7 +20,7 @@ EVALS = REPO_ROOT / "evals"
 # Isolate cms state writes (common.py creates STATE_DIR at import time).
 import os
 
-os.environ.setdefault("CMS_STATE_DIR", tempfile.mkdtemp(prefix="whetstone-cms-state-"))
+os.environ.setdefault("CMS_STATE_DIR", tempfile.mkdtemp(prefix="hephaestus-cms-state-"))
 
 # Make the cms scripts importable as top-level modules (common, check, hook, ...).
 if str(CMS_SCRIPTS) not in sys.path:

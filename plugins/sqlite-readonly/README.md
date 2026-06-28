@@ -27,8 +27,8 @@ A `schema://main` resource exposes the schema as token-budgeted Markdown.
 ## Install
 
 ```
-/plugin marketplace add Swissbit92/whetstone
-/plugin install sqlite-readonly@whetstone
+/plugin marketplace add Swissbit92/hephaestus
+/plugin install sqlite-readonly@hephaestus
 /sqlite-readonly:setup     # optional — works zero-config against a sample DB
 ```
 

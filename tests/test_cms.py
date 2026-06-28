@@ -33,7 +33,7 @@ status: active
 created: 2026-01-01
 last_reviewed_on: 2026-06-01
 review_in: 6 months
-applies_to: whetstone
+applies_to: hephaestus
 ---
 
 Body text.

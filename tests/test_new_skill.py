@@ -47,10 +47,10 @@ def test_force_overwrites(tmp_path):
     assert "description: second" in path.read_text()
 
 
-def test_default_skills_dir_points_at_whetstone_plugin():
-    # Sanity: the default lands inside the whetstone plugin's skills/ dir, and exists.
+def test_default_skills_dir_points_at_crucible_plugin():
+    # Sanity: the default lands inside the crucible plugin's skills/ dir, and exists.
     assert new_skill._DEFAULT_SKILLS_DIR.name == "skills"
-    assert new_skill._DEFAULT_SKILLS_DIR.parent.name == "whetstone"
+    assert new_skill._DEFAULT_SKILLS_DIR.parent.name == "crucible"
     assert new_skill._DEFAULT_SKILLS_DIR.exists()
 
 

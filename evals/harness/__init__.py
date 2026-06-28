@@ -1,4 +1,4 @@
-"""whetstone skill-eval harness.
+"""hephaestus skill-eval harness.
 
 Measures whether the plugins behave as their SKILL.md specifies. Deterministic-first:
 assert on git/file world-state and tool-call traces; an optional pinned-Claude rubric

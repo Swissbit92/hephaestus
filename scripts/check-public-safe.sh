@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Public-safety guard for the whetstone marketplace.
+# Public-safety guard for the hephaestus marketplace.
 #
 # This repo is PUBLIC. It must contain zero references to any private/employer system.
 # This script greps the tracked tree for known private tokens and exits non-zero on any
