@@ -1,7 +1,7 @@
 {
   "name": "crucible",
   "description": "Keep your craft sharp: doc-discipline (cms), decision stress-testing (grill-me), a structured development workflow (develop), a safe branch lifecycle (start-branch / finish-branch), a skill-authoring guide + scaffolder (author-skill), eval-first development (freeze a baseline, gate on match-or-beat-or-revert), and flag-gate (default-OFF rollout with instant revert).",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "author": {
     "name": "Swissbit92"
   },

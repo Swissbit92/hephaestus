@@ -12,7 +12,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 -
 
 ### Fixed
--
+- **crucible 0.5.1 — qa-gatekeeper live baseline.** The QA gate re-derives the test baseline from ground truth (the branch-point commit via `git merge-base`, counted in a throwaway worktree) instead of trusting a stated count, and treats only a *drop* in passing tests or a new failure as a regression (added tests are expected, not a regression). Kills the stale-baseline false-alarm → loop-trustworthy gate. Aligned `develop` + `start-branch` baseline wording to match.
 
 ## [0.1.0] — 2026-06-28
 

@@ -55,7 +55,7 @@ Typos, 1-line fixes, formatting, comment updates.
 2. State the **target repo(s)/scope**.
 3. State alignment — how does this advance the project's goals? If it advances nothing obvious, justify it (tech debt, correctness, prerequisite).
 4. Create a task list with all phases (TaskCreate) — keep it visible throughout.
-5. Record the starting test count: run the repo's test command (e.g. `<your test runner --collect-only>`).
+5. Record the starting test count by running the repo's test command (e.g. `<your test runner --collect-only>`) — a live snapshot at the branch point. The QA gate re-derives this baseline from ground truth (the branch-point commit), so it's the clean branch point that matters, not a memorized number.
 
 **Gate:** user confirms classification and alignment before proceeding.
 
@@ -131,7 +131,7 @@ Catch issues before they compound.
 Use a `qa-gatekeeper` agent if your project provides one; otherwise do QA directly. Checks (all projects):
 
 1. All tests pass.
-2. No test-count regression vs. the Phase 0 baseline.
+2. No passing-test regression vs. the branch-point baseline (derived live, not a stated number) — fewer passing tests or a newly failing test is a regression; *more* tests (the milestone added them) is not.
 3. No orphaned code (stale references to renamed/deleted symbols).
 4. Lint clean (your linter).
 5. No security issues (no hardcoded secrets, no injection).
@@ -158,7 +158,7 @@ Rules: incremental only; bump test counts if changed materially; bump version nu
 
 ## 8. PHASE 6 — COMPLETION (after all milestones)
 
-1. Verify the final test count — confirm no regression vs. Phase 0.
+1. Verify the final suite is green with no passing-test regression vs. the branch-point baseline (more tests than baseline is expected, not a regression).
 2. Version bump (FULL only): patch by default; minor for a designated major feature. LIGHT: skip unless notable.
 3. Capture lessons learned: a short note of what worked, what didn't, what was surprising. Persist to memory and/or docs if it's a notable milestone or a critical mistake; otherwise keep it to the conversation.
 4. Mark all tasks complete (TaskUpdate).

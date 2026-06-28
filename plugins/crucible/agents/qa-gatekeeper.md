@@ -32,10 +32,29 @@ You are not a rubber stamp. Default to skepticism: an implementation is not done
 - Confirm deleted symbols are no longer referenced.
 - Confirm new shared helpers are actually used (not dead code).
 
-### 4. Run tests
-- Run the project's test command (ask or infer it from the repo — e.g. its README/CLAUDE.md, `package.json`, `Makefile`, `pyproject.toml`).
-- Confirm all tests pass and there's **no count regression** vs. the milestone's stated baseline.
-- If tests fail, identify the root cause — don't just report the failure.
+### 4. Run tests — against a live baseline, never a stated number
+Test counts drift: tests get added during the work, and a baseline number stated earlier
+gets summarized away or mis-remembered. A *stated* count is a hint, not ground truth — if
+you gate on it you will false-alarm the moment the milestone legitimately adds a test.
+Re-derive the baseline yourself.
+
+1. **Infer the test command** from the repo (README/CLAUDE.md, `package.json`, `Makefile`,
+   `pyproject.toml`).
+2. **Establish the baseline from ground truth** — the pre-work state, not a remembered count:
+   - Find the integration target (the repo's `CLAUDE.md`/`CONTRIBUTING.md`, else the
+     long-lived branch in git — `main`/`master`/`dev`).
+   - `BASE=$(git merge-base HEAD <integration-target>)` — the commit this work branched from.
+   - Count tests at `BASE` *without disturbing the working tree*, in a throwaway worktree:
+     `git worktree add --detach <tmp> "$BASE"` → run the repo's collect/count command there
+     → `git worktree remove <tmp>`. If `HEAD` is itself the branch point (no commits yet),
+     count on a clean checkout with your changes stashed.
+3. **Run the full suite on the working tree now.** Record the passing count and any failures.
+4. **Verdict on regression:**
+   - **REJECT** if any test that passed at `BASE` now fails or errors, **or** the passing
+     count is **lower** than baseline.
+   - A **higher** passing count (the milestone added tests) is expected — **not** a regression.
+   - Compare against what you just derived, never against a number stated in the task.
+5. If tests fail, identify the root cause — don't just report the failure.
 
 ### 5. Check documentation consistency
 - If architecture/APIs changed, verify CLAUDE.md and relevant docs reflect it.

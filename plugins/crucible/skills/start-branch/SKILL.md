@@ -49,8 +49,10 @@ default — only use it if the repo asks for it.)
 
 ## Phase 4 — Establish the test baseline
 
-Run the repo's test command and record pass/fail + count. This baseline is the gate
-`finish-branch` enforces.
+Run the repo's test command and record pass/fail + count **at this commit** — a live
+snapshot of ground truth at the branch point. Downstream gates re-derive from this point
+rather than trusting the number, so record what the tree actually shows. This baseline is
+the gate `finish-branch` enforces.
 
 If the baseline is already **red**, say so explicitly — `finish-branch` requires green to
 merge, not merely "no worse than a failing baseline." The user should know they're
