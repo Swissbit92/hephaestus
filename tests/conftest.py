@@ -16,6 +16,7 @@ SCRIPTS = REPO_ROOT / "scripts"
 SQLITE_RO = REPO_ROOT / "plugins" / "sqlite-readonly" / "servers" / "sqlite-readonly"
 DECK_LIB = REPO_ROOT / "plugins" / "deck-builder" / "skills" / "deck-builder"
 EVALS = REPO_ROOT / "evals"
+EVAL_FIRST_SCRIPTS = REPO_ROOT / "plugins" / "crucible" / "skills" / "eval-first" / "scripts"
 
 # Isolate cms state writes (common.py creates STATE_DIR at import time).
 import os
@@ -41,6 +42,10 @@ if str(DECK_LIB) not in sys.path:
 # Make the eval harness importable (from harness import scoring, reliability, ...).
 if str(EVALS) not in sys.path:
     sys.path.insert(0, str(EVALS))
+
+# Make the eval-first crucible skill scripts importable (ab_harness, baseline, judge, ...).
+if str(EVAL_FIRST_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(EVAL_FIRST_SCRIPTS))
 
 
 def pytest_collection_modifyitems(config, items):

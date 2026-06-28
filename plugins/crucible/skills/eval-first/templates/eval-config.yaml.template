@@ -1,0 +1,28 @@
+# eval-first config — copy to evals/eval-config.yaml and fill in.
+# The methodology: freeze a baseline, run the candidate, gate on match-or-beat-or-revert.
+
+candidate_model: "<your system or model id>"
+judge_model: "claude-sonnet-4-6"   # MUST be a different family than candidate_model (no self-grading)
+k: 3                                # samples per case for stochastic systems (avg before aggregating)
+
+# Gate
+gate_mode: "all"                   # 'all' = pass^k (regression gate, every attempt holds)
+                                   # 'rate' = avg@k >= min_rate (capability eval)
+min_rate: 0.6                      # used only when gate_mode = rate
+tolerance: 0.0                     # match-or-beat slack: 0.0 for regression, ~0.02 for capability
+
+# Layer 1 — deterministic checks run on every output BEFORE the judge (cheap, auditable).
+deterministic_checks:
+  - check: non_empty
+  - check: max_length
+    args: { n: 4000 }
+  # - check: citation_present
+  # - check: json_has_keys
+  #   args: { keys: ["answer", "sources"] }
+
+# Layer 3 — blind A/B judge rubric (only runs on outputs that clear Layer 1).
+# Every pair is judged in BOTH orderings; order-dependent verdicts become ties.
+rubric: |
+  Judge which response better satisfies the task. Prefer correctness and
+  faithfulness to the input. Penalize unsupported claims. Do not prefer a
+  response for being longer or more elaborate.

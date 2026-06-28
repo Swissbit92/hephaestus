@@ -23,7 +23,7 @@ The factory is built in value-first phases — each ships standalone value and i
 
 ## Phase 1 — bank the certain value (pays for itself, no role-agents)
 
-- [ ] **`eval-first`** — a **crucible skill** (`plugins/crucible/skills/eval-first/`, sibling to grill-me/cms), extracted from nephilim ADR-005: baseline-freeze, match-or-beat-or-revert, blind-judge. **Primary Phase-1 deliverable** (generic, no live-system risk; closes the "no eval for the fabric" gap). Not a separate plugin — Tier-A capabilities are crucible skills.
+- [x] **`eval-first`** ✅ — a **crucible skill** (`plugins/crucible/skills/eval-first/`, sibling to grill-me/cms): baseline-freeze, deterministic-first checks, swap-augmented blind A/B judge (self-grading-guarded), match-or-beat-or-revert. Generic stdlib scripts + templates; 38 tests; crucible 0.3.0→0.4.0. Closes the "no eval for the fabric" gap. (Two upgrades over the source: swap augmentation + pinned-judge-family assertion.)
 
 ## Parked / optional (do last)
 
