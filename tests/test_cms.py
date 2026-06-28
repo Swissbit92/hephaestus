@@ -307,3 +307,17 @@ def test_init_scaffold_produces_valid_security_and_threat_docs(tmp_path):
     # The generated THREAT_LEVEL.md has valid frontmatter (incl. a valid threat_level).
     findings = check.run_mechanical_check(tmp_path / "docs" / "THREAT_LEVEL.md")
     assert [f for f in findings if f.level == "error"] == []
+
+
+def test_init_scaffolds_best_practice_readme(tmp_path):
+    """The scaffolded README starts from a best-practice skeleton (creation-time enforcement):
+    title + purpose substituted, a table of contents, a Contributing link, a License link,
+    and a Mermaid-diagram hint."""
+    init.scaffold(tmp_path, repo_name="demo", purpose="a demo repo")
+    readme = (tmp_path / "README.md").read_text(encoding="utf-8")
+    assert "# demo" in readme and "a demo repo" in readme  # placeholders substituted
+    assert "{{REPO_NAME}}" not in readme and "{{ONE_LINE_PURPOSE}}" not in readme
+    assert "## Contents" in readme                          # TOC present
+    assert "[CONTRIBUTING.md](CONTRIBUTING.md)" in readme   # Contributing linked
+    assert "[LICENSE](LICENSE)" in readme                   # License linked
+    assert "mermaid" in readme.lower()                      # diagram hint present

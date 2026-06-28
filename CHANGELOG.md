@@ -12,7 +12,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - **crucible 0.4.0 — `eval-first` skill.** Eval-first methodology + generic stdlib scripts (`ab_harness`, `baseline`, `judge`, `deterministic`, `reliability`) and scaffolding templates. Freeze an immutable baseline → deterministic-first checks → swap-augmented blind A/B judge (pinned, self-grading-guarded) → match-or-beat-or-revert verdict. 38 tests.
 
 ### Changed
--
+- **crucible 0.6.3 — cms README scaffold upgrade.** `cms init` now scaffolds a best-practice README skeleton — a table of contents, a Mermaid-diagram hint (text-based, GitHub-rendered, AI-parseable), and linked Contributing/License sections — baking README best practices in at **creation time** (deliberately *not* a retroactive content lint, which would erode cms's trustworthy Error/Warning model). Backed by a quick web-research pass on README best practices for humans + AI agents. +1 test.
 
 ### Fixed
 - **crucible 0.6.1 — loop-harness ledger status + log-capture (dogfood findings).** `loop_budget disarm` now syncs the ledger's `Status` field (was stuck on `armed` after convergence). Corrected the `SKILL.md` log-inspection example: under a repo whose pytest `addopts` already sets `-q`, an extra `pytest -q` becomes `-qq` and suppresses the summary line `loop_logscan` needs — switched to the project's plain test command. (The bug was caught by `loop_logscan`'s own refuse-to-guess-green safety property.)
