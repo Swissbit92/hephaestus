@@ -40,7 +40,15 @@ The factory is built in value-first phases — each ships standalone value and i
 
 ## Phase 3 — close one loop (safest surface; first loop = CI Sweeper)
 
-- [ ] Borrow the read-only **CI Sweeper** pattern from [`cobusgreyling/loop-engineering`](https://github.com/cobusgreyling/loop-engineering): a `/goal`-style loop watching test suites + launchd logs + the freshness watchdog, triaging failures and drafting fixes **in a worktree only** — `LOOP-STATE.md` ledger + `--max-turns`/budget ceilings (model: that repo's `loop-cost`/`loop-audit`), **never emit-signals / never live-Mongo / never merge**, surfacing a needs-me report. Read-only diagnosis, no capital path. Monthly-review → remediation handoff is the *second* loop.
+Evidence-backed by [research/loop-engineering-2025](research/loop-engineering-2025.md) (deep-research, 2026-06-28). **Architecture: a single-threaded linear agent with shared full-trace context + minimal scaffolding — NOT a persona role-team** (consensus across Cognition + Anthropic; minimal scaffolds match heavy ones on SWE-bench). **Run the unattended sweep on a cheaper model / lower effort, not max-Opus-max-effort** — HAL found higher reasoning effort *reduced* accuracy in most runs, and accuracy↔cost spans ~100×.
+
+- [ ] Borrow the read-only **CI Sweeper** pattern from [`cobusgreyling/loop-engineering`](https://github.com/cobusgreyling/loop-engineering): a `/goal`-style loop watching test suites + launchd logs + the freshness watchdog, triaging failures and drafting fixes **in a worktree only**, **never emit-signals / never live-Mongo / never merge**, surfacing a needs-me report. Read-only diagnosis, no capital path. Monthly-review → remediation handoff is the *second* loop.
+- [ ] **Build order (highest-leverage primitives first):**
+  1. Loop-driver spine — single-threaded, `LOOP-STATE.md` ledger (note-taking/compaction for context rot) + **budget/turn ceilings + per-run cost log**.
+  2. **PreToolUse safety hook** (deterministic, not CLAUDE.md prose) enforcing never-merge / never-leave-worktree / never-touch-live (copy the cms-hook pattern).
+  3. Gate drafted fixes through **`eval-first` + `flag-gate`** — *already built in crucible*; this is the trust gate the loop literature requires.
+  4. Triage skill: read failure → root-cause → draft-in-worktree → adversarial verify → append to ledger. Add **LLM-aided log inspection** to the needs-me report.
+- [ ] **Skip:** persona/role multi-agent teams (net liability — documented). **Defer:** parallel fan-out until there is genuinely independent, shared-context-free work; even then scope it read-only like Anthropic's research fan-out, never a coding crew.
 
 ## Phase 4 — conditional orchestration (only if Phases 1–3 prove out)
 
