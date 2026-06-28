@@ -24,6 +24,7 @@ A small workshop of [Claude Code](https://code.claude.com) plugins to keep your 
 | **start-branch** | skill | Isolate work before implementing — detects the repo's integration target (never hardcoded), picks a plain branch vs. git worktree, names it Conventional-Branch style, records a clean test baseline, confirms in one line. Used by `develop`'s ISOLATE phase (2.5). |
 | **finish-branch** | skill | Close out a branch/worktree safely — gates on tests, offers merge / PR / keep / discard, PR-by-default for deploy branches, cleans up without losing unmerged work (`-d` never `-D`, informed discard). Used by `develop`'s INTEGRATE phase (6.5). |
 | **qa-gatekeeper** | agent | Skeptical QA gate used by `develop`'s Phase 4 — verifies stated changes, hunts bugs/orphaned code, runs tests, and returns PASS / CONDITIONAL PASS / REJECT. |
+| **eval-first** | skill | Eval-first development — freeze a baseline, then gate every change on match-or-beat-or-revert. Deterministic-first checks → swap-augmented blind A/B judge (with self-grading guard) → `verdict`. Generic stdlib scripts + scaffolding templates; domain scorers plug in via injected `judge_fn`/`embed_fn`. |
 | **author-skill** | skill | Guide + scaffolder for writing a high-quality skill/plugin — lays out the authoring patterns (with real exemplars) and creates a pre-structured `SKILL.md` via `scripts/new_skill.py`. User-invoked. |
 
 ## Install

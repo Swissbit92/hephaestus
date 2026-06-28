@@ -7,6 +7,7 @@ import pytest
 
 import ab_harness as ab
 import baseline as bl
+import deterministic as det
 import judge as jg
 import reliability as rel
 
@@ -271,3 +272,39 @@ def test_judge_pairs_integrates_with_tally():
     # case1: left(WIN) wins, left_is=B -> b_win; case2: right(WIN) wins, right_is=B -> b_win
     t = ab.tally(pairs, picks)
     assert t["b_wins"] == 2 and t["a_wins"] == 0
+
+
+# ---------------- deterministic checks (Layer 1) ----------------
+
+def test_deterministic_checks_pass_and_fail():
+    assert det.apply_check("non_empty", "x")["passed"] is True
+    assert det.apply_check("non_empty", "   ")["passed"] is False
+    assert det.apply_check("exact_match", "abc", {"expected": "abc"})["passed"] is True
+    assert det.apply_check("contains", "hello world", {"needle": "world"})["passed"] is True
+    assert det.apply_check("not_contains", "hello", {"needle": "x"})["passed"] is True
+    assert det.apply_check("regex_match", "id=42", {"pattern": r"id=\d+"})["passed"] is True
+    assert det.apply_check("regex_absent", "clean", {"pattern": r"ERROR"})["passed"] is True
+    assert det.apply_check("max_length", "abc", {"n": 5})["passed"] is True
+    assert det.apply_check("min_length", "ab", {"n": 5})["passed"] is False
+    assert det.apply_check("json_parses", '{"a": 1}')["passed"] is True
+    assert det.apply_check("json_parses", "not json")["passed"] is False
+    assert det.apply_check("json_has_keys", '{"a":1,"b":2}', {"keys": ["a", "b"]})["passed"] is True
+    assert det.apply_check("citation_present", "see https://x.com")["passed"] is True
+    assert det.apply_check("citation_present", "no refs")["passed"] is False
+
+
+def test_apply_check_unknown_raises():
+    with pytest.raises(KeyError):
+        det.apply_check("does_not_exist", "x")
+
+
+def test_apply_check_missing_arg_raises():
+    with pytest.raises(KeyError):
+        det.apply_check("exact_match", "x")            # no 'expected' arg
+
+
+def test_run_deterministic_cascade():
+    ok = det.run_deterministic("hello", [{"check": "non_empty"}, {"check": "max_length", "args": {"n": 10}}])
+    assert ok["all_passed"] is True
+    bad = det.run_deterministic("hello", [{"check": "non_empty"}, {"check": "max_length", "args": {"n": 2}}])
+    assert bad["all_passed"] is False

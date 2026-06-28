@@ -1,0 +1,22 @@
+{
+  "description": "Eval cases for <your system>. Each case is an input + optional reference, grouped by category. Start with 20-50 cases; grow toward 100+ as the system matures. Cover normal use, edge/robustness, and adversarial inputs.",
+  "categories": ["correctness", "robustness", "adversarial"],
+  "cases": [
+    {
+      "id": "correct-01",
+      "category": "correctness",
+      "input": "<a representative request your system should handle well>",
+      "expected": "<optional reference answer that passes all graders>"
+    },
+    {
+      "id": "robust-01",
+      "category": "robustness",
+      "input": "<an unusual but valid input — empty fields, long text, odd formatting>"
+    },
+    {
+      "id": "adversarial-01",
+      "category": "adversarial",
+      "input": "<an input that tries to break the system — injection, out-of-scope, trap>"
+    }
+  ]
+}
