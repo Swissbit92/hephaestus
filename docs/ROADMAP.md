@@ -23,8 +23,11 @@ The factory is built in value-first phases — each ships standalone value and i
 
 ## Phase 1 — bank the certain value (pays for itself, no role-agents)
 
-- [ ] **`kucoin-safety-gate`** plugin — deterministic `PreToolUse` hard-block on live KuCoin calls + `[executed]/[inspected]/[assumed]` tag check.
-- [ ] **`eval-first`** plugin (Tier A) — extract from nephilim ADR-005: baseline-freeze, match-or-beat-or-revert, blind-judge.
+- [ ] **`eval-first`** plugin (Tier A) — extract from nephilim ADR-005: baseline-freeze, match-or-beat-or-revert, blind-judge. **Primary Phase-1 deliverable** (generic, no live-system risk; closes the "no eval for the fabric" gap).
+
+## Parked / optional (do last)
+
+- [ ] **`kucoin-safety-gate`** plugin (Tier B) — deterministic `PreToolUse` hard-block on Claude-Code-initiated live KuCoin calls (ccxt MCP order tools + bash live-order scripts; **not** production launchd jobs) + `[executed]/[inspected]/[assumed]` tag check. **Parked 2026-06-28 at user request** — optional, revisit when an autonomous loop actually operates near the trading repos.
 
 ## Phase 2 — first restricted role-agents
 
