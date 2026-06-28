@@ -6,6 +6,8 @@ import random
 import pytest
 
 import ab_harness as ab
+import baseline as bl
+import judge as jg
 import reliability as rel
 
 
@@ -143,3 +145,129 @@ def test_pass_at_k_estimate_edges():
         rel.pass_at_k_estimate(5, 1, 0)                    # k must be positive
     with pytest.raises(ValueError):
         rel.pass_at_k_estimate(3, 1, 5)                    # k cannot exceed n
+
+
+# ---------------- baseline: freeze / load / immutability ----------------
+
+def test_freeze_load_roundtrip(tmp_path):
+    p = tmp_path / "baseline_v1.json"
+    bl.freeze_baseline(p, "legacy", {"acc": 0.8}, results={"x": 1}, stamp="2026-06-28T00:00:00")
+    loaded = bl.load_baseline(p)
+    assert loaded["label"] == "legacy"
+    assert loaded["stamp"] == "2026-06-28T00:00:00"
+    assert loaded["report"] == {"acc": 0.8}
+    assert loaded["results"] == {"x": 1}
+
+
+def test_freeze_is_immutable(tmp_path):
+    p = tmp_path / "baseline_v1.json"
+    bl.freeze_baseline(p, "legacy", {"acc": 0.8})
+    with pytest.raises(FileExistsError):
+        bl.freeze_baseline(p, "legacy", {"acc": 0.9})       # never silently overwrite
+    bl.freeze_baseline(p, "legacy", {"acc": 0.9}, force=True)  # explicit override allowed
+    assert bl.load_baseline(p)["report"]["acc"] == 0.9
+
+
+# ---------------- baseline: compare (match-or-beat gate) ----------------
+
+def test_compare_clean_when_matched_or_beat():
+    r = bl.compare_to_baseline({"a": 0.8, "b": 0.9}, {"a": 0.8, "b": 0.7})
+    assert r["clean"] is True
+    assert r["improvements"] == ["b"]
+    assert r["regressions"] == []
+
+
+def test_compare_flags_regression():
+    r = bl.compare_to_baseline({"a": 0.7}, {"a": 0.8})
+    assert r["regressions"] == ["a"]
+    assert r["clean"] is False
+
+
+def test_compare_tolerance_absorbs_small_drop():
+    r = bl.compare_to_baseline({"a": 0.79}, {"a": 0.80}, tolerance=0.02)
+    assert r["regressions"] == []
+    assert r["clean"] is True
+
+
+def test_compare_missing_key_blocks():
+    r = bl.compare_to_baseline({"a": 0.8}, {"a": 0.8, "b": 0.5})
+    assert r["missing"] == ["b"]
+    assert r["clean"] is False
+
+
+def test_compare_new_key_noted_not_blocking():
+    r = bl.compare_to_baseline({"a": 0.8, "c": 0.6}, {"a": 0.8})
+    assert r["new"] == ["c"]
+    assert r["clean"] is True
+
+
+# ---------------- judge: family guard ----------------
+
+def test_family_extraction():
+    assert jg.family("claude-sonnet-4-6") == "claude"
+    assert jg.family("gpt-5") == "gpt"
+    assert jg.family("gemini-2.5-pro") == "gemini"
+
+
+def test_assert_judge_distinct():
+    with pytest.raises(ValueError):
+        jg.assert_judge_distinct("claude-sonnet-4-6", "claude-opus-4-8")  # self-grading
+    jg.assert_judge_distinct("claude-sonnet-4-6", "gpt-5")                # different family OK
+
+
+# ---------------- judge: prompt + parse ----------------
+
+def test_build_ab_prompt_contains_rubric_and_outputs():
+    p = jg.build_ab_prompt("the input", "LEFTOUT", "RIGHTOUT", "be concise")
+    assert "be concise" in p and "LEFTOUT" in p and "RIGHTOUT" in p
+    assert "JSON" in p and "longer" in p
+
+
+def test_parse_ab_verdict_from_prose():
+    assert jg.parse_ab_verdict('reasoning... {"choice": "right", "reason": "x"} end')["choice"] == "right"
+
+
+def test_parse_ab_verdict_garbage_is_tie():
+    assert jg.parse_ab_verdict("no json here")["choice"] == "tie"
+
+
+# ---------------- judge: swap augmentation (the upgrade) ----------------
+
+def _content_judge(win="WIN"):
+    """A consistent judge that prefers whichever response actually contains `win`,
+    regardless of position."""
+    def jf(prompt: str) -> str:
+        left = prompt.split("# Response LEFT\n", 1)[1].split("\n\n# Response RIGHT", 1)[0]
+        right = prompt.split("# Response RIGHT\n", 1)[1].split("\n\n", 1)[0]
+        if win in left and win not in right:
+            return '{"choice": "left", "reason": "x"}'
+        if win in right and win not in left:
+            return '{"choice": "right", "reason": "x"}'
+        return '{"choice": "tie", "reason": "x"}'
+    return jf
+
+
+def _position_biased_judge(prompt: str) -> str:
+    return '{"choice": "left", "reason": "always left"}'   # ignores content
+
+
+def test_judge_pair_consistent_judge_picks_winner():
+    pair = ab.BlindPair("1", left="WIN response", right="lose response", left_is="A")
+    assert jg.judge_pair(pair, "in", "rubric", _content_judge()) == "left"
+
+
+def test_judge_pair_position_bias_resolves_to_tie():
+    pair = ab.BlindPair("1", left="alpha", right="beta", left_is="A")
+    # the biased judge always says "left" -> flips under swap -> order-dependent -> tie
+    assert jg.judge_pair(pair, "in", "rubric", _position_biased_judge) == "tie"
+
+
+def test_judge_pairs_integrates_with_tally():
+    pairs = [
+        ab.BlindPair("1", left="WIN a", right="lose a", left_is="B"),   # candidate(B) on left
+        ab.BlindPair("2", left="lose b", right="WIN b", left_is="A"),   # candidate(B) on right
+    ]
+    picks = jg.judge_pairs(pairs, "rubric", _content_judge())
+    # case1: left(WIN) wins, left_is=B -> b_win; case2: right(WIN) wins, right_is=B -> b_win
+    t = ab.tally(pairs, picks)
+    assert t["b_wins"] == 2 and t["a_wins"] == 0
