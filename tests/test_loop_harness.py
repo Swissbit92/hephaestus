@@ -15,11 +15,13 @@ import loop_budget
 import loop_common
 import loop_hook
 import loop_ledger
+import loop_logscan
 import pytest
 
 BUDGET_PY = Path(loop_budget.__file__)
 LEDGER_PY = Path(loop_ledger.__file__)
 HOOK_PY = Path(loop_hook.__file__)
+LOGSCAN_PY = Path(loop_logscan.__file__)
 
 
 def _run_cli(script: Path, args, state_dir: Path) -> subprocess.CompletedProcess:
@@ -385,3 +387,82 @@ def test_compact_keeps_entry_that_merely_mentions_archive_phrase():
     compacted = loop_ledger.compact(text, keep_recent=10)  # under threshold → no archiving
     timeline = loop_ledger.parse_sections(compacted)["Timeline"]
     assert any("mentions the phrase" not in t and "old log" in t for t in timeline)  # entry survived
+
+
+# --- iteration: ledger status-sync on disarm (dogfood finding #1) ---
+
+def test_set_status_updates_header():
+    text = loop_ledger.init_ledger("g", "loop-1", status="armed")
+    out = loop_ledger.set_status(text, "converged", updated="2026-06-28T02:00:00+00:00")
+    assert "- **Status:** converged" in out
+    assert "- **Status:** armed" not in out
+    assert "- **Updated:** 2026-06-28T02:00:00+00:00" in out
+
+
+def test_disarm_syncs_ledger_status(tmp_path):
+    state = tmp_path / "state"
+    ledger = tmp_path / "LOOP-STATE.md"
+    ledger.write_text(loop_ledger.init_ledger("g", "loop-x", status="armed"), encoding="utf-8")
+    r = _run_cli(BUDGET_PY, ["arm", "--goal", "g", "--max-turns", "5", "--ledger", str(ledger)], state)
+    assert r.returncode == 0
+    r = _run_cli(BUDGET_PY, ["disarm", "--status", "converged"], state)
+    assert r.returncode == 0 and json.loads(r.stdout)["ledger_synced"] is True
+    assert "- **Status:** converged" in ledger.read_text()  # no longer 'armed'
+
+
+def test_disarm_without_ledger_is_noop(tmp_path):
+    state = tmp_path / "state"
+    assert _run_cli(BUDGET_PY, ["arm", "--goal", "g", "--max-turns", "5"], state).returncode == 0
+    r = _run_cli(BUDGET_PY, ["disarm", "--status", "stopped"], state)
+    assert r.returncode == 0 and json.loads(r.stdout)["ledger_synced"] is False
+
+
+def test_arm_defaults_ledger_to_worktree(tmp_path):
+    state = tmp_path / "state"
+    wt = tmp_path / "wt"; wt.mkdir()
+    ledger = wt / "LOOP-STATE.md"
+    ledger.write_text(loop_ledger.init_ledger("g", "loop-y"), encoding="utf-8")
+    assert _run_cli(BUDGET_PY, ["arm", "--goal", "g", "--max-turns", "5", "--worktree", str(wt)], state).returncode == 0
+    r = _run_cli(BUDGET_PY, ["disarm", "--status", "converged"], state)
+    assert json.loads(r.stdout)["ledger_synced"] is True  # found <worktree>/LOOP-STATE.md by convention
+    assert "- **Status:** converged" in ledger.read_text()
+
+
+# --- iteration: loop_logscan summarizer (dogfood finding #2) ---
+
+def test_logscan_parses_failure_summary():
+    out = loop_logscan.summarize("1 failed, 59 passed in 0.50s")
+    assert out["failed"] == 1 and out["passed"] == 59 and out["ok"] is False and out["matched"] is True
+
+
+def test_logscan_parses_green_summary():
+    out = loop_logscan.summarize("324 passed, 2 skipped in 2.32s")
+    assert out["ok"] is True and out["passed"] == 324 and out["skipped"] == 2 and out["failed"] == 0
+
+
+def test_logscan_extracts_failing_nodes():
+    text = "FAILED tests/test_x.py::test_a - AssertionError\nFAILED tests/test_x.py::test_b - ValueError\n1 failed, 1 passed"
+    out = loop_logscan.summarize(text)
+    assert out["failing_tests"] == ["tests/test_x.py::test_a", "tests/test_x.py::test_b"]
+
+
+def test_logscan_counts_errors_as_not_ok():
+    out = loop_logscan.summarize("2 errors, 10 passed in 1s")
+    assert out["errors"] == 2 and out["ok"] is False
+
+
+def test_logscan_unparseable_is_not_ok():
+    out = loop_logscan.summarize("......... [100%]")  # raw progress, no summary
+    assert out["matched"] is False and out["ok"] is False
+
+
+def test_logscan_strips_ansi_color():
+    out = loop_logscan.summarize("\x1b[31m1 failed\x1b[0m, \x1b[32m2 passed\x1b[0m in 0.1s")
+    assert out["failed"] == 1 and out["passed"] == 2
+
+
+def test_logscan_cli_reads_stdin(tmp_path):
+    env = dict(os.environ)
+    r = subprocess.run([sys.executable, str(LOGSCAN_PY)], input="3 failed, 7 passed in 1s",
+                       capture_output=True, text=True, env=env)
+    assert r.returncode == 0 and json.loads(r.stdout)["failed"] == 3

@@ -53,15 +53,17 @@ don't design around being blocked).
 1. **Arm** — set the hard ceiling and the worktree. This writes the armed-run marker that turns
    the safety hook ON.
    `python3 scripts/loop_budget.py arm --goal "fix CI failures" --max-turns 20 [--max-tokens N] [--max-cost-usd X] --worktree "$WT"`
+   (the ledger path defaults to `$WT/LOOP-STATE.md`; pass `--ledger PATH` to override.)
 2. **Init the ledger** — `python3 scripts/loop_ledger.py init --goal "..." --run-id "$RID" --out "$WT/LOOP-STATE.md"`
 3. **Iterate** (single thread). Each turn:
    - `charge`: `python3 scripts/loop_budget.py charge --turns 1 [--tokens N --cost-usd X]` — **exit 3 means budget exhausted → stop.**
-   - Do one unit of work *inside `$WT`* (read a failure, form a hypothesis, draft a fix).
+   - Do one unit of work *inside `$WT`* (read a failure, form a hypothesis, draft a fix). Pipe test output through `loop_logscan` for a structured pass/fail summary instead of eyeballing raw dots: `pytest | python3 scripts/loop_logscan.py` (returns `{ok, passed, failed, failing_tests, …}`; `ok` is False if it can't parse a summary — never claim green from unparsed output). **`loop_logscan` needs the test runner's pass/fail *summary* line** — use the project's normal test command and don't stack an extra `-q` on a project that already sets `-q` in `addopts` (it becomes `-qq` and suppresses the summary). If `matched` is False, your command hid the summary — fix the command, don't trust the run.
    - Append to the ledger (`loop_ledger.py append --section timeline|decision|hypothesis|needs-me`).
    - Periodically `loop_ledger.py compact` so the ledger stays small (structural; you do the
      semantic summary in the entry text).
 4. **Disarm** — `python3 scripts/loop_budget.py disarm --status converged|budget-exhausted|stopped`.
-   This removes the armed marker (hook goes inert again) and appends a cost-log record.
+   This removes the armed marker (hook goes inert again), appends a cost-log record, and stamps
+   the ledger's `Status` with the final status so it stops reading `armed`.
 
 The ledger — not the context window — is the loop's memory. Context is a finite attention budget
 ("context rot"); write decisions/findings/open-hypotheses to `LOOP-STATE.md` so a compacted or
@@ -84,7 +86,9 @@ For each failure:
 Aggregate pass/fail scores hide misbehavior. Read the *logs/traces*, not just the exit code —
 catch out-of-scope or reward-hacking actions (e.g. an agent editing a test to make it pass instead
 of fixing the bug). Surface anything suspicious in the needs-me report rather than silently
-trusting a green checkmark.
+trusting a green checkmark. `scripts/loop_logscan.py` is the deterministic floor of this step —
+it extracts counts + failing node IDs and refuses to report `ok` from output it couldn't parse;
+*you* still read the trace for behavioral red flags scores can't see.
 
 ## Stop conditions
 
