@@ -21,6 +21,20 @@ One principle runs through all of it: **small, composable tools that earn their 
 stdlib where possible, no hidden dependencies, each one tested and documented so an agent (or a
 human) can pick it up cold.
 
+## Contents
+
+- [Plugins in this marketplace](#plugins-in-this-marketplace)
+- [crucible plugin](#crucible-plugin)
+- [The develop workflow](#the-develop-workflow)
+- [Install](#install)
+- [What's portable, what to adapt](#whats-portable-what-to-adapt)
+- [cms state & persistence](#cms-state--persistence)
+- [Requirements](#requirements)
+- [Layout](#layout)
+- [Releasing](#releasing)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Plugins in this marketplace
 
 | Plugin | What it is |
@@ -45,6 +59,24 @@ human) can pick it up cold.
 | **flag-gate** | skill | Default-OFF feature-flag rollout with instant revert — ship behind a flag, keep the legacy path byte-identical, flip only on an eval-first gate, revert by flipping off, retire after soak. Pairs with `eval-first`. |
 | **author-skill** | skill | Guide + scaffolder for writing a high-quality skill/plugin — lays out the authoring patterns (with real exemplars) and creates a pre-structured `SKILL.md` via `scripts/new_skill.py`. User-invoked. |
 | **loop-harness** | skill | Run a bounded, single-threaded, **read-only** agent loop safely — hard turn/budget ceilings + cost log (`loop_budget`), a `LOOP-STATE` ledger for memory (`loop_ledger`), a `PreToolUse` safety hook that blocks merge/push/out-of-worktree while a loop is armed (`loop_hook`), a test-log summarizer (`loop_logscan`), and `loop_sweep` — one command for a read-only CI sweep → needs-me report. Single-threaded, *not* role-teams (evidence-backed). |
+
+## The develop workflow
+
+`develop` is the spine the other crucible tools hang off. It classifies a task
+(FULL / LIGHT / TRIVIAL) and walks the matching phases, with a real gate between each —
+no plan approval, no implementation; no green tests, no merge:
+
+```mermaid
+flowchart LR
+  C[0 Classify] --> R[1 Research] --> A[2 Architect] --> I[2.5 Isolate]
+  I --> M[3 Implement] --> Q{4 QA gate}
+  Q -- REJECT --> M
+  Q -- PASS --> D[5 Docs] --> X[6 Complete] --> G[6.5 Integrate]
+```
+
+FULL work runs every phase; LIGHT skips Research/Architect; TRIVIAL skips isolate/integrate.
+Isolate/Integrate call **start-branch**/**finish-branch**; the QA gate is **qa-gatekeeper**;
+docs go through **cms**; LLM-backed or behavior-changing steps slot in **eval-first**/**flag-gate**.
 
 ## Install
 
@@ -101,17 +133,21 @@ overwrite the cached plugin dir, so state resolves in this order:
 ```
 hephaestus/
 ├── .claude-plugin/marketplace.json     # marketplace catalog (lists all plugins)
-├── scripts/                            # release.sh · bump_version.py · check-public-safe.sh
+├── scripts/                            # release.sh · bump_version.py · new_skill.py · check-public-safe.sh
+├── evals/                              # skill-eval harness (behavioral scenarios)
 ├── tests/                              # pytest suite
-└── plugins/crucible/
-    ├── .claude-plugin/plugin.json      # plugin manifest + cms hook
-    ├── skills/
-    │   ├── cms/                         # SKILL.md + scripts/ + templates/ + state/
-    │   ├── grill-me/SKILL.md
-    │   ├── start-branch/SKILL.md
-    │   └── finish-branch/SKILL.md
-    ├── commands/develop.md
-    └── agents/qa-gatekeeper.md
+├── docs/                               # ROADMAP · decisions/ (ADRs) · research/ — cms-managed
+├── VISION.md · CHANGELOG.md · CONTRIBUTING.md
+└── plugins/
+    ├── crucible/                        # flagship craft tools (see plugins/crucible/README.md)
+    │   ├── .claude-plugin/plugin.json   # manifest + cms & loop-harness PreToolUse hooks
+    │   ├── skills/{cms,grill-me,start-branch,finish-branch,author-skill,eval-first,flag-gate,loop-harness}/
+    │   ├── commands/develop.md
+    │   └── agents/qa-gatekeeper.md
+    ├── sqlite-readonly/                # read-only SQLite MCP server
+    ├── mcp-starter/                    # MCP-plugin packaging template
+    ├── second-brain/                   # Obsidian inbox processor
+    └── deck-builder/                   # code-backed .pptx deck builder
 ```
 
 ## Releasing
@@ -133,6 +169,13 @@ independently under its own tag namespace `<plugin>-v<x.y.z>`. The script refuse
 unless you're on `main` with a clean tree, validates the plugin, then commits, tags,
 pushes, and creates a GitHub release with notes drawn from that plugin's commits since its
 last tag. The version math lives in `scripts/bump_version.py` (unit-tested).
+
+## Contributing
+
+Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup
+(live-loading a plugin with `--plugin-dir`), the branch model, and the non-negotiable
+public-safety rule. In short: work on a feature branch (keep `main` releasable), and run
+`pytest -q` and `scripts/check-public-safe.sh` clean before integrating.
 
 ## License
 
