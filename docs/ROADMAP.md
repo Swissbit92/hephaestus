@@ -29,10 +29,14 @@ The factory is built in value-first phases — each ships standalone value and i
 
 - [ ] **`kucoin-safety-gate`** plugin (Tier B) — deterministic `PreToolUse` hard-block on Claude-Code-initiated live KuCoin calls (ccxt MCP order tools + bash live-order scripts; **not** production launchd jobs) + `[executed]/[inspected]/[assumed]` tag check. **Parked 2026-06-28 at user request** — optional, revisit when an autonomous loop actually operates near the trading repos.
 
-## Phase 2 — first restricted role-agents
+## Phase 2 — first restricted role-agents — **DEFERRED 2026-06-28** (domain tier premature)
 
-- [ ] **`blast-radius-reviewer`** (read-only; carries the ecosystem ADR-001/002/003/004) + **`quant-architect`** (read-only).
-- [x] Wire `qa-gatekeeper`'s test baseline to read ground truth live ✅ 2026-06-28 — the gate now re-derives the baseline from the branch-point commit (`git merge-base HEAD <target>`, counted in a throwaway worktree) instead of trusting a stated count; regression = fewer passing tests or a newly failing test, added tests are not. Aligned `develop` + `start-branch` baseline wording. crucible 0.5.0→0.5.1.
+> **Decision (2026-06-28):** the domain-agent tier is **deferred until the trading engine stabilizes.** A guardian only helps once there is a stable contract to guard — and the engine is still being actively built, so its "house rules" (data contracts, conventions, failure modes) are *supposed* to be changing. Freezing them into an agent now would cost more (fighting stale rules) than it returns. This is the premortem working as intended: value-first, don't garden infrastructure while the engine needs building.
+>
+> **Re-trigger:** revisit when, during real trading work, you repeatedly catch yourself thinking *"I must not break X"* — that repetition is the signal the house rules have solidified enough to write down. Until then: point the **generic tier (`crucible`)** at the engine-building work (it needs no house rules), and keep a cheap **house-rules backlog** — jot each *"don't break X"* moment in a notes file in the trading repo — so codifying the ecosystem ADRs later is transcription, not archaeology.
+
+- [x] Wire `qa-gatekeeper`'s test baseline to read ground truth live ✅ 2026-06-28 — the gate now re-derives the baseline from the branch-point commit (`git merge-base HEAD <target>`, counted in a throwaway worktree) instead of trusting a stated count; regression = fewer passing tests or a newly failing test, added tests are not. Aligned `develop` + `start-branch` baseline wording. crucible 0.5.0→0.5.1. *(Generic gate fix — standalone value, not part of the deferred domain tier.)*
+- [ ] *(deferred — see decision above)* **`blast-radius-reviewer`** (read-only; would carry the ecosystem contracts) + **`quant-architect`** (read-only; would carry the quant failure modes). Blocked on stable, written-down house rules.
 
 ## Phase 3 — close one loop (safest surface; first loop = CI Sweeper)
 
