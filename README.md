@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Swissbit92/hephaestus/actions/workflows/ci.yml/badge.svg)](https://github.com/Swissbit92/hephaestus/actions/workflows/ci.yml)
 
-**hephaestus** is a public [Claude Code](https://code.claude.com) marketplace of small, sharp
+**hephaestus** is a private [Claude Code](https://code.claude.com) marketplace of small, sharp
 plugins — a workshop for keeping your craft sharp. Each plugin is self-contained, vendor-neutral,
 and versioned independently, so you install only what you need and update it on its own cadence.
 
@@ -174,7 +174,7 @@ last tag. The version math lives in `scripts/bump_version.py` (unit-tested).
 
 Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup
 (live-loading a plugin with `--plugin-dir`), the branch model, and the non-negotiable
-public-safety rule. In short: work on a feature branch (keep `main` releasable), and run
+secret-guard rule. In short: work on a feature branch (keep `main` releasable), and run
 `pytest -q` and `scripts/check-public-safe.sh` clean before integrating.
 
 ## License
