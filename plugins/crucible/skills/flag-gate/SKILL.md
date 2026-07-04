@@ -17,6 +17,7 @@ Any behavioral change to a system that's already running: prompt/model swaps, ne
 4. **Revert = flip the flag OFF.** No code rollback, no redeploy. The flag is the kill switch; that's the entire value. If revert needs anything more, the change wasn't flag-gated.
 5. **Assert the default in a test.** A flag that silently defaults ON defeats the safety. Test the default value *env-independently* — assert the declared default in code, not the value after the environment resolves it (an env var set in the test shell will mask a wrong default).
 6. **Retire after soak.** Once the flag has been ON with no regressions through a soak window, delete the legacy path and the flag. Set an earliest-retire date when you create it. Permanent flags become flag debt — branching complexity nobody removes.
+7. **The failure branch gets a deadline too.** The retire date in rule 6 only covers the flag that *wins*. Set a second date at creation for the flag that *loses*: when the eval comes back worse, by that date the change is either fixed and re-gated, or the flag **and its now-dead new path are deleted**. A gate that failed and was left OFF with the new code still in the tree is the same flag debt as a permanent ON flag — a branch kept alive that will never flip. "Parked" with no date is how it rots there.
 
 ## The lifecycle, end to end
 
@@ -25,7 +26,7 @@ add flag (default OFF, legacy untouched)
   → ship (live path unchanged)
   → /crucible:eval-first: candidate vs frozen baseline
   → match-or-beat? flip per-scope → watch → flip global
-  → worse? leave OFF, fix or drop (revert is already done — it never shipped)
+  → worse? leave OFF → fix-and-re-gate OR delete flag + dead new path by the failure-decision date (never park indefinitely)
   → soak clean → delete legacy path + flag (retire by the date you set)
 ```
 
@@ -35,6 +36,7 @@ add flag (default OFF, legacy untouched)
 - **Refactoring the legacy path while adding the flag** — now revert isn't byte-identical and "flip it off" no longer restores the old behavior.
 - **Flipping before the eval gate** — shipping on a hunch is the thing flags exist to prevent.
 - **Permanent flags** — every un-retired flag doubles a code path forever. Retire on schedule.
+- **Indefinitely parked flags** — a flag whose eval came back worse, left OFF with its new path still in the tree and no decision date. "Parked" is flag debt wearing a nicer word: set a fix-or-delete date at creation, and when it arrives, one of the two paths gets deleted. A dark, built, un-owned code branch is exactly what accretes into stacked `if flag:` god-functions.
 - **Non-revertible "flags"** — a flag in front of a one-way state migration isn't a kill switch; flipping it off won't undo the migration.
 
 This is the rollout half of safe iteration; `/crucible:eval-first` is the measurement half. Use them together: eval-first decides *whether* to flip, flag-gate makes the flip and its reversal cost nothing.

@@ -45,6 +45,7 @@ Templates in `templates/`: `probes.json.template` (your eval cases) and `eval-co
 - **Deterministic checks run before the judge** — never spend a judge call on a structural failure.
 - **pass^k for regression gates** (every attempt holds), **avg@k / match-or-beat for capability**.
 - **Baselines are immutable** — `freeze_baseline` refuses to overwrite; version them alongside code.
+- **Run outputs are ephemeral artifacts, not source** — write scored candidate runs and judge dumps to a gitignored results dir (e.g. `evals/results/`). Only the probe set and the frozen baseline belong in version control. Committing timestamped run dumps is how repeated eval-first runs silently turn into repo bloat (MBs of `*.json`/`*.html` nobody reads again).
 - **Re-calibrate on any judge model bump** — a silent judge version change shifts scores 3–8 points.
 
 ## Anti-patterns
