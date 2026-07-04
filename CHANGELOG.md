@@ -5,7 +5,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 ## [Unreleased]
 
 ### Added
--
+- **crucible 0.7.0 — `repo-audit` skill.** Recurring, repeatable whole-repo health audit built for *trending*, not one-off snapshots. A deterministic pure-stdlib anchor (`repo_metrics.py`: file/LOC inventory, God-file detection, tracked-artifact & `.gitignore` hygiene, flag-branching count, conservative Python dead-module candidates, and an itemised `anchor_score` — same commit, same number, every run) feeds four **frozen, read-only, parallel** analysis lenses (Janitor / Architect / Clean-Code / DevOps). Synthesized into a dated `docs/audits/{date}-{repo}.md` that the next run diffs (score Δ · closed / new / deferred). Delegates the docs dimension to `cms`; gitignores raw agent dumps (eval-first artifact-hygiene lesson); lenses are versioned so a moved ruler is visible. Reconciles with the VISION non-goal — parallel independent read-only lenses over a static tree are *not* the rejected sequential role-play waterfall. +19 tests (342→361).
 
 ### Changed
 -

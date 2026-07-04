@@ -31,6 +31,7 @@ instructions enter context only when invoked.
 | **flag-gate** | skill | Default-OFF feature-flag rollout with instant revert — ship behind a flag, keep the legacy path byte-identical, flip only on an eval-first gate, revert by flipping off, retire after a soak. Pairs with `eval-first`. |
 | **author-skill** | skill | Guide + scaffolder for writing a high-quality skill/plugin — the authoring patterns (with real exemplars) plus a pre-structured `SKILL.md` via `scripts/new_skill.py`. |
 | **loop-harness** | skill | Run a bounded, single-threaded, **read-only** agent loop safely. Detailed below. |
+| **repo-audit** | skill + script | Recurring, repeatable **whole-repo health audit** — a deterministic pure-stdlib metrics anchor (`repo_metrics.py`: God-file density, tracked-artifact hygiene, gitignore gaps, flag-branching) plus four *frozen*, read-only, parallel analysis lenses (dead-code / structure / clean-code / config-hygiene), synthesized into a dated `docs/audits/` report you **trend over time**. Delegates docs to `cms`; the anchor score is reproducible so "72→68 since last quarter" means something. Not a diff review — that's `/code-review`. |
 
 ## The development loop, end to end
 
