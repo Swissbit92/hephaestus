@@ -18,6 +18,7 @@ DECK_LIB = REPO_ROOT / "plugins" / "deck-builder" / "skills" / "deck-builder"
 EVALS = REPO_ROOT / "evals"
 EVAL_FIRST_SCRIPTS = REPO_ROOT / "plugins" / "crucible" / "skills" / "eval-first" / "scripts"
 LOOP_HARNESS_SCRIPTS = REPO_ROOT / "plugins" / "crucible" / "skills" / "loop-harness" / "scripts"
+REPO_AUDIT_SCRIPTS = REPO_ROOT / "plugins" / "crucible" / "skills" / "repo-audit" / "scripts"
 
 # Isolate cms state writes (common.py creates STATE_DIR at import time).
 import os
@@ -53,6 +54,10 @@ if str(EVAL_FIRST_SCRIPTS) not in sys.path:
 # Make the loop-harness crucible skill scripts importable (loop_common, loop_budget, ...).
 if str(LOOP_HARNESS_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(LOOP_HARNESS_SCRIPTS))
+
+# Make the repo-audit crucible skill scripts importable (repo_metrics).
+if str(REPO_AUDIT_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(REPO_AUDIT_SCRIPTS))
 
 
 def pytest_collection_modifyitems(config, items):
