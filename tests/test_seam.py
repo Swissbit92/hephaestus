@@ -44,7 +44,7 @@ def test_generic_plugin_has_no_domain_content(plugin):
     hits = []
     for f in _text_files(plugin):
         try:
-            text = f.read_text().lower()
+            text = f.read_text(encoding="utf-8").lower()
         except UnicodeDecodeError:
             continue
         for tok in DOMAIN_TOKENS:

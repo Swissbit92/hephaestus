@@ -9,9 +9,25 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent  # skills/loop-harness/
+
+
+def use_utf8_stdio() -> None:
+    """Force UTF-8 on stdout/stderr before writing any non-ASCII.
+
+    Windows consoles/pipes default to cp1252, which *raises UnicodeEncodeError* on the
+    arrows/dashes in our reports — killing the process and destroying the exit-code contract
+    (a sweep would exit 1 "red" when it actually meant 2 "unparsed"). Call once at each CLI
+    entry point. Idempotent; a no-op on streams that don't support reconfigure.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")  # py3.7+
+        except (AttributeError, ValueError):      # already-wrapped / detached stream
+            pass
 
 # The armed-run marker: its presence means a loop is currently armed and the safety hook
 # should enforce read-only/no-merge. Absence means normal manual work — hook stays inert.

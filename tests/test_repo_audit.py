@@ -20,7 +20,7 @@ def _write(root, rel, content):
     if isinstance(content, bytes):
         p.write_bytes(content)
     else:
-        p.write_text(content)
+        p.write_text(content, encoding="utf-8")
     return rel
 
 

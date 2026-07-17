@@ -106,10 +106,10 @@ def test_file_frontmatter_or_absent(tmp_path):
     assert scoring.file_frontmatter_or_absent(r_absent, path="docs/g.md")[0] is True
     # present WITH frontmatter -> pass
     (tmp_path / "docs").mkdir()
-    (tmp_path / "docs" / "g.md").write_text("---\ntitle: x\n---\n# G\n")
+    (tmp_path / "docs" / "g.md").write_text("---\ntitle: x\n---\n# G\n", encoding="utf-8")
     assert scoring.file_frontmatter_or_absent(r_absent, path="docs/g.md")[0] is True
     # present WITHOUT frontmatter -> fail
-    (tmp_path / "docs" / "bad.md").write_text("# G\n")
+    (tmp_path / "docs" / "bad.md").write_text("# G\n", encoding="utf-8")
     assert scoring.file_frontmatter_or_absent(r_absent, path="docs/bad.md")[0] is False
 
 

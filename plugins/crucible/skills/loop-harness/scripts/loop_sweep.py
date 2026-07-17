@@ -87,7 +87,12 @@ def run_sweep(*, test_cmd: str, goal: str | None = None, max_turns: int = 1,
 
         # shell=True is intentional: test_cmd is operator-supplied config that needs shell
         # features (see the module docstring's trust-boundary note), not untrusted input.
-        proc = subprocess.run(test_cmd, shell=True, cwd=worktree, capture_output=True, text=True)  # noqa: S602
+        # errors="replace": a sweeper must survive whatever the suite prints. Without an explicit
+        # encoding this decodes as cp1252 on Windows and *raises* on any non-ASCII test output —
+        # a sweep would die instead of reporting. Mangling a stray glyph is fine; the summary
+        # line loop_logscan needs is ASCII.
+        proc = subprocess.run(test_cmd, shell=True, cwd=worktree, capture_output=True,  # noqa: S602
+                              text=True, encoding="utf-8", errors="replace")
         summary = loop_logscan.summarize(f"{proc.stdout}\n{proc.stderr}")
         status, code = classify(summary)
 
@@ -113,6 +118,7 @@ def run_sweep(*, test_cmd: str, goal: str | None = None, max_turns: int = 1,
 
 
 def main(argv=None) -> int:
+    loop_common.use_utf8_stdio()  # report is non-ASCII; cp1252 would kill the 0/1/2 exit contract
     parser = argparse.ArgumentParser(prog="loop_sweep", description="read-only CI Sweeper diagnostic pass")
     parser.add_argument("--test-cmd", required=True, help="the project's test command, e.g. 'pytest'")
     parser.add_argument("--goal", default=None)

@@ -87,7 +87,7 @@ def main(argv: list[str]) -> int:
         print("error: `claude` CLI not found — the eval runner needs it.", file=sys.stderr)
         return 2
 
-    scenarios = json.loads((HERE / "scenarios.json").read_text())["scenarios"]
+    scenarios = json.loads((HERE / "scenarios.json").read_text(encoding="utf-8"))["scenarios"]
     if args.scenario:
         scenarios = [s for s in scenarios if s["id"] == args.scenario]
         if not scenarios:
@@ -119,7 +119,7 @@ def main(argv: list[str]) -> int:
     if args.baseline:
         bpath = Path(args.baseline)
         if bpath.exists():
-            cmp = report_mod.compare_to_baseline(report, json.loads(bpath.read_text()))
+            cmp = report_mod.compare_to_baseline(report, json.loads(bpath.read_text(encoding="utf-8")))
             print(f"vs baseline: regressions={cmp['regressions']} improvements={cmp['improvements']} new={cmp['new']}")
         else:
             report_mod.freeze_baseline(report, bpath)

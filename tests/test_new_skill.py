@@ -10,13 +10,13 @@ def test_create_skill_writes_stub(tmp_path):
     path = new_skill.create_skill(tmp_path, "my-skill", "does a thing")
     assert path.exists()
     assert path == tmp_path / "my-skill" / "SKILL.md"
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     assert "name: my-skill" in text
     assert "description: does a thing" in text
 
 
 def test_stub_embeds_the_patterns(tmp_path):
-    text = new_skill.create_skill(tmp_path, "s", "d").read_text()
+    text = new_skill.create_skill(tmp_path, "s", "d").read_text(encoding="utf-8")
     # The stub should guide toward the high-leverage patterns, not be blank boilerplate.
     for marker in ["Do-not", "BAD", "GOOD", "HARD GATE", "Output", "Guardrails",
                    "CLAUDE_SKILL_DIR", "progressive disclosure"]:
@@ -44,7 +44,7 @@ def test_refuses_existing_without_force(tmp_path):
 def test_force_overwrites(tmp_path):
     new_skill.create_skill(tmp_path, "dup", "first")
     path = new_skill.create_skill(tmp_path, "dup", "second", force=True)
-    assert "description: second" in path.read_text()
+    assert "description: second" in path.read_text(encoding="utf-8")
 
 
 def test_default_skills_dir_points_at_crucible_plugin():

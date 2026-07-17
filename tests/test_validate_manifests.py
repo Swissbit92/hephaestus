@@ -18,13 +18,13 @@ def _make_repo(tmp_path, *, plugin_name="foo", version="0.1.0", with_desc=True,
     manifest = {"name": plugin_name, "version": version}
     if with_desc:
         manifest["description"] = "a plugin"
-    (pdir / "plugin.json").write_text(json.dumps(manifest))
+    (pdir / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
     mkt = root / ".claude-plugin"
     mkt.mkdir(parents=True)
     (mkt / "marketplace.json").write_text(json.dumps({
         "name": "m", "plugins": [{"name": entry_name or plugin_name, "source": source,
                                   "description": "x"}]
-    }))
+    }), encoding="utf-8")
     return root
 
 
@@ -62,7 +62,7 @@ def test_name_mismatch_flagged(tmp_path):
 
 def test_invalid_json_flagged(tmp_path):
     root = _make_repo(tmp_path)
-    (root / "plugins" / "foo" / ".claude-plugin" / "plugin.json").write_text("{not json")
+    (root / "plugins" / "foo" / ".claude-plugin" / "plugin.json").write_text("{not json", encoding="utf-8")
     problems = vm.validate(root)
     assert any("invalid JSON" in p for p in problems)
 

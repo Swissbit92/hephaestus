@@ -25,7 +25,7 @@ from common import SKILL_ROOT, iter_md_files
 def load_facts(path: Path) -> list[dict]:
     """Minimal YAML parser for the sync_facts.yaml format (list of facts with
     name/pattern/expected_value/note keys). Only supports this exact layout."""
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     facts: list[dict] = []
     current: dict | None = None
     in_note = False
@@ -123,7 +123,7 @@ def main() -> int:
             if "decisions" in relparts:
                 continue
             try:
-                text = md.read_text(errors="replace")
+                text = md.read_text(encoding="utf-8", errors="replace")
             except Exception:
                 continue
             for m in rx.finditer(text):

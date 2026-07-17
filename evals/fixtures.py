@@ -21,7 +21,7 @@ def _init(repo: Path, default_branch: str = "main") -> None:
 def _write(repo: Path, rel: str, content: str) -> None:
     p = repo / rel
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(content)
+    p.write_text(content, encoding="utf-8")
 
 
 def _commit_all(repo: Path, msg: str) -> None:
