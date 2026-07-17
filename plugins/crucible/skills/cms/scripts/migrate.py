@@ -98,7 +98,7 @@ def find_extraction_candidates(claude_md: Path) -> list[tuple[str, int, int]]:
     """Return [(section_title, start_line, end_line)] for H2 sections >threshold lines."""
     if not claude_md.exists():
         return []
-    lines = claude_md.read_text(errors="replace").splitlines()
+    lines = claude_md.read_text(encoding="utf-8", errors="replace").splitlines()
     sections: list[tuple[str, int, int]] = []
     current: tuple[str, int] | None = None  # (title, start)
     for i, line in enumerate(lines):
@@ -144,9 +144,9 @@ def main() -> int:
         print(f"  {rel_src}  →  {rel_dst}")
         if args.apply:
             dst.parent.mkdir(parents=True, exist_ok=True)
-            text = src.read_text(errors="replace")
+            text = src.read_text(encoding="utf-8", errors="replace")
             text = ensure_completed_frontmatter(text)
-            dst.write_text(text)
+            dst.write_text(text, encoding="utf-8")
             src.unlink()
             applied += 1
     if args.apply:
@@ -169,7 +169,7 @@ def main() -> int:
             print(f"    → candidate target: docs/shared/{_slug(title)}.md  (replace with `@docs/shared/{_slug(title)}.md`)")
     print()
 
-    total_lines = len(claude_md.read_text(errors="replace").splitlines()) if claude_md.exists() else 0
+    total_lines = len(claude_md.read_text(encoding="utf-8", errors="replace").splitlines()) if claude_md.exists() else 0
     print(f"Summary: {len(archive_cands)} archive candidates, {len(extractions)} extraction proposals, CLAUDE.md={total_lines} lines")
     return 0
 

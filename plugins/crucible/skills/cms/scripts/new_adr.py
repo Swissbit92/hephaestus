@@ -46,13 +46,13 @@ def main() -> int:
         return 2
 
     repo_name = args.repo_name or _infer_repo_name(adr_dir)
-    body = (TEMPLATES_DIR / "ADR.md").read_text()
+    body = (TEMPLATES_DIR / "ADR.md").read_text(encoding="utf-8")
     body = (body
             .replace("{{TITLE}}", args.title)
             .replace("{{NUMBER}}", f"{n:03d}")
             .replace("{{TODAY}}", today_iso())
             .replace("{{REPO_NAME}}", repo_name))
-    dst.write_text(body)
+    dst.write_text(body, encoding="utf-8")
     print(f"Created: {dst}")
     return 0
 

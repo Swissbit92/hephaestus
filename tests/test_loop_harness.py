@@ -30,8 +30,10 @@ def _run_cli(script: Path, args, state_dir: Path) -> subprocess.CompletedProcess
     env = dict(os.environ)
     env["LOOP_HARNESS_STATE_DIR"] = str(state_dir)
     return subprocess.run(
+        # explicit utf-8: the scripts force utf-8 stdout, so a cp1252 default here would
+        # blow up the reader thread and hand back stdout=None (Windows).
         [sys.executable, str(script), *args],
-        capture_output=True, text=True, env=env,
+        capture_output=True, text=True, encoding="utf-8", env=env,
     )
 
 
@@ -151,7 +153,7 @@ def test_init_ledger_has_all_sections_empty():
 
 
 def test_template_matches_init_structure():
-    tmpl = (Path(loop_ledger.__file__).parent.parent / "templates" / "LOOP-STATE.md.template").read_text()
+    tmpl = (Path(loop_ledger.__file__).parent.parent / "templates" / "LOOP-STATE.md.template").read_text(encoding="utf-8")
     for h in loop_ledger.HEADINGS:
         assert f"## {h}" in tmpl
     assert loop_ledger.PLACEHOLDER in tmpl
@@ -224,7 +226,7 @@ def test_ledger_cli_init_append_compact(tmp_path):
     assert r.returncode == 0 and f.exists()
     r = _run_cli(LEDGER_PY, ["append", "--file", str(f), "--section", "needs-me", "--entry", "human review please"], tmp_path)
     assert r.returncode == 0
-    assert "- human review please" in loop_ledger.parse_sections(f.read_text())["Needs-me"]
+    assert "- human review please" in loop_ledger.parse_sections(f.read_text(encoding="utf-8"))["Needs-me"]
     r = _run_cli(LEDGER_PY, ["compact", "--file", str(f), "--keep", "5"], tmp_path)
     assert r.returncode == 0
 
@@ -409,7 +411,7 @@ def test_disarm_syncs_ledger_status(tmp_path):
     assert r.returncode == 0
     r = _run_cli(BUDGET_PY, ["disarm", "--status", "converged"], state)
     assert r.returncode == 0 and json.loads(r.stdout)["ledger_synced"] is True
-    assert "- **Status:** converged" in ledger.read_text()  # no longer 'armed'
+    assert "- **Status:** converged" in ledger.read_text(encoding="utf-8")  # no longer 'armed'
 
 
 def test_disarm_without_ledger_is_noop(tmp_path):
@@ -427,7 +429,7 @@ def test_arm_defaults_ledger_to_worktree(tmp_path):
     assert _run_cli(BUDGET_PY, ["arm", "--goal", "g", "--max-turns", "5", "--worktree", str(wt)], state).returncode == 0
     r = _run_cli(BUDGET_PY, ["disarm", "--status", "converged"], state)
     assert json.loads(r.stdout)["ledger_synced"] is True  # found <worktree>/LOOP-STATE.md by convention
-    assert "- **Status:** converged" in ledger.read_text()
+    assert "- **Status:** converged" in ledger.read_text(encoding="utf-8")
 
 
 # --- iteration: loop_logscan summarizer (dogfood finding #2) ---
@@ -491,7 +493,7 @@ def _run_sweep_cli(test_cmd, tmp_path, extra=None):
     env = dict(os.environ); env["LOOP_HARNESS_STATE_DIR"] = str(tmp_path / "state")
     ledger = tmp_path / "LOOP-STATE.md"
     args = [sys.executable, str(SWEEP_PY), "--test-cmd", test_cmd, "--ledger", str(ledger), *(extra or [])]
-    return subprocess.run(args, capture_output=True, text=True, env=env), ledger
+    return subprocess.run(args, capture_output=True, text=True, encoding="utf-8", env=env), ledger
 
 
 def test_sweep_green_exits_0_and_ledger_converged(tmp_path):
@@ -499,7 +501,7 @@ def test_sweep_green_exits_0_and_ledger_converged(tmp_path):
     r, ledger = _run_sweep_cli("printf '%s\\n' '5 passed in 0.1s'", tmp_path)
     assert r.returncode == 0, r.stderr
     assert "GREEN" in r.stdout
-    assert "- **Status:** green" in ledger.read_text()  # disarm synced the ledger
+    assert "- **Status:** green" in ledger.read_text(encoding="utf-8")  # disarm synced the ledger
     # state cleared (not left armed)
     assert not (tmp_path / "state" / loop_common.RUN_STATE_FILE).exists()
 
@@ -509,7 +511,7 @@ def test_sweep_red_exits_1_and_reports_failing(tmp_path):
     r, ledger = _run_sweep_cli(cmd, tmp_path)
     assert r.returncode == 1
     assert "RED" in r.stdout and "tests/x.py::test_a" in r.stdout
-    led = ledger.read_text()
+    led = ledger.read_text(encoding="utf-8")
     assert "failing: tests/x.py::test_a" in led and "- **Status:** red" in led
 
 
@@ -517,10 +519,10 @@ def test_sweep_unparsed_exits_2(tmp_path):
     r, ledger = _run_sweep_cli("printf '%s\\n' '..... [100%]'", tmp_path)  # no summary line
     assert r.returncode == 2
     assert "UNPARSED" in r.stdout
-    assert "- **Status:** unparsed" in ledger.read_text()
+    assert "- **Status:** unparsed" in ledger.read_text(encoding="utf-8")
 
 
 def test_sweep_writes_report_file(tmp_path):
     report = tmp_path / "report.md"
     r, _ = _run_sweep_cli("printf '%s\\n' '3 passed in 0.1s'", tmp_path, extra=["--report", str(report)])
-    assert r.returncode == 0 and report.exists() and "GREEN" in report.read_text()
+    assert r.returncode == 0 and report.exists() and "GREEN" in report.read_text(encoding="utf-8")

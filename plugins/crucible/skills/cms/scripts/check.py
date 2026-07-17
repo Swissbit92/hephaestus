@@ -40,7 +40,7 @@ from common import (
 
 
 def check_frontmatter(path: Path, required: bool) -> list[Finding]:
-    text = path.read_text(errors="replace")
+    text = path.read_text(encoding="utf-8", errors="replace")
     fm, _ = parse_frontmatter(text)
     findings: list[Finding] = []
     rel = str(path)
@@ -79,7 +79,7 @@ def check_frontmatter(path: Path, required: bool) -> list[Finding]:
 
 
 def check_atpath_imports(path: Path) -> list[Finding]:
-    text = path.read_text(errors="replace")
+    text = path.read_text(encoding="utf-8", errors="replace")
     findings: list[Finding] = []
     for raw, target in find_atpath_imports(text, path.parent):
         if not target.exists():
@@ -123,7 +123,7 @@ def check_claude_md_size_trend(repo: Path) -> list[Finding]:
     claude = repo / "CLAUDE.md"
     if not claude.exists():
         return []
-    lines = len(claude.read_text(errors="replace").splitlines())
+    lines = len(claude.read_text(encoding="utf-8", errors="replace").splitlines())
     state = load_state("size_history")
     key = str(repo.resolve())
     entry = state.get(key, {})

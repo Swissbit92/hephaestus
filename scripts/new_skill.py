@@ -95,7 +95,7 @@ def create_skill(
     if target.exists() and not force:
         raise FileExistsError(f"skill already exists: {target} (use --force to overwrite)")
     skill_dir.mkdir(parents=True, exist_ok=True)
-    target.write_text(STUB.format(name=name, description=description))
+    target.write_text(STUB.format(name=name, description=description), encoding="utf-8")
     return target
 
 

@@ -24,7 +24,7 @@ _REQUIRED_PLUGIN_KEYS = ("name", "version", "description")
 
 def _load_json(path: Path) -> tuple[dict | None, str | None]:
     try:
-        return json.loads(path.read_text()), None
+        return json.loads(path.read_text(encoding="utf-8")), None
     except FileNotFoundError:
         return None, f"missing file: {path}"
     except (json.JSONDecodeError, ValueError) as e:

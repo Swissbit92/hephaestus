@@ -107,7 +107,7 @@ def file_frontmatter_or_absent(run: RunResult, path: str) -> tuple[bool, str]:
     if not p.exists():
         return True, f"{path} absent (write was blocked)"
     try:
-        text = p.read_text(errors="replace")
+        text = p.read_text(encoding="utf-8", errors="replace")
     except OSError as e:
         return False, f"unreadable: {e}"
     if text.lstrip().startswith("---"):

@@ -11,7 +11,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 -
 
 ### Fixed
--
+- **Windows encoding — plugin scripts crashed or silently corrupted non-ASCII docs.** Every `read_text`/`write_text` call across the plugins relied on the platform default encoding, which is **cp1252 on Windows**, not UTF-8. Two live failure modes: a hard `UnicodeDecodeError` (e.g. `cms/scripts/init.py` scaffolding a repo whose docs contain an em-dash), and — worse — **silent corruption** at the 13 sites passing `errors="replace"`, which still decoded as cp1252 and mangled `—`/`→` into `�` instead of failing loudly (this is what corrupted a freshly scaffolded `SKILL.md`). Pinned `encoding="utf-8"` at **54 call sites across 25 files**. Separately, `loop_sweep` wrote its non-ASCII report to a cp1252 stdout, raising `UnicodeEncodeError` mid-report and killing the process with exit 1 — **silently breaking the documented 0/1/2 exit contract, so a cron sweep reported "red" when it actually meant "couldn't parse a summary"**. CLI entry points now force UTF-8 stdio (`loop_common.use_utf8_stdio`), and the sweep decodes the suite's output as UTF-8 with `errors="replace"` (a sweeper must survive whatever a test prints, not die on an emoji). Fixes 5 pre-existing failures — the suite was only ever green on POSIX (357 passed / 5 failed → **362 passed**) — and removes the `PYTHONUTF8=1` workaround downstream repos needed in order to lint their docs.
 
 ## [crucible-v0.6.3] — 2026-06-28
 

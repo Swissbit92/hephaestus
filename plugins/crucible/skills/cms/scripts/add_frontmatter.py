@@ -84,12 +84,12 @@ def make_frontmatter(path: Path, content: str) -> str:
 
 
 def process(path: Path, dry_run: bool = False) -> str:
-    content = path.read_text(errors="replace")
+    content = path.read_text(encoding="utf-8", errors="replace")
     if content.startswith("---\n"):
         return "skip (already has frontmatter)"
     fm = make_frontmatter(path, content)
     if not dry_run:
-        path.write_text(fm + content)
+        path.write_text(fm + content, encoding="utf-8")
     return f"{'[DRY] ' if dry_run else ''}added ({infer_status(path)})"
 
 

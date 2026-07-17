@@ -152,7 +152,7 @@ def main() -> int:
     existing = ""
     if path.exists():
         try:
-            existing = path.read_text(errors="replace")
+            existing = path.read_text(encoding="utf-8", errors="replace")
         except Exception:
             existing = ""
 

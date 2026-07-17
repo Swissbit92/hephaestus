@@ -157,7 +157,7 @@ def load_state(name: str) -> dict:
     path = STATE_DIR / f"{name}.json"
     if path.exists():
         try:
-            return json.loads(path.read_text())
+            return json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             return {}
     return {}
@@ -165,7 +165,7 @@ def load_state(name: str) -> dict:
 
 def save_state(name: str, data: dict) -> None:
     path = STATE_DIR / f"{name}.json"
-    path.write_text(json.dumps(data, indent=2, sort_keys=True))
+    path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def repo_name(repo: Path) -> str:
