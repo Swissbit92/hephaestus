@@ -55,7 +55,7 @@ def scaffold(repo: Path, *, repo_name: str, purpose: str) -> list[tuple[str, str
     for d in ["docs/decisions", "docs/archive"]:
         keep = repo / d / ".gitkeep"
         if not keep.exists():
-            keep.write_text("")
+            keep.write_text("", encoding="utf-8")
     # Files
     for rel, template_name in TEMPLATE_MAP:
         dst = repo / rel
@@ -63,9 +63,9 @@ def scaffold(repo: Path, *, repo_name: str, purpose: str) -> list[tuple[str, str
             actions.append(("skipped", rel))
             continue
         src = TEMPLATES_DIR / template_name
-        body = substitute(src.read_text(), repo_name=repo_name, purpose=purpose)
+        body = substitute(src.read_text(encoding="utf-8"), repo_name=repo_name, purpose=purpose)
         dst.parent.mkdir(parents=True, exist_ok=True)
-        dst.write_text(body)
+        dst.write_text(body, encoding="utf-8")
         actions.append(("created", rel))
     return actions
 

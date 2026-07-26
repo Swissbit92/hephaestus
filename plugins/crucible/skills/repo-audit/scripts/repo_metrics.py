@@ -224,7 +224,7 @@ def _gitignore_gaps(root: Path) -> tuple[bool, list[str]]:
     if not gi.exists():
         return False, list(GITIGNORE_EXPECTED)
     try:
-        body = gi.read_text(errors="replace")
+        body = gi.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return True, list(GITIGNORE_EXPECTED)
     present_lines = {ln.strip().rstrip("/") for ln in body.splitlines()
@@ -251,7 +251,7 @@ def _python_dead_module_candidates(records: list[tuple[str, Path]]) -> list[str]
     bodies: dict[str, str] = {}
     for rel, ap in py:
         try:
-            text = ap.read_text(errors="replace")
+            text = ap.read_text(encoding="utf-8", errors="replace")
         except OSError:
             text = ""
         bodies[rel] = text
@@ -376,7 +376,7 @@ def collect(root: str | Path, *, files: list[str] | None = None,
             # flag grep (text source files only)
             if flag_res:
                 try:
-                    text = ap.read_text(errors="replace")
+                    text = ap.read_text(encoding="utf-8", errors="replace")
                 except OSError:
                     text = ""
                 n = sum(len(r.findall(text)) for r in flag_res)

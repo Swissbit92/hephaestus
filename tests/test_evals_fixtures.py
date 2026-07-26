@@ -36,7 +36,7 @@ def test_snapshot_detects_dirty(tmp_path):
 # --------------------------------------------------------------------------- fixtures
 def test_finish_red_on_feature_with_failing_test(tmp_path):
     repo = fixtures.build("finish_red", tmp_path / "r")
-    assert (repo / "tests" / "test_feature.py").read_text().count("== 3")  # failing
+    assert (repo / "tests" / "test_feature.py").read_text(encoding="utf-8").count("== 3")  # failing
     assert world.snapshot(repo).branch == "feature/add-feature"
 
 
@@ -59,7 +59,7 @@ def test_second_brain_vault_has_inbox(tmp_path):
 
 def test_cms_repo_has_valid_docs(tmp_path):
     repo = fixtures.build("cms_repo", tmp_path / "r")
-    assert (repo / "docs" / "ARCHITECTURE.md").read_text().startswith("---")
+    assert (repo / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8").startswith("---")
 
 
 def test_sqlite_fixture_has_rows(tmp_path):
@@ -82,7 +82,7 @@ def test_build_unknown_fixture_raises(tmp_path):
 
 # --------------------------------------------------------------------------- scenarios.json integrity
 def _load_scenarios():
-    return json.loads(SCENARIOS.read_text())["scenarios"]
+    return json.loads(SCENARIOS.read_text(encoding="utf-8"))["scenarios"]
 
 
 def test_scenarios_file_loads_and_has_entries():

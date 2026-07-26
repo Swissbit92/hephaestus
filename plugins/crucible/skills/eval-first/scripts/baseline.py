@@ -29,12 +29,12 @@ def freeze_baseline(path, label: str, report: dict, results: Optional[dict] = No
         "results": results,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=True))
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
     return payload
 
 
 def load_baseline(path) -> dict:
-    return json.loads(Path(path).read_text())
+    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 def compare_to_baseline(candidate: dict, baseline: dict, tolerance: float = 0.0) -> dict:

@@ -11,7 +11,7 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 
 | Plugin | Scope |
 |--------|-------|
-| **crucible** | Generic, vendor-neutral craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill`, `eval-first`, `flag-gate`, `loop-harness`, `repo-audit` |
+| **crucible** | Generic, vendor-neutral craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill`, `eval-first`, `flag-gate`, `loop-harness`, `act-for-real`, `repo-audit` |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server (3-layer read-only, NL→SQL) |
 | **mcp-starter** | Template for packaging a Python MCP server as a plugin |
 | **second-brain** | Obsidian inbox processor (suggest-then-confirm; skills-only) |
@@ -97,7 +97,7 @@ hephaestus/
 └── plugins/
     ├── crucible/
     │   ├── .claude-plugin/plugin.json
-    │   ├── skills/{cms,grill-me,start-branch,finish-branch,author-skill,eval-first,flag-gate,loop-harness,repo-audit}/
+    │   ├── skills/{cms,grill-me,start-branch,finish-branch,author-skill,eval-first,flag-gate,loop-harness,act-for-real,repo-audit}/
     │   ├── commands/develop.md
     │   └── agents/qa-gatekeeper.md
     ├── sqlite-readonly/         # read-only SQLite MCP server (uv project under servers/)

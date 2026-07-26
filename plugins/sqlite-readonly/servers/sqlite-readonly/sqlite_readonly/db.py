@@ -31,7 +31,7 @@ def materialize_sample(sql_path: str | Path, dest: str | Path) -> str:
         dest.parent.mkdir(parents=True, exist_ok=True)
         c = sqlite3.connect(str(dest))
         try:
-            c.executescript(Path(sql_path).read_text())
+            c.executescript(Path(sql_path).read_text(encoding="utf-8"))
             c.commit()
         finally:
             c.close()
