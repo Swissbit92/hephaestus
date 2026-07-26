@@ -88,16 +88,29 @@ the conceptual interface — map them to the scripts as shown.
 
 ## Shared state
 
-State must survive plugin updates (which overwrite the cached plugin dir). Resolution order:
+**Runtime state is never written inside the plugin.** Two reasons, and both bite:
+it must survive a plugin update that overwrites the plugin dir, and it records one
+entry per repo — so inside a generic (Tier A) plugin it becomes domain content,
+which `tests/test_seam.py` rejects under ADR-001.
+
+Resolution order:
 
 1. `CMS_STATE_DIR` env var, if set
 2. `${CLAUDE_PLUGIN_DATA}/cms-state` when running as a plugin
-3. `<skill>/state/` as a local fallback
+3. `~/.claude/cms-state` — the default in ordinary use, since neither env var is
+   normally set
+
+State written by older versions is migrated out of `<skill>/state/` on first run
+and the legacy copy removed. The migration is non-destructive: an existing file at
+the new location always wins.
 
 Files:
 
-- `size_history.json` — per-repo CLAUDE.md line-count history (for the "grew >20%" warning)
-- `sync_facts.yaml` — regex allowlist of known-drift facts (ships empty; grows as you find drift). The `sync` command's default `--facts` path is `<skill>/state/sync_facts.yaml`.
+- `size_history.json` — per-repo CLAUDE.md line-count history (for the "grew >20%" warning). **Runtime state** — lives in the resolved state dir above.
+- `sync_facts.yaml` — regex allowlist of known-drift facts (ships empty; grows as you find drift). **Shipped config** — versioned with the plugin at `<skill>/state/`, which is why `sync`'s default `--facts` path points there. It must stay free of ecosystem-specific tokens.
+
+Anything you add here follows the same split: versioned starters in the plugin,
+accumulated runtime data outside it.
 
 ## Hook scope
 
