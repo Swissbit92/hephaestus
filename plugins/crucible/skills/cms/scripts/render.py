@@ -650,7 +650,13 @@ def main() -> int:
         print(f"OK     {args.output.name} matches {args.input.name} and this renderer")
         return 0
 
-    args.output.write_text(build(args.input), encoding="utf-8")
+    # Strip per-line trailing whitespace. A generated artifact that trips a
+    # repo's trailing-whitespace pre-commit hook cannot be committed at all: the
+    # hook rewrites the staged copy, that conflicts with the working tree, and
+    # the commit rolls back — in a loop. Cheap to emit clean; expensive to
+    # diagnose at the commit.
+    page = "\n".join(ln.rstrip() for ln in build(args.input).split("\n"))
+    args.output.write_text(page, encoding="utf-8")
     print(f"wrote {args.output}  ({args.output.stat().st_size:,} bytes)")
     return 0
 
