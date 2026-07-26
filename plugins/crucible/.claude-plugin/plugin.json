@@ -1,7 +1,7 @@
 {
   "name": "crucible",
   "description": "Keep your craft sharp: doc-discipline (cms), decision stress-testing (grill-me), a structured development workflow (develop), a safe branch lifecycle (start-branch / finish-branch), a skill-authoring guide + scaffolder (author-skill), eval-first development (freeze a baseline, gate on match-or-beat-or-revert), flag-gate (default-OFF rollout with instant revert), loop-harness (bounded, single-threaded, read-only agent loops with budget ceilings, a LOOP-STATE ledger, and a worktree-only safety hook), act-for-real (the discipline for irreversible actions on live systems you often don't own: classify reversibility, bind authority to the exact action, never fabricate a real-world identifier, verify from a fresh read instead of the call), and repo-audit (recurring whole-repo health audit: a deterministic metrics anchor plus four frozen read-only lenses, trended over time).",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "author": {
     "name": "Swissbit92"
   },
