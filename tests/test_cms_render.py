@@ -267,7 +267,7 @@ class TestCheckerHasTeeth:
         checker that cries wolf gets switched off — which costs more than it was
         ever worth."""
         page = tmp_path / "p.html"
-        page.write_text("<h2>Prose only</h2><p>No diagrams here.</p>")
+        page.write_text("<h2>Prose only</h2><p>No diagrams here.</p>", encoding="utf-8")
 
         violations, n = check_arch.check_file(page)
 
@@ -276,7 +276,7 @@ class TestCheckerHasTeeth:
     def test_a_malformed_svg_still_fails(self):
         """The narrow case that *should* fire: an <svg> exists but is unusable."""
         page = Path(__file__).parent / "_tmp_malformed.html"
-        page.write_text("<svg width='10'><rect/></svg>")
+        page.write_text("<svg width='10'><rect/></svg>", encoding="utf-8")
         try:
             violations, _ = check_arch.check_file(page)
             assert {v.code for v in violations} == {"C6"}
@@ -306,9 +306,9 @@ class TestProvenanceGate:
     @pytest.fixture
     def pair(self, tmp_path):
         md = tmp_path / "A.md"
-        md.write_text(_fm("## Section\n\nBody.\n"))
+        md.write_text(_fm("## Section\n\nBody.\n"), encoding="utf-8")
         out = tmp_path / "A.html"
-        out.write_text(render_arch.build(md))
+        out.write_text(render_arch.build(md), encoding="utf-8")
         return md, out
 
     def _rc(self, md, out):
@@ -330,7 +330,7 @@ class TestProvenanceGate:
 
     def test_editing_the_source_trips_it(self, pair):
         md, out = pair
-        md.write_text(md.read_text() + "\nmore\n")
+        md.write_text(md.read_text(encoding="utf-8") + "\nmore\n", encoding="utf-8")
 
         assert self._rc(md, out) == 1
 
@@ -343,7 +343,7 @@ class TestProvenanceGate:
     def test_an_output_without_hashes_trips_it(self, pair):
         """An older generated file must not pass silently."""
         md, out = pair
-        out.write_text("<html>no provenance</html>")
+        out.write_text("<html>no provenance</html>", encoding="utf-8")
 
         assert self._rc(md, out) == 1
 
@@ -351,7 +351,7 @@ class TestProvenanceGate:
         """Source alone is not enough — change the renderer and every page is
         stale while its source is untouched."""
         _, out = pair
-        text = out.read_text()
+        text = out.read_text(encoding="utf-8")
 
         assert render_arch.SRC_HASH_RE.search(text)
         assert render_arch.GEN_HASH_RE.search(text)
@@ -362,13 +362,13 @@ class TestPageAssembly:
         """The palette is the repo's identity, not the tool's — that seam is what
         makes this promotable to other repos."""
         md = tmp_path / "A.md"
-        md.write_text("---\ntitle: T\napplies_to: demo\naccent: \"#00FF99\"\n---\n\n## S\n")
+        md.write_text("---\ntitle: T\napplies_to: demo\naccent: \"#00FF99\"\n---\n\n## S\n", encoding="utf-8")
 
         assert "#00FF99" in render_arch.build(md)
 
     def test_nav_is_built_from_the_h2s(self, tmp_path):
         md = tmp_path / "A.md"
-        md.write_text(_fm("## First\n\n## Second\n"))
+        md.write_text(_fm("## First\n\n## Second\n"), encoding="utf-8")
         out = render_arch.build(md)
 
         assert '<a href="#first">First</a>' in out
@@ -378,6 +378,6 @@ class TestPageAssembly:
         """The single-source claim collapses the moment someone hand-edits the
         HTML, so the page has to say so."""
         md = tmp_path / "A.md"
-        md.write_text(_fm("## S\n"))
+        md.write_text(_fm("## S\n"), encoding="utf-8")
 
         assert "DO NOT EDIT" in render_arch.build(md).upper()

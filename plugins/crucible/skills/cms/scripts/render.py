@@ -573,7 +573,7 @@ def _gen_hash() -> str:
 
 
 def build(md_path: Path) -> str:
-    meta, body_md = parse_frontmatter(md_path.read_text())
+    meta, body_md = parse_frontmatter(md_path.read_text(encoding="utf-8"))
     body = render_markdown(body_md)
 
     repo = meta.get("applies_to", md_path.parents[1].name)
@@ -609,7 +609,7 @@ def staleness(md_path: Path, html_path: Path) -> str | None:
     """
     if not html_path.exists():
         return "does not exist — render it"
-    rendered = html_path.read_text()
+    rendered = html_path.read_text(encoding="utf-8")
     ms, mg = SRC_HASH_RE.search(rendered), GEN_HASH_RE.search(rendered)
     if not ms or not mg:
         return "has no provenance hashes — re-render"
@@ -650,7 +650,7 @@ def main() -> int:
         print(f"OK     {args.output.name} matches {args.input.name} and this renderer")
         return 0
 
-    args.output.write_text(build(args.input))
+    args.output.write_text(build(args.input), encoding="utf-8")
     print(f"wrote {args.output}  ({args.output.stat().st_size:,} bytes)")
     return 0
 

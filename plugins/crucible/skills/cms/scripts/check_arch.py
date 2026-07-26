@@ -154,7 +154,7 @@ def check_file(path: Path) -> tuple[list, int]:
     gets switched off, which costs more than the check was worth. Only malformed
     SVG counts.
     """
-    html = path.read_text()
+    html = path.read_text(encoding="utf-8")
     found = RE_SVG.findall(html)
     if not found:
         if "<svg" in html:
