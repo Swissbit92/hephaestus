@@ -12,17 +12,49 @@ from typing import Iterator
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_ROOT / "templates"
 
-# State (size-history, sync facts) must survive plugin updates, which overwrite
-# the cached plugin dir. Prefer an explicit override, then the plugin's
-# persistent data dir, then a local fallback for non-plugin use.
+# Shipped config lives in the plugin and is versioned with it. Runtime state does
+# NOT, and the distinction is load-bearing: this skill records one entry per repo
+# it is run against, so its state accumulates the names of whatever ecosystem is
+# using it. Written inside the plugin, that is domain content sitting in a generic
+# (Tier A) plugin — the exact seam ADR-001 forbids and tests/test_seam.py enforces.
+#
+# It was also self-defeating. The comment here used to say state "must survive
+# plugin updates, which overwrite the cached plugin dir" — and then the last
+# branch wrote it into that very directory. Since neither env var is set in
+# ordinary use, that branch was not a rare fallback; it was the only path ever
+# taken.
+SHIPPED_STATE_DIR = SKILL_ROOT / "state"          # versioned starters, no runtime writes
+
 _state_override = os.environ.get("CMS_STATE_DIR")
 if _state_override:
     STATE_DIR = Path(_state_override).expanduser()
 elif os.environ.get("CLAUDE_PLUGIN_DATA"):
     STATE_DIR = Path(os.environ["CLAUDE_PLUGIN_DATA"]).expanduser() / "cms-state"
 else:
-    STATE_DIR = SKILL_ROOT / "state"
+    STATE_DIR = Path.home() / ".claude" / "cms-state"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _migrate_legacy_state() -> None:
+    """Move state written by older versions out of the plugin directory.
+
+    Best-effort and non-destructive: an existing file at the new location always
+    wins, and any failure is silent because losing size history costs a single
+    "grew >20%" warning, while crashing every cms invocation costs the skill.
+    """
+    if STATE_DIR == SHIPPED_STATE_DIR:
+        return
+    for legacy in SHIPPED_STATE_DIR.glob("*.json"):
+        target = STATE_DIR / legacy.name
+        try:
+            if not target.exists():
+                target.write_text(legacy.read_text())
+            legacy.unlink()
+        except OSError:
+            pass
+
+
+_migrate_legacy_state()
 
 # Base allowlist: canonical doc names that must never be auto-archived. The full
 # ARCHIVE_ALLOWLIST is derived below to also cover every REQUIRED_FILES entry — so a

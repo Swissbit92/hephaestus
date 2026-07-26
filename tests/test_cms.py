@@ -321,3 +321,55 @@ def test_init_scaffolds_best_practice_readme(tmp_path):
     assert "[CONTRIBUTING.md](CONTRIBUTING.md)" in readme   # Contributing linked
     assert "[LICENSE](LICENSE)" in readme                   # License linked
     assert "mermaid" in readme.lower()                      # diagram hint present
+
+
+# --------------------------------------------------------- runtime state location
+# The seam regression. `check` records one entry per repo it runs against, so the
+# size-history file accumulates the names of whatever ecosystem uses the skill.
+# Written inside the plugin that is domain content in a generic (Tier A) plugin,
+# which tests/test_seam.py forbids — and it also contradicted this skill's own
+# stated requirement that state survive a plugin update that overwrites the
+# plugin directory. The old last-resort branch did exactly that, and since
+# neither env var is set in ordinary use, it was the only branch ever taken.
+
+def _resolved_state_dir(env_overrides: dict) -> Path:
+    """Import `common` in a clean subprocess and ask where it decided to write."""
+    env = {**os.environ, **env_overrides}
+    for k, v in env_overrides.items():
+        if v is None:
+            env.pop(k, None)
+    out = subprocess.run(
+        [sys.executable, "-c", "import common; print(common.STATE_DIR)"],
+        capture_output=True, text=True, env=env,
+        cwd=str(Path(common.__file__).parent),
+    )
+    assert out.returncode == 0, out.stderr
+    return Path(out.stdout.strip())
+
+
+def test_runtime_state_never_defaults_into_the_plugin(tmp_path):
+    """With no env configured — the ordinary case — state must still land
+    outside the plugin directory."""
+    resolved = _resolved_state_dir({"CMS_STATE_DIR": None, "CLAUDE_PLUGIN_DATA": None})
+
+    assert common.SKILL_ROOT not in resolved.parents
+    assert resolved != common.SHIPPED_STATE_DIR
+
+
+def test_explicit_override_still_wins(tmp_path):
+    resolved = _resolved_state_dir({"CMS_STATE_DIR": str(tmp_path / "custom")})
+
+    assert resolved == tmp_path / "custom"
+
+
+def test_plugin_data_dir_is_used_when_present(tmp_path):
+    resolved = _resolved_state_dir(
+        {"CMS_STATE_DIR": None, "CLAUDE_PLUGIN_DATA": str(tmp_path / "pdata")})
+
+    assert resolved == tmp_path / "pdata" / "cms-state"
+
+
+def test_shipped_state_dir_holds_no_runtime_json():
+    """Versioned starters only. A *.json here means something wrote runtime state
+    back into the plugin."""
+    assert list(common.SHIPPED_STATE_DIR.glob("*.json")) == []

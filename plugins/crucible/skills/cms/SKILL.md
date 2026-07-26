@@ -33,6 +33,8 @@ runtime), substitute the absolute path to this skill's `scripts/` directory.
 | `/cms new-adr <title>` | `new_adr.py "<title>" [--path <dir>]` | Scaffold next NNN-title.md ADR with Nygard template |
 | `/cms sync` | `sync.py [<root>]` | Cross-repo drift detector (regex allowlist of known-drift facts in `state/sync_facts.yaml`) |
 | `/cms migrate <path>` | `migrate.py <path>` | Propose-and-approve structural migration (extract to docs/, archive stale) |
+| `/cms render [<path>]` | `render.py [<repo>]` | Render `docs/ARCHITECTURE.md` → `docs/ARCHITECTURE.html`, a human-readable view. `--check` exits 1 when stale |
+| — | `check_arch.py <html>` | Structural check on a rendered page's diagrams (overlaps, connectors through boxes, out-of-bounds) |
 
 Invoke this skill with `/crucible:cms`. The `/cms <subcommand>` forms above are
 the conceptual interface — map them to the scripts as shown.
@@ -88,16 +90,53 @@ the conceptual interface — map them to the scripts as shown.
 
 ## Shared state
 
-State must survive plugin updates (which overwrite the cached plugin dir). Resolution order:
+**Runtime state is never written inside the plugin.** Two reasons, and both bite:
+it must survive a plugin update that overwrites the plugin dir, and it records one
+entry per repo — so inside a generic (Tier A) plugin it becomes domain content,
+which `tests/test_seam.py` rejects under ADR-001.
+
+Resolution order:
 
 1. `CMS_STATE_DIR` env var, if set
 2. `${CLAUDE_PLUGIN_DATA}/cms-state` when running as a plugin
-3. `<skill>/state/` as a local fallback
+3. `~/.claude/cms-state` — the default in ordinary use, since neither env var is
+   normally set
+
+State written by older versions is migrated out of `<skill>/state/` on first run
+and the legacy copy removed. The migration is non-destructive: an existing file at
+the new location always wins.
 
 Files:
 
-- `size_history.json` — per-repo CLAUDE.md line-count history (for the "grew >20%" warning)
-- `sync_facts.yaml` — regex allowlist of known-drift facts (ships empty; grows as you find drift). The `sync` command's default `--facts` path is `<skill>/state/sync_facts.yaml`.
+- `size_history.json` — per-repo CLAUDE.md line-count history (for the "grew >20%" warning). **Runtime state** — lives in the resolved state dir above.
+- `sync_facts.yaml` — regex allowlist of known-drift facts (ships empty; grows as you find drift). **Shipped config** — versioned with the plugin at `<skill>/state/`, which is why `sync`'s default `--facts` path points there. It must stay free of ecosystem-specific tokens.
+
+Anything you add here follows the same split: versioned starters in the plugin,
+accumulated runtime data outside it.
+
+## Rendered architecture view
+
+`docs/ARCHITECTURE.md` stays the single source; `docs/ARCHITECTURE.html` is
+generated from it and **must never be hand-edited**. This deliberately does not
+add a second architecture document — a second hand-maintained file would double
+the staleness surface rather than solve it, so drift is made structurally
+impossible instead of merely policed.
+
+- Diagrams live in fenced ` ```archview ` blocks inside the markdown, the way
+  mermaid already does. One file to edit, one linter to satisfy.
+- Repo-specific visuals go in a fenced ` ```html ` block and pass through
+  untouched — "the one thing this repo does" differs everywhere and cannot be
+  schema'd, so the format offers a socket rather than a type.
+- The palette accent comes from frontmatter (`accent: "#RRGGBB"`), so visual
+  identity belongs to the repo, not to this skill.
+- Staleness is gated on **content hashes of both the source and the renderer**,
+  never mtimes — git does not preserve mtimes, so a checkout reports a
+  byte-identical page as stale. `check` surfaces it as a Warning, never an Error:
+  a gate that blocks on a regenerable artifact is one people learn to bypass.
+- **`check_arch.py` is the authority on layout, not the eye.** Layout engines do
+  not fail loudly; they emit a connector through a box and it looks plausible.
+
+Full schema, view catalogue and authoring rules: [references/architecture-views.md](references/architecture-views.md).
 
 ## Hook scope
 
