@@ -33,6 +33,8 @@ runtime), substitute the absolute path to this skill's `scripts/` directory.
 | `/cms new-adr <title>` | `new_adr.py "<title>" [--path <dir>]` | Scaffold next NNN-title.md ADR with Nygard template |
 | `/cms sync` | `sync.py [<root>]` | Cross-repo drift detector (regex allowlist of known-drift facts in `state/sync_facts.yaml`) |
 | `/cms migrate <path>` | `migrate.py <path>` | Propose-and-approve structural migration (extract to docs/, archive stale) |
+| `/cms render [<path>]` | `render.py [<repo>]` | Render `docs/ARCHITECTURE.md` → `docs/ARCHITECTURE.html`, a human-readable view. `--check` exits 1 when stale |
+| — | `check_arch.py <html>` | Structural check on a rendered page's diagrams (overlaps, connectors through boxes, out-of-bounds) |
 
 Invoke this skill with `/crucible:cms`. The `/cms <subcommand>` forms above are
 the conceptual interface — map them to the scripts as shown.
@@ -111,6 +113,30 @@ Files:
 
 Anything you add here follows the same split: versioned starters in the plugin,
 accumulated runtime data outside it.
+
+## Rendered architecture view
+
+`docs/ARCHITECTURE.md` stays the single source; `docs/ARCHITECTURE.html` is
+generated from it and **must never be hand-edited**. This deliberately does not
+add a second architecture document — a second hand-maintained file would double
+the staleness surface rather than solve it, so drift is made structurally
+impossible instead of merely policed.
+
+- Diagrams live in fenced ` ```archview ` blocks inside the markdown, the way
+  mermaid already does. One file to edit, one linter to satisfy.
+- Repo-specific visuals go in a fenced ` ```html ` block and pass through
+  untouched — "the one thing this repo does" differs everywhere and cannot be
+  schema'd, so the format offers a socket rather than a type.
+- The palette accent comes from frontmatter (`accent: "#RRGGBB"`), so visual
+  identity belongs to the repo, not to this skill.
+- Staleness is gated on **content hashes of both the source and the renderer**,
+  never mtimes — git does not preserve mtimes, so a checkout reports a
+  byte-identical page as stale. `check` surfaces it as a Warning, never an Error:
+  a gate that blocks on a regenerable artifact is one people learn to bypass.
+- **`check_arch.py` is the authority on layout, not the eye.** Layout engines do
+  not fail loudly; they emit a connector through a box and it looks plausible.
+
+Full schema, view catalogue and authoring rules: [references/architecture-views.md](references/architecture-views.md).
 
 ## Hook scope
 

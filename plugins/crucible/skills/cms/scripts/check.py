@@ -141,10 +141,35 @@ def check_claude_md_size_trend(repo: Path) -> list[Finding]:
     return findings
 
 
+def check_architecture_page(repo: Path) -> list[Finding]:
+    """Warn when a rendered ARCHITECTURE.html no longer matches its source.
+
+    Warning, not error: this is advisory precisely so it stays trustworthy. A
+    gate that blocks on a regenerable artifact is a gate people learn to bypass,
+    and then it protects nothing. Silent when there is no rendered page — most
+    repos have prose long before they have a rendered view, and flagging them
+    would make the check cry wolf across the estate.
+    """
+    md = repo / "docs" / "ARCHITECTURE.md"
+    page = repo / "docs" / "ARCHITECTURE.html"
+    if not md.exists() or not page.exists():
+        return []
+    try:
+        import render
+    except Exception:                                    # noqa: BLE001
+        return []
+    if render.is_current(md, page):
+        return []
+    return [Finding("warning", str(page),
+                    "generated page is out of date with ARCHITECTURE.md "
+                    "— re-render with `/cms render`")]
+
+
 def run_repo_check(repo: Path) -> list[Finding]:
     findings: list[Finding] = []
     findings.extend(check_required_files(repo))
     findings.extend(check_claude_md_size_trend(repo))
+    findings.extend(check_architecture_page(repo))
     # Per-file checks
     for md in iter_md_files(repo, include_archive=False):
         required_fm = "/docs/" in str(md).replace("\\", "/") and md.name not in FRONTMATTER_EXEMPT
