@@ -59,6 +59,13 @@ GROUP_PAD = 18
 # markdown subset
 # ════════════════════════════════════════════════════════════════════════════
 
+# Four states and no more. A vocabulary this small is one a reader learns once
+# and an author cannot misuse; a fifth colour stops it meaning anything at a
+# glance. Never colour alone — the label carries the meaning.
+PILL_STATES = ("ok", "warn", "bad", "mute")
+RE_PILL = re.compile(r"\[\[(ok|warn|bad|mute):([^\]|\n]+)\]\]")
+
+
 def _inline(text: str) -> str:
     """Escape, then re-introduce the few inline forms an architecture doc uses.
 
@@ -66,6 +73,12 @@ def _inline(text: str) -> str:
     construct supported here is one more thing that can render wrong.
     """
     out = html.escape(text, quote=False)
+    # Ahead of the code and emphasis passes, so a pill label cannot be
+    # half-consumed by one of them and emitted as something else.
+    out = RE_PILL.sub(
+        lambda m: f'<span class="pill pill-{m.group(1)}">{m.group(2).strip()}</span>',
+        out,
+    )
     out = re.sub(r"`([^`]+)`", r"<code>\1</code>", out)
     out = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", out)
     out = re.sub(r"(?<![*\w])\*([^*\n]+)\*(?!\*)", r"<em>\1</em>", out)
@@ -143,6 +156,8 @@ def render_markdown(md: str) -> str:
                     "fig": fig_index, "spec": spec,
                 }
                 out.append(render_diagram(spec, fig_index))
+            elif lang == "archstat":
+                out.append(render_stats(json.loads(body)))
             elif lang == "archflow":
                 out.append(render_flow(json.loads(body), views, claimed_flows))
             elif lang == "html":
@@ -640,6 +655,44 @@ def _legend(nodes: list) -> str:
     return f'<div class="legend">{items}</div>'
 
 
+def render_stats(spec: list) -> str:
+    """The gauge row: the handful of facts worth reading before the prose.
+
+    The footer of this page claims STRUCTURE ONLY, NO RUNTIME STATE, and a row of
+    gauges is exactly where that claim goes to die — "tests: 357" and "uptime:
+    99.9%" are the two most tempting and most rotten things to put here. So a
+    gauge takes a `value` the author wrote down and nothing is computed: if it is
+    the sort of fact that changes without anyone editing this file, it does not
+    belong in it. Prefer what is true because of a decision (venue, gating,
+    allocation) over what is true because of a run.
+    """
+    if not isinstance(spec, list) or not spec:
+        raise ArchStatError("archstat must be a non-empty list of gauges")
+    cells = []
+    for k, g in enumerate(spec, 1):
+        if not g.get("label") or not g.get("value"):
+            raise ArchStatError(
+                f"gauge {k} needs both 'label' and 'value'; got {sorted(g)}"
+            )
+        state = g.get("state", "")
+        if state and state not in PILL_STATES:
+            raise ArchStatError(
+                f"gauge {k} state {state!r} is not one of {list(PILL_STATES)}"
+            )
+        note = (f'<small>{html.escape(g["note"])}</small>'
+                if g.get("note") else "")
+        cells.append(
+            f'<div class="gauge"{f" data-state={state}" if state else ""}>'
+            f'<dt>{html.escape(g["label"])}</dt>'
+            f'<dd>{html.escape(g["value"])}{note}</dd></div>'
+        )
+    return f'<dl class="gauges">{"".join(cells)}</dl>'
+
+
+class ArchStatError(ValueError):
+    """A gauge row that would render as a blank or a lie."""
+
+
 class ArchFlowError(ValueError):
     """A flow points at something that is not in the diagram.
 
@@ -842,6 +895,11 @@ TEMPLATE = """<meta charset="utf-8">
      tightest of the three still clears 4.5:1 against --panel2. */
   --txt:#D6E0DD; --mid:#9CA8A5; --faint:#70847E;
   --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  /* ui-serif resolves to New York on macOS and a real text face elsewhere. No
+     webfont, so nothing to block and nothing to wait for. It is here to give
+     headings and figures a voice the body text does not have — everything on
+     this page used to be one width, which is even and flat. */
+  --serif:ui-serif,"New York",Georgia,"Times New Roman",serif;
 }}
 body{{background:var(--void);color:var(--txt);font-family:var(--mono);
   font-size:13px;line-height:1.65;-webkit-font-smoothing:antialiased;
@@ -865,9 +923,15 @@ h1{{margin:0;font-size:1.05rem;font-weight:600;letter-spacing:.07em;color:var(--
 nav{{display:flex;flex-wrap:wrap;gap:.65rem;font-size:.6rem;letter-spacing:.09em}}
 nav a{{color:var(--mid);text-decoration:none;text-transform:uppercase}}
 nav a:hover{{color:var(--accent)}}
-h2{{margin:2.2rem 0 0;font-size:.76rem;font-weight:600;letter-spacing:.17em;text-transform:uppercase;
-  color:var(--accent);border-bottom:1px solid var(--edge);padding-bottom:.45rem;scroll-margin-top:4.5rem}}
-h3{{margin:1.5rem 0 0;font-size:.7rem;font-weight:600;letter-spacing:.11em;text-transform:uppercase;color:var(--txt)}}
+/* Serif, sentence case, and bigger — not uppercase mono at .76rem. A heading
+   that is the same width and nearly the same size as the paragraph under it is
+   not doing the one job a heading has, which is to be findable while scanning. */
+h2{{margin:2.4rem 0 0;font-family:var(--serif);font-size:1.5rem;font-weight:400;
+  letter-spacing:-.01em;text-transform:none;line-height:1.15;
+  color:var(--accent);border-bottom:1px solid var(--edge);padding-bottom:.5rem;
+  scroll-margin-top:4.5rem}}
+h3{{margin:1.6rem 0 0;font-family:var(--serif);font-size:1.08rem;font-weight:400;
+  letter-spacing:0;text-transform:none;color:var(--txt)}}
 h1,h2,h3{{text-wrap:balance}}
 /* 68ch, not the 78ch this used to carry. The 45-75 character guidance assumes a
    proportional face averaging ~0.5em; monospace runs ~0.6em, so the same ch
@@ -896,6 +960,33 @@ pre{{margin:0;background:var(--panel);border:1px solid var(--edge);padding:.7rem
 @media (prefers-reduced-motion:reduce){{.cpy{{transition:none}}}}
 /* Touch has no hover, so the affordance must not be hover-gated there. */
 @media (hover:none){{.cpy{{opacity:1}}}}
+/* ── gauge row ─────────────────────────────────────────────────────────
+   The handful of facts worth having before the prose. 1px gaps over a ruled
+   background so the cells read as one instrument rather than four cards. */
+.gauges{{display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));
+  gap:1px;background:var(--edge);border:1px solid var(--edge);margin:1.1rem 0 0}}
+.gauge{{background:var(--panel);padding:.85rem 1rem;display:grid;gap:.25rem}}
+.gauge dt{{margin:0;font-size:.57rem;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--faint)}}
+.gauge dd{{margin:0;font-family:var(--serif);font-size:1.5rem;line-height:1.05;
+  color:var(--txt);letter-spacing:-.01em}}
+.gauge dd small{{font-family:var(--mono);font-size:.58rem;color:var(--faint);
+  letter-spacing:.04em;margin-left:.4rem;white-space:nowrap}}
+.gauge[data-state=ok] dd{{color:var(--phos)}}
+.gauge[data-state=warn] dd{{color:var(--accent)}}
+.gauge[data-state=bad] dd{{color:var(--red)}}
+
+/* ── state pills ───────────────────────────────────────────────────────
+   Never colour alone: the label carries the meaning, so the pill still works
+   in greyscale, in print, and for anyone who cannot separate the hues. */
+.pill{{display:inline-block;font-size:.58rem;letter-spacing:.1em;
+  text-transform:uppercase;padding:.1rem .42rem;border:1px solid currentColor;
+  border-radius:2px;white-space:nowrap;vertical-align:.08em}}
+.pill-ok{{color:var(--phos)}}
+.pill-warn{{color:var(--accent)}}
+.pill-bad{{color:var(--red)}}
+.pill-mute{{color:var(--faint)}}
+
 .tw{{overflow:auto;max-height:min(80vh,44rem);margin:.9rem 0 0;
   border:1px solid var(--edge);background:var(--panel)}}
 table{{width:100%;min-width:30rem;border-collapse:separate;border-spacing:0;font-size:.75rem}}

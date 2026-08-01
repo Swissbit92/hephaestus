@@ -906,3 +906,68 @@ class TestTextSibling:
         md.write_text(_fm("```html\n<div id='decor'></div>\n```\n"), encoding="utf-8")
 
         assert "decor" not in render_arch.build_text(md)
+
+
+class TestStatsAndPills:
+    """Two small vocabularies. Both are only useful while they stay small."""
+
+    def test_a_gauge_row_renders_its_values(self):
+        out = render_arch.render_stats([
+            {"label": "Carry", "value": "Live", "note": "SUB1", "state": "bad"},
+            {"label": "Venue", "value": "KuCoin"},
+        ])
+
+        assert 'class="gauges"' in out
+        assert "<dt>Carry</dt>" in out
+        assert "data-state=bad" in out
+        assert "<small>SUB1</small>" in out
+
+    def test_a_gauge_missing_a_value_is_an_error_not_a_blank_cell(self):
+        with pytest.raises(render_arch.ArchStatError):
+            render_arch.render_stats([{"label": "Carry"}])
+
+    def test_an_invented_state_is_rejected(self):
+        """The vocabulary is four. A fifth colour means nothing at a glance."""
+        with pytest.raises(render_arch.ArchStatError) as e:
+            render_arch.render_stats([{"label": "a", "value": "b", "state": "critical"}])
+
+        assert "ok" in str(e.value)
+
+    @pytest.mark.parametrize("state", ["ok", "warn", "bad", "mute"])
+    def test_pills_render_inline_anywhere(self, state):
+        out = render_arch.render_markdown(f"Status is [[{state}:Halted]] today.\n")
+
+        assert f'<span class="pill pill-{state}">Halted</span>' in out
+
+    def test_a_pill_survives_being_next_to_code_and_bold(self):
+        out = render_arch.render_markdown("[[ok:Safe]] `run.py` is **fine**\n")
+
+        assert 'class="pill pill-ok">Safe<' in out
+        assert "<code>run.py</code>" in out
+        assert "<strong>fine</strong>" in out
+
+    def test_pills_work_inside_a_table_cell(self):
+        out = render_arch.render_markdown(
+            "| Lever | Effect |\n|---|---|\n| x | [[bad:Global]] no orders |\n")
+
+        assert 'pill pill-bad' in out
+        assert "<td>" in out
+
+    def test_an_unknown_pill_state_is_left_as_written(self):
+        """Silently swallowing it would hide the typo; leaving it visible does not."""
+        out = render_arch.render_markdown("[[critical:Boom]]\n")
+
+        assert "pill" not in out
+        assert "[[critical:Boom]]" in out
+
+
+class TestHeadingsAreFindable:
+    def test_headings_use_the_serif_face_at_a_readable_size(self, tmp_path):
+        """A heading set in the same width and nearly the same size as the
+        paragraph beneath it is not doing the one job a heading has."""
+        md = tmp_path / "A.md"
+        md.write_text(_fm("## Trust boundary\n\ntext\n"), encoding="utf-8")
+        out = render_arch.build(md)
+
+        assert "--serif:ui-serif" in out
+        assert "h2{margin:2.4rem 0 0;font-family:var(--serif);font-size:1.5rem" in out

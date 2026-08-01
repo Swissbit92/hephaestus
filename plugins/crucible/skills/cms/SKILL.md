@@ -139,6 +139,12 @@ impossible instead of merely policed.
   `archflow`. That exact omission went unnoticed for weeks: the capability had
   shipped and the content had not, which nothing that checks *whether the page
   builds* can see.
+- A fenced ` ```archstat ` block renders a gauge row: the few facts worth having
+  before the prose. Values are written, never computed — a gauge row is where
+  "STRUCTURE ONLY, NO RUNTIME STATE" usually dies.
+- `[[ok:…]]` / `[[warn:…]]` / `[[bad:…]]` / `[[mute:…]]` render inline state
+  pills, usable in any table cell. Four states and no more; the label carries the
+  meaning so they survive greyscale and print.
 - `published_url` in frontmatter binds the page to one address: the footer links
   it, and `--publish` redeploys there. Without it every publish mints a new link
   and the old ones rot in place, indistinguishable from the current one.

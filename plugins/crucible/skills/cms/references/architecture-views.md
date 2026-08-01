@@ -241,3 +241,39 @@ Docs have two readers now. An agent handed the rendered page has to wade through
 40KB of CSS and SVG coordinates to reach three sentences of meaning. Since it is
 generated from the same markdown in the same pass, it cannot drift from the page
 beside it — which is the only reason it is worth having at all.
+
+## `archstat` — the gauge row
+
+A handful of facts worth having before the prose. One fenced block, near the top.
+
+```json
+[
+  {"label": "Carry sleeve", "value": "Live", "note": "SUB1", "state": "bad"},
+  {"label": "Kill switch", "value": "SIMULATE", "note": "env var", "state": "ok"}
+]
+```
+
+`label` and `value` are required; `note` and `state` are optional. `state` is one
+of `ok` / `warn` / `bad` / `mute` — anything else fails the render rather than
+rendering as an uncoloured surprise.
+
+**Nothing here is computed, and that is the constraint, not a limitation.** The
+page footer claims STRUCTURE ONLY, NO RUNTIME STATE, and a gauge row is precisely
+where that claim goes to die — "tests: 357" and "uptime: 99.9%" are the two most
+tempting and most rotten things to put in one. Prefer what is true because of a
+*decision* (venue, gating, what holds the keys) over what is true because of a
+*run*. If a value would change without anyone editing the file, leave it out.
+
+**Colour two or three cells, not most of them.** A row where everything is
+coloured is a row where nothing is. And check the semantics before reaching for
+amber: a safety feature being *on* is not a warning.
+
+## Pills
+
+`[[ok:Passing]]`, `[[warn:Partial]]`, `[[bad:Global]]`, `[[mute:N/A]]` — inline,
+anywhere prose is rendered, including inside a table cell. They encode state in
+form as well as colour: the label carries the meaning, so a pill still works in
+greyscale, in print, and for a reader who cannot separate the hues.
+
+The same four states as `archstat`, deliberately. An unrecognised state is left
+on the page verbatim rather than swallowed, so the typo is visible.
