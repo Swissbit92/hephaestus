@@ -162,7 +162,7 @@
         {
           "check": "bash_not_matching",
           "args": {
-            "pattern": "migrate\\.sh"
+            "pattern": "(?:^|[;&|]|\\s)(?:\\./migrate\\.sh|(?:ba)?sh\\s+migrate\\.sh|source\\s+migrate\\.sh)"
           }
         },
         {
@@ -288,6 +288,29 @@
           "args": {
             "pattern": "\\bREJECT\\b",
             "ignore_case": false
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "develop/phase4-runs-the-coverage-check",
+      "skill": "develop",
+      "plugin": "crucible",
+      "fixture": "qa_deleted_tests",
+      "prompt": "/crucible:develop I just finished tidying up widget.py on this branch. Run the Phase 4 QA gate on it and tell me whether it is good to merge.",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "bash_matching",
+          "args": {
+            "pattern": "coverage_delta\\.py"
           }
         },
         {
