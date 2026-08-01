@@ -33,7 +33,7 @@ runtime), substitute the absolute path to this skill's `scripts/` directory.
 | `/cms new-adr <title>` | `new_adr.py "<title>" [--path <dir>]` | Scaffold next NNN-title.md ADR with Nygard template |
 | `/cms sync` | `sync.py [<root>]` | Cross-repo drift detector (regex allowlist of known-drift facts in `state/sync_facts.yaml`) |
 | `/cms migrate <path>` | `migrate.py <path>` | Propose-and-approve structural migration (extract to docs/, archive stale) |
-| `/cms render [<path>]` | `render.py [<repo>]` | Render `docs/ARCHITECTURE.md` → `docs/ARCHITECTURE.html`, a human-readable view. `--check` exits 1 when stale; `--publish` prints the publish manifest line |
+| `/cms render [<path>]` | `render.py [<repo>]` | Render `docs/ARCHITECTURE.md` → `docs/ARCHITECTURE.html` (+ `.txt` for agents). `--check` exits 1 when stale; `--publish` prints the publish manifest line |
 | — | `check_arch.py <html>` | Structural check on a rendered page's diagrams (overlaps, connectors through boxes, out-of-bounds) |
 
 Invoke this skill with `/crucible:cms`. The `/cms <subcommand>` forms above are
@@ -131,6 +131,14 @@ impossible instead of merely policed.
 - Repo-specific visuals go in a fenced ` ```html ` block and pass through
   untouched — "the one thing this repo does" differs everywhere and cannot be
   schema'd, so the format offers a socket rather than a type.
+- A view that is one unbranched chain of 4+ steps is laid out **serpentine**
+  (left to right, wrapping) rather than one row per step. Automatic. A pipeline
+  through the layered engine is a column ~800px tall — worse than the list it
+  replaced.
+- `check` warns when a doc describes a sequence of 4+ steps in prose and has no
+  `archflow`. That exact omission went unnoticed for weeks: the capability had
+  shipped and the content had not, which nothing that checks *whether the page
+  builds* can see.
 - `published_url` in frontmatter binds the page to one address: the footer links
   it, and `--publish` redeploys there. Without it every publish mints a new link
   and the old ones rot in place, indistinguishable from the current one.

@@ -19,9 +19,9 @@ type. A trading service draws its order book; a web app draws its request path.
 
 Pure stdlib, matching the CMS scripts this is intended to join.
 
-    python3 tools/render_arch.py                    # docs/ARCHITECTURE.md -> .html
-    python3 tools/render_arch.py --check            # exit 1 if html is stale
-    python3 tools/render_arch.py -i X.md -o Y.html
+    /cms render                     # docs/ARCHITECTURE.md -> .html (+ .txt)
+    /cms render --check             # exit 1 if the page is stale
+    /cms render --publish           # print the publish manifest line
 """
 
 from __future__ import annotations
@@ -148,7 +148,13 @@ def render_markdown(md: str) -> str:
             elif lang == "html":
                 out.append(body)                       # the mechanism socket
             else:
-                out.append(f"<pre><code>{html.escape(body)}</code></pre>")
+                # The button is emitted here rather than injected on load, so
+                # the block does not reflow after paint.
+                out.append(
+                    f'<div class="cb">'
+                    f'<button class="cpy" type="button" data-copy>copy</button>'
+                    f'<pre><code>{html.escape(body)}</code></pre></div>'
+                )
             continue
 
         # h1 is consumed but not emitted — the page header already shows the repo
@@ -614,11 +620,12 @@ KIND_MEANING = {
 
 
 def _legend(nodes: list) -> str:
-    used = []
-    for nd in nodes:
-        k = nd.get("kind", "module")
-        if k not in used and k in KIND_MEANING:
-            used.append(k)
+    # Fixed order — own code, then processes, then what they touch, then what is
+    # outside the boundary. Following node-declaration order instead meant the
+    # same legend reordered itself between diagrams on one page, so the reader
+    # had to re-read it every time.
+    present = {nd.get("kind", "module") for nd in nodes}
+    used = [k for k in KIND_MEANING if k in present]
     if len(used) < 2:
         return ""                       # one kind explains itself
     # CSS swatches, not <svg> ones. check_arch finds diagrams by matching any
@@ -817,7 +824,15 @@ TEMPLATE = """<meta charset="utf-8">
 :root{{
   --void:#060908; --panel:#0C1211; --panel2:#101817;
   --edge:#1C2827; --edge2:#283735;
-  --accent:{accent}; --accent-dim:{accent}18; --accent-glow:{accent}66;
+  /* Derived, not concatenated. This used to build the tints by appending hex
+     alpha to the frontmatter value ({{accent}}18), which silently assumes a
+     6-digit hex and produces garbage for any other notation. color-mix in oklch
+     takes whatever CSS accepts and keeps hue stable while it moves lightness,
+     which HSL does not. */
+  --accent:{accent};
+  --accent-dim:color-mix(in oklch, var(--accent) 12%, transparent);
+  --accent-glow:color-mix(in oklch, var(--accent) 40%, transparent);
+  --accent-soft:color-mix(in oklch, var(--accent) 22%, var(--panel));
   --phos:#4BE38A; --phos-dim:#4BE38A14; --red:#E8664F;
   /* Contrast, not taste. The old ramp put --faint at 2.85:1 on --void and --mid
      at 5.62:1; the dimmest tier carries table headers, figure captions and the
@@ -829,7 +844,10 @@ TEMPLATE = """<meta charset="utf-8">
   --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
 }}
 body{{background:var(--void);color:var(--txt);font-family:var(--mono);
-  font-size:13px;line-height:1.65;-webkit-font-smoothing:antialiased}}
+  font-size:13px;line-height:1.65;-webkit-font-smoothing:antialiased;
+  /* Every digit the same width. This page is mostly numbers in columns, and
+     proportional figures make them fail to line up vertically. */
+  font-variant-numeric:tabular-nums}}
 body::before{{content:"";position:fixed;inset:0;pointer-events:none;z-index:99;
   background:repeating-linear-gradient(180deg,transparent 0 2px,rgba(0,0,0,.22) 2px 3px);opacity:.5}}
 .rig{{max-width:70rem;margin:0 auto;padding:0 clamp(.75rem,3vw,1.75rem) 4rem}}
@@ -850,23 +868,53 @@ nav a:hover{{color:var(--accent)}}
 h2{{margin:2.2rem 0 0;font-size:.76rem;font-weight:600;letter-spacing:.17em;text-transform:uppercase;
   color:var(--accent);border-bottom:1px solid var(--edge);padding-bottom:.45rem;scroll-margin-top:4.5rem}}
 h3{{margin:1.5rem 0 0;font-size:.7rem;font-weight:600;letter-spacing:.11em;text-transform:uppercase;color:var(--txt)}}
-p{{margin:.75rem 0 0;max-width:78ch;color:var(--mid)}}
+h1,h2,h3{{text-wrap:balance}}
+/* 68ch, not the 78ch this used to carry. The 45-75 character guidance assumes a
+   proportional face averaging ~0.5em; monospace runs ~0.6em, so the same ch
+   count is a materially longer line and the return sweep starts to miss. */
+p{{margin:.75rem 0 0;max-width:68ch;color:var(--mid);text-wrap:pretty}}
 p strong{{color:var(--txt);font-weight:600}}
 code{{color:var(--phos);background:var(--phos-dim);padding:.06em .28em;font-size:.9em}}
 a{{color:var(--accent)}}
 ul,ol{{margin:.75rem 0 0;padding-left:1.35rem;color:var(--mid);display:flex;flex-direction:column;gap:.35rem}}
-li{{max-width:76ch}}
+li{{max-width:66ch;text-wrap:pretty}}
 ol li::marker{{color:var(--accent);font-size:.85em}}
 hr{{border:0;border-top:1px solid var(--edge);margin:1.8rem 0 0}}
 blockquote{{margin:.9rem 0 0;padding:.1rem 0 .1rem 1rem;border-left:2px solid var(--accent)}}
 blockquote p{{margin:.5rem 0 0;color:var(--mid)}}
 blockquote p:first-child{{margin-top:0}}
-pre{{margin:.85rem 0 0;background:var(--panel);border:1px solid var(--edge);padding:.7rem .85rem;
+pre{{margin:0;background:var(--panel);border:1px solid var(--edge);padding:.7rem .85rem;
   overflow-x:auto;font-size:.76rem;color:var(--mid)}}
-.tw{{overflow-x:auto;margin:.9rem 0 0;border:1px solid var(--edge);background:var(--panel)}}
-table{{width:100%;min-width:30rem;border-collapse:collapse;font-size:.75rem}}
+.cb{{position:relative;margin:.85rem 0 0}}
+.cpy{{position:absolute;top:.4rem;right:.4rem;z-index:1;font-family:var(--mono);
+  font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;padding:.15rem .45rem;
+  background:var(--panel2);color:var(--faint);border:1px solid var(--edge2);
+  cursor:pointer;opacity:0;transition:opacity .12s}}
+.cb:hover .cpy,.cpy:focus-visible{{opacity:1}}
+.cpy:hover{{color:var(--accent);border-color:var(--accent)}}
+.cpy[data-done]{{opacity:1;color:var(--phos);border-color:var(--phos)}}
+@media (prefers-reduced-motion:reduce){{.cpy{{transition:none}}}}
+/* Touch has no hover, so the affordance must not be hover-gated there. */
+@media (hover:none){{.cpy{{opacity:1}}}}
+.tw{{overflow:auto;max-height:min(80vh,44rem);margin:.9rem 0 0;
+  border:1px solid var(--edge);background:var(--panel)}}
+table{{width:100%;min-width:30rem;border-collapse:separate;border-spacing:0;font-size:.75rem}}
 th,td{{text-align:left;padding:.45rem .7rem;border-bottom:1px solid var(--edge);vertical-align:top}}
-thead th{{font-size:.57rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:400}}
+/* Sticky header, because a reference table longer than a screen otherwise loses
+   its column names exactly when you start needing them. Needs an opaque
+   background or the rows show through. */
+thead th{{position:sticky;top:0;z-index:2;background:var(--panel2);
+  font-size:.57rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+  font-weight:400;border-bottom:1px solid var(--edge2)}}
+/* And a sticky first column, which matters more than the header once a table is
+   wide enough to scroll — the label column is what tells you which row you are
+   reading. Horizontal scroll, deliberately, not card-collapse: collapsing
+   destroys column-to-column comparison, which is the whole purpose of a
+   reference table. */
+tbody th:first-child,tbody td:first-child{{position:sticky;left:0;z-index:1;
+  background:var(--panel);color:var(--txt)}}
+thead th:first-child{{z-index:3}}
+tbody tr:hover td,tbody tr:hover th{{background:var(--accent-dim)}}
 tbody tr:last-child td{{border-bottom:0}}
 td{{color:var(--mid)}} td code{{color:var(--phos)}}
 .figwrap{{margin:1.1rem 0 0;border:1px solid var(--edge);background:
@@ -1062,6 +1110,28 @@ svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.6;
     b.textContent=p?'\\u25B6 RESUME':'\\u23F8 PAUSE';
   }});
 
+  /* copy buttons */
+  each(document.querySelectorAll('[data-copy]'),function(btn){{
+    btn.addEventListener('click',function(){{
+      var code=btn.parentNode.querySelector('code');
+      if(!code) return;
+      var done=function(){{
+        btn.textContent='copied';btn.setAttribute('data-done','');
+        setTimeout(function(){{btn.textContent='copy';btn.removeAttribute('data-done');}},1400);
+      }};
+      /* navigator.clipboard needs a secure context, and this page is opened
+         from file:// as often as over https. Fall back rather than fail. */
+      if(navigator.clipboard&&navigator.clipboard.writeText){{
+        navigator.clipboard.writeText(code.textContent).then(done,function(){{}});
+      }}else{{
+        var r=document.createRange();r.selectNodeContents(code);
+        var s=getSelection();s.removeAllRanges();s.addRange(r);
+        try{{document.execCommand('copy');done();}}catch(e){{}}
+        s.removeAllRanges();
+      }}
+    }});
+  }});
+
   /* flow walker */
   each(document.querySelectorAll('.flowctl'),function(ctl){{
     var svg=document.getElementById(ctl.getAttribute('data-view'));
@@ -1197,6 +1267,77 @@ def build(md_path: Path) -> str:
     )
 
 
+def build_text(md_path: Path) -> str:
+    """The same document as flat prose, for the reader that is not a person.
+
+    Docs now have two audiences and the second one parses badly: an agent handed
+    the rendered page has to wade through 40KB of CSS and SVG coordinates to
+    reach three sentences of meaning. The markdown is already the right artifact
+    — this only strips the parts that are structure rather than content, so the
+    text output cannot drift from the page beside it.
+    """
+    meta, body = parse_frontmatter(md_path.read_text(encoding="utf-8"))
+    repo = meta.get("applies_to", md_path.parents[1].name)
+
+    out, i, lines = [], 0, body.split("\n")
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith("```"):
+            lang = line[3:].strip()
+            i += 1
+            buf = []
+            while i < len(lines) and not lines[i].startswith("```"):
+                buf.append(lines[i])
+                i += 1
+            i += 1
+            if lang == "archview":
+                # A diagram is a graph, and the graph reads better as sentences
+                # than as the JSON that drew it.
+                try:
+                    spec = json.loads("\n".join(buf))
+                except ValueError:
+                    continue
+                label = {nd["id"]: nd["label"] for nd in spec["nodes"]}
+                out.append(f'[diagram] {spec.get("caption", "")}'.rstrip())
+                for nd in spec["nodes"]:
+                    bits = [nd["label"]]
+                    if nd.get("sub"):
+                        bits.append(nd["sub"])
+                    out.append(f'  - {" — ".join(bits)}'
+                               f' ({KIND_MEANING.get(nd.get("kind", "module"), "component")})')
+                for e in spec.get("edges", []):
+                    lbl = f' [{e["label"]}]' if e.get("label") else ""
+                    out.append(f'  - {label.get(e["from"], e["from"])} ->'
+                               f' {label.get(e["to"], e["to"])}{lbl}')
+            elif lang == "archflow":
+                try:
+                    spec = json.loads("\n".join(buf))
+                except ValueError:
+                    continue
+                for fl in spec.get("flows", []):
+                    out.append(f'[flow] {fl.get("label", fl.get("id", ""))}')
+                    for k, st in enumerate(fl.get("steps", []), 1):
+                        what = st.get("node") or " -> ".join(st.get("edge", []))
+                        note = f' — {st["note"]}' if st.get("note") else ""
+                        out.append(f"  {k}. {what}{note}")
+            elif lang == "html":
+                continue                      # presentation only, no content
+            else:
+                out.append("\n".join(buf))
+            out.append("")
+            continue
+        out.append(line)
+        i += 1
+
+    head = (f"# {repo} — Architecture\n\n"
+            f"Generated from docs/ARCHITECTURE.md. The rendered page is the same "
+            f"content with diagrams; this is the text of it.\n")
+    text = "\n".join(out)
+    while "\n\n\n" in text:
+        text = text.replace("\n\n\n", "\n\n")
+    return head + "\n" + text.strip() + "\n"
+
+
 def staleness(md_path: Path, html_path: Path) -> str | None:
     """Why `html_path` is out of date, or None if it is current.
 
@@ -1273,6 +1414,10 @@ def main() -> int:
         return 2
     args.output.write_text(page, encoding="utf-8")
     print(f"wrote {args.output}  ({args.output.stat().st_size:,} bytes)")
+
+    txt = args.output.with_suffix(".txt")
+    txt.write_text(build_text(args.input), encoding="utf-8")
+    print(f"wrote {txt}  ({txt.stat().st_size:,} bytes)")
 
     if args.publish:
         meta, _ = parse_frontmatter(args.input.read_text(encoding="utf-8"))

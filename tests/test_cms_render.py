@@ -826,3 +826,83 @@ class TestChainLayout:
         """Below the floor, wrapping just looks arbitrary."""
         assert render_arch._chain_order(*(lambda s: (s["nodes"], s["edges"]))(
             self._chain(3))) is None
+
+
+class TestReadability:
+    """Mechanics, not decoration. Each of these was measurably wrong."""
+
+    def _page(self, tmp_path, body="## S\n\ntext\n"):
+        md = tmp_path / "A.md"
+        md.write_text(_fm(body), encoding="utf-8")
+        return render_arch.build(md)
+
+    def test_measure_is_tuned_for_monospace(self, tmp_path):
+        """45-75ch assumes ~0.5em glyphs; mono runs ~0.6em, so the same ch count
+        is a materially longer line. 78ch was over the top of the range."""
+        out = self._page(tmp_path)
+
+        assert "max-width:68ch" in out
+        assert "max-width:78ch" not in out
+
+    def test_figures_are_tabular(self, tmp_path):
+        assert "tabular-nums" in self._page(tmp_path)
+
+    def test_the_accent_ramp_is_derived_not_concatenated(self, tmp_path):
+        """Appending hex alpha to the frontmatter value assumes 6-digit hex and
+        produces garbage for anything else."""
+        md = tmp_path / "A.md"
+        md.write_text("---\ntitle: T\napplies_to: d\naccent: \"oklch(70% 0.15 40)\"\n---\n\n## S\n",
+                      encoding="utf-8")
+        out = render_arch.build(md)
+
+        assert "color-mix(in oklch" in out
+        assert "oklch(70% 0.15 40)18" not in out      # the old bug, spelled out
+
+    def test_tables_pin_their_header_and_their_label_column(self, tmp_path):
+        out = self._page(tmp_path, "| a | b |\n|---|---|\n| 1 | 2 |\n")
+
+        assert "position:sticky" in out
+        assert "tbody td:first-child" in out
+
+    def test_code_blocks_carry_a_copy_button_in_the_markup(self, tmp_path):
+        """Server-rendered, so the block does not reflow after paint."""
+        out = self._page(tmp_path, "```\nsome code\n```\n")
+
+        assert "data-copy" in out
+        assert out.index("data-copy") < out.index("some code")
+
+
+class TestTextSibling:
+    """The second reader. An agent handed the rendered page wades through 40KB
+    of CSS and SVG coordinates to reach three sentences."""
+
+    def test_diagrams_become_sentences(self, tmp_path):
+        v = {"id": "v", "caption": "how it hangs together",
+             "nodes": [{"id": "a", "label": "Alpha", "sub": "does things"},
+                       {"id": "b", "label": "Beta", "kind": "store"}],
+             "edges": [{"from": "a", "to": "b", "label": "writes"}]}
+        md = tmp_path / "A.md"
+        md.write_text(_fm(_block("archview", v)), encoding="utf-8")
+        txt = render_arch.build_text(md)
+
+        assert "how it hangs together" in txt
+        assert "Alpha — does things" in txt
+        assert "Alpha -> Beta [writes]" in txt
+        assert "<svg" not in txt and "viewBox" not in txt
+
+    def test_flows_become_numbered_steps(self, tmp_path):
+        v = {"id": "v", "caption": "c", "nodes": [{"id": "a", "label": "A"}], "edges": []}
+        fl = {"view": "v", "flows": [{"id": "f", "label": "The walk",
+                                      "steps": [{"node": "a", "note": "first thing"}]}]}
+        md = tmp_path / "A.md"
+        md.write_text(_fm(_block("archview", v) + _block("archflow", fl)), encoding="utf-8")
+        txt = render_arch.build_text(md)
+
+        assert "[flow] The walk" in txt
+        assert "1. a — first thing" in txt
+
+    def test_presentation_only_blocks_are_dropped(self, tmp_path):
+        md = tmp_path / "A.md"
+        md.write_text(_fm("```html\n<div id='decor'></div>\n```\n"), encoding="utf-8")
+
+        assert "decor" not in render_arch.build_text(md)

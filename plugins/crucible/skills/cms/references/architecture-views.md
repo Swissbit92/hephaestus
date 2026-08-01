@@ -108,6 +108,13 @@ prev/next steps through it one hop at a time.
   label is used when it is absent. Write it as a sentence, not a fragment: it is
   read aloud by a screen reader as the step changes.
 
+**A path is laid out differently.** When a view is one unbranched chain of four
+or more steps it is placed serpentine — left to right, wrapping, alternate rows
+reversed so the wrap lands directly beneath the box above it. Automatic, no key
+needed. The layered engine gives a pipeline one row per step, which at seven
+steps is a column ~800px tall — strictly worse than the numbered list it
+replaced. Anything that branches keeps the layered engine.
+
 **Order matters.** An `archflow` must appear *below* the `archview` it walks.
 Resolution is a single forward pass, so a flow declared first cannot see its view
 and the render fails rather than emitting a picker that highlights nothing.
@@ -143,7 +150,7 @@ is decoration, and decoration is what rots first.
 | What is this repo, what does it touch? | topology | always |
 | What does it own — the blast radius? | data/resources | when it owns shared state |
 | What holds credentials, what can act? | trust boundary | when it holds any |
-| What happens when it runs? | `archflow` over the topology | when non-obvious |
+| What happens when it runs? | `archflow` over the topology | **whenever there is a sequence** |
 | What is the mechanism? | `html` socket | repo-specific |
 | What will bite me? | **prose, not a diagram** | always |
 
@@ -211,3 +218,26 @@ routing bugs in a page that had been committed, pushed and called finished:
 a multi-row edge dropping straight through an intervening node, and a back-edge
 rail returning horizontally through whatever sat between the lane and its target.
 Neither was visible without measuring.
+
+## The flow-shape check
+
+`/cms check` warns when a doc carries four or more sequential steps as prose —
+a numbered list, or an arrow cascade — and has no `archflow` block.
+
+It exists because of a specific failure: `archflow` shipped, every repo already
+had its pipelines written as numbered lists, and not one was converted. Nothing
+detected that for weeks, because a list is valid markdown and the page rendered
+fine. The capability was present and the content was not, which is invisible to
+every check that looks at whether the page *builds*.
+
+Warning, never error — the same reasoning as the staleness gate.
+
+## The text sibling
+
+`/cms render` also writes `docs/ARCHITECTURE.txt`: the same content flat, with
+diagrams rendered as node and edge sentences and flows as numbered steps.
+
+Docs have two readers now. An agent handed the rendered page has to wade through
+40KB of CSS and SVG coordinates to reach three sentences of meaning. Since it is
+generated from the same markdown in the same pass, it cannot drift from the page
+beside it — which is the only reason it is worth having at all.
