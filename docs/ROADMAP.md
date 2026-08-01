@@ -2,7 +2,7 @@
 title: Roadmap
 status: active
 created: 2026-06-28
-last_reviewed_on: 2026-06-28
+last_reviewed_on: 2026-08-01
 review_in: 3 months
 applies_to: hephaestus
 ---
@@ -56,6 +56,22 @@ Evidence-backed by [research/loop-engineering-2025](research/loop-engineering-20
 ## Phase 4 — conditional orchestration (only if Phases 1–3 prove out)
 
 - [ ] **`sprint-execute`** Dynamic Workflow over genuinely-parallel work, model-mixed per role. Build only where it buys measurable reliability (heed mini-SWE-agent).
+
+## Phase 5 — evidence-typed verification (close the gate gap) — **ACTIVE 2026-08-01**
+
+Evidence-backed by [research/gate-design-2026](research/gate-design-2026.md) (19-agent fan-out, 2026-08-01). **Diagnosis: the gate checks the wrong axis and is unenforced.** Zero of ~15 audited production incidents were caught by "all tests pass"; the ranked causes are dishonest tests (13), config/environment (9), unreached code (7), swallowed exceptions (7), statistical error (6), unit mismatch (5) — i.e. **truth** failures, while Phase 4 QA checks **code hygiene**. Meanwhile the Plan agent fired 3 times against 24 FULL classifications, so adding mandatory prose does not add verification.
+
+**Architecture: branch the evidence, not the ceremony.** One spine, one tier ladder, a pluggable evidence profile selected by marker-file detection (`package.json` → JS gates, `pyproject.toml` → Python gates, **no marker → skip, never guess**). Domain gets its own *gates and toolset*, never its own workflow — tool overload is the quantified failure (43%→2% as tools grow 4→51) while Instruction Bleed worsens with every added conditional branch. Prior art (`shinpr/claude-code-workflows`) forks agents and gates over 16 shared ones; it does not fork the spine.
+
+Premortem: this fails if the profiles become a second-system generalization exercise — five speculative domain files validated on none of them. Guard: ship the eval baseline first, then one profile at a time, each justified by a defect class already in the taxonomy.
+
+- [ ] **Freeze the ruler** — `develop` + `qa-gatekeeper` scenarios in `evals/scenarios.json` + a frozen baseline. `develop` has **61 invocations and zero eval coverage**; the covered set (start-branch, finish-branch, cms, act-for-real) gives false confidence that the most-used artifact is safe to change. This is `eval-first` applied to the fabric itself — and its first real firing.
+- [ ] **Truth gates in `qa-gatekeeper`** — three additions, prompt-level and generic: *does this test assert the right value or merely that a value came back* (13 defects) · *is this code reached from a live entry point, not merely referenced* (7 defects — `no orphaned code` is the wrong check; the need is **no unreached code**) · *are exceptions swallowed* (7 defects). Targets ~27 of 55 catalogued defects at zero schema risk.
+- [ ] **Evidence-typed Phase 4** — `skills/…/references/evidence-{js,python,live-system,data}.md` with the SKILL/command body as a **router, not content** (Anthropic's own skill guidance). The hard gate is the *same shape* per domain — build/typecheck/lint/test plus a **substance check that rejects `expect(true).toBe(true)`-style non-assertions** — only the commands differ. Visual output is **evidence for a human, never a verdict**: a model scores 35–38% exact-match judging UI, and a design *role* is this repo's documented anti-pattern while a design *check* is not.
+- [ ] **Invariants mechanism** — standing constraints ("mobile-first", "no new deps") are not feature specs and must not share an artifact with them: a spec dies at merge, an invariant must outlive every task. Pipeline: path-scoped rules → EARS/Given-When-Then conversion → **executable check**. The doc becomes a pointer to the check, never the enforcement — per Anthropic, CLAUDE.md is *"context, not enforced configuration."* Named **constraint decay** (~30pp compliance loss under accumulated constraints; compaction does not reset it).
+- [ ] **One graph edge + a bounded loop** — backtrack-to-plan when QA fails the *same class* twice (carrying accumulated evidence), a hard cap on fix attempts (~N=3), and QA output required to be actionable rather than pass/fail. Deliberately **not** a general graph: a controlled study found orchestration *increased* failure rates vs. prompt-level procedure (24% vs 11.5%), and OpenAI deprecated Agent Builder in 2026-06.
+- [ ] **Wire the orphaned skills** — `develop` references 3 of 10 skills; six have never been invoked in any session (`eval-first`, `flag-gate`, `loop-harness`, `act-for-real`, `author-skill`, `grill-me`) and the reference direction is one-way. `act-for-real` exists for live-venue actions and the workflow that does live-venue work never mentions it. Unreachable nodes, found by drawing the graph — which is the whole return on graph thinking here.
+- [ ] **Skip:** a UX-gatekeeper persona · screenshot self-critique as a pass/fail gate · mandatory e2e (0/9 inspected sources mandate it) · per-domain forks of `develop` · promoting `cms` to a phased workflow — it is the exemplar, not the patient, and `develop` should borrow *its* enforcement model rather than the reverse.
 
 ## Shipped
 
