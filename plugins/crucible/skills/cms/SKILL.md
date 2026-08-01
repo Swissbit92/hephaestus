@@ -33,7 +33,7 @@ runtime), substitute the absolute path to this skill's `scripts/` directory.
 | `/cms new-adr <title>` | `new_adr.py "<title>" [--path <dir>]` | Scaffold next NNN-title.md ADR with Nygard template |
 | `/cms sync` | `sync.py [<root>]` | Cross-repo drift detector (regex allowlist of known-drift facts in `state/sync_facts.yaml`) |
 | `/cms migrate <path>` | `migrate.py <path>` | Propose-and-approve structural migration (extract to docs/, archive stale) |
-| `/cms render [<path>]` | `render.py [<repo>]` | Render `docs/ARCHITECTURE.md` → `docs/ARCHITECTURE.html`, a human-readable view. `--check` exits 1 when stale |
+| `/cms render [<path>]` | `render.py [<repo>]` | Render `docs/ARCHITECTURE.md` → `docs/ARCHITECTURE.html`, a human-readable view. `--check` exits 1 when stale; `--publish` prints the publish manifest line |
 | — | `check_arch.py <html>` | Structural check on a rendered page's diagrams (overlaps, connectors through boxes, out-of-bounds) |
 
 Invoke this skill with `/crucible:cms`. The `/cms <subcommand>` forms above are
@@ -124,9 +124,16 @@ impossible instead of merely policed.
 
 - Diagrams live in fenced ` ```archview ` blocks inside the markdown, the way
   mermaid already does. One file to edit, one linter to satisfy.
+- A fenced ` ```archflow ` block walks an `archview` instead of redrawing it —
+  select a flow, everything off its path dims, prev/next steps through it. Same
+  boxes, so "what is here" and "what happens" cannot drift apart. It must sit
+  below the view it references, and every step id is checked at build time.
 - Repo-specific visuals go in a fenced ` ```html ` block and pass through
   untouched — "the one thing this repo does" differs everywhere and cannot be
   schema'd, so the format offers a socket rather than a type.
+- `published_url` in frontmatter binds the page to one address: the footer links
+  it, and `--publish` redeploys there. Without it every publish mints a new link
+  and the old ones rot in place, indistinguishable from the current one.
 - The palette accent comes from frontmatter (`accent: "#RRGGBB"`), so visual
   identity belongs to the repo, not to this skill.
 - Staleness is gated on **content hashes of both the source and the renderer**,

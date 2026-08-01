@@ -73,6 +73,55 @@ clean, and `check_arch.py` C4 enforces the second:
    one there, the group is spanning rows it does not own — split it, or move the
    stray node into it.
 
+## `archflow` schema
+
+A topology answers "what is here". It cannot answer "what happens when a request
+arrives", and the usual workaround — a second diagram of the same boxes with
+different arrows — puts the same facts in two places and lets them disagree.
+
+An `archflow` block instead *walks* an existing `archview`. Same boxes, same
+layout, no second copy: selecting a flow dims everything not on its path, and
+prev/next steps through it one hop at a time.
+
+```json
+{
+  "view": "topology",
+  "flows": [
+    {
+      "id": "read-path",
+      "label": "Serving a cached read",
+      "steps": [
+        {"node": "client",  "note": "one sentence — what happens at this step"},
+        {"edge": ["client", "gateway"]},
+        {"node": "cache",   "note": "hit, so the store is never touched"}
+      ]
+    }
+  ]
+}
+```
+
+- **`view`** names an `archview` on the same page. Give that block an `"id"`;
+  without one it is addressable positionally as `f1`, `f2` … in document order.
+- **A step is exactly one of `node` or `edge`.** An edge is the `[from, to]` pair
+  as written in the view — not a separate identifier.
+- **`note`** is the caption shown while that step is current. Optional; the flow
+  label is used when it is absent. Write it as a sentence, not a fragment: it is
+  read aloud by a screen reader as the step changes.
+
+**Order matters.** An `archflow` must appear *below* the `archview` it walks.
+Resolution is a single forward pass, so a flow declared first cannot see its view
+and the render fails rather than emitting a picker that highlights nothing.
+
+Every reference is checked when the page is built. A step pointing at a node or
+edge that is not in the view, a duplicate flow id, or an unresolvable `view` all
+stop the render and name the offending id alongside the valid ones. This is
+deliberately a build error and not a `check_arch.py` code: that checker only ever
+reads the emitted SVG, where a dangling reference is invisible — a broken picker
+and a working one produce identical geometry.
+
+Flows are deep-linkable: selecting one rewrites the fragment to
+`#flow=<id>&step=<n>`, and opening that link restores it.
+
 ## The mechanism socket
 
 Fenced ` ```html ` blocks pass through untouched. This is the deliberate escape
@@ -94,7 +143,7 @@ is decoration, and decoration is what rots first.
 | What is this repo, what does it touch? | topology | always |
 | What does it own — the blast radius? | data/resources | when it owns shared state |
 | What holds credentials, what can act? | trust boundary | when it holds any |
-| What happens when it runs? | runtime flow | when non-obvious |
+| What happens when it runs? | `archflow` over the topology | when non-obvious |
 | What is the mechanism? | `html` socket | repo-specific |
 | What will bite me? | **prose, not a diagram** | always |
 
@@ -103,11 +152,29 @@ Resist adding a view that restates something already in `ROADMAP.md`,
 
 ## Frontmatter
 
-Standard CMS fields, plus two optional ones the renderer reads:
+Standard CMS fields, plus three optional ones the renderer reads:
 
 - `accent: "#RRGGBB"` — the page's accent colour. Visual identity belongs to the
   repo, not to this skill.
 - `stage: word word` — short chips in the page header.
+- `published_url: https://…` — where the rendered copy is published. The page
+  renders it as a CANONICAL COPY link in its own footer, so a copy that has been
+  mailed on or re-hosted still says where the live one lives, and `render --publish`
+  redeploys to that same address instead of minting a new one each time.
+
+## Publishing
+
+`render.py --publish` does not publish. It renders, then prints one manifest line:
+
+```
+PUBLISH  docs/ARCHITECTURE.html  url=https://…  title="repo — Architecture"
+```
+
+The agent reads that line and performs the upload. The split is not ceremony —
+this renderer is pure stdlib with no network and no credentials, and it stays
+that way. A doc with no `published_url` yet prints `PUBLISH-NEW`; publish it,
+then write the returned address into the frontmatter so every later render
+targets the same link rather than scattering copies.
 
 ## Staleness
 

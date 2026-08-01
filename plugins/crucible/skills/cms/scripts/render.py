@@ -107,10 +107,19 @@ def _starts_block(line: str) -> bool:
 
 
 def render_markdown(md: str) -> str:
-    """Markdown subset -> HTML, with ```archview and ```html handled specially."""
+    """Markdown subset -> HTML, with ```archview/```archflow/```html handled specially."""
     lines = md.split("\n")
     out: list[str] = []
     i, n = 0, len(lines)
+
+    # Views seen so far, keyed by their archview id. A single forward pass, so an
+    # archflow can only reference a view declared *above* it — which is also how
+    # the page reads, diagram first and then the walk through it.
+    views: dict[str, dict] = {}
+    fig_index = 0
+    # Page-scoped, so two archflow blocks over the same view cannot both claim
+    # one flow id and emit two elements sharing a DOM id.
+    claimed_flows: set = set()
 
     while i < n:
         line = lines[i]
@@ -126,7 +135,16 @@ def render_markdown(md: str) -> str:
             body = "\n".join(buf)
 
             if lang == "archview":
-                out.append(render_diagram(json.loads(body)))
+                fig_index += 1
+                spec = json.loads(body)
+                # An unnamed view still gets a stable handle, so adding an `id`
+                # later is an edit to one block rather than a renumbering.
+                views[spec.get("id") or f"f{fig_index}"] = {
+                    "fig": fig_index, "spec": spec,
+                }
+                out.append(render_diagram(spec, fig_index))
+            elif lang == "archflow":
+                out.append(render_flow(json.loads(body), views, claimed_flows))
             elif lang == "html":
                 out.append(body)                       # the mechanism socket
             else:
@@ -218,6 +236,33 @@ def render_markdown(md: str) -> str:
 # ════════════════════════════════════════════════════════════════════════════
 # diagram engine — layered DAG
 # ════════════════════════════════════════════════════════════════════════════
+
+def _slug_id(s: str) -> str:
+    """A DOM-safe fragment of an author-written id.
+
+    archview ids are authored for readability, not for HTML — they carry dots,
+    slashes and spaces. Those are legal in an `id` attribute under HTML5 but
+    break `querySelector`/CSS selectors without escaping, which is exactly the
+    kind of bug that only shows up on the one repo whose node happens to be
+    called `exchange.py`.
+    """
+    return re.sub(r"[^A-Za-z0-9_-]+", "-", s).strip("-").lower() or "x"
+
+
+def _node_aria(nd: dict) -> str:
+    """One accessible name per node, assembled from the three visible lines.
+
+    Deliberately `aria-label` and not a `<title>` child: `<title>` renders as a
+    native browser tooltip on hover, which fights the flow caption that archflow
+    puts on screen. The label is invisible and never collides.
+    """
+    parts = [nd["label"]]
+    if nd.get("sub"):
+        parts.append(nd["sub"])
+    if nd.get("tech"):
+        parts.append(f'built with {nd["tech"]}')
+    return html.escape(" — ".join(parts))
+
 
 def _lines(nd: dict) -> int:
     return 1 + bool(nd.get("sub")) + bool(nd.get("tech"))
@@ -326,7 +371,13 @@ def _lane_path(a, b, lane_x, gap_out, gap_in) -> str:
             f"L{bx:.1f} {gap_in:.1f} L{bx:.1f} {b['y'] - 5:.1f}")
 
 
-def render_diagram(spec: dict) -> str:
+def render_diagram(spec: dict, fig: int = 1) -> str:
+    """Lay out and emit one diagram.
+
+    `fig` scopes every emitted DOM id. A page may carry several diagrams, and two
+    of them naming a node `wallet` would otherwise collide into duplicate ids —
+    invalid HTML, and a `getElementById` that silently returns the wrong box.
+    """
     nodes, edges = spec["nodes"], spec.get("edges", [])
     groups, caption = spec.get("groups", []), spec.get("caption", "")
 
@@ -361,7 +412,7 @@ def render_diagram(spec: dict) -> str:
         lane = lane_l if tl > fl else lane_r
         return _lane_path(a, b, lane, gap_below(fl), gap_above(tl))
 
-    p = [f'<div class="figwrap"><svg viewBox="0 0 {width:.0f} {h:.0f}" '
+    p = [f'<div class="figwrap"><svg id="fig-f{fig}" viewBox="0 0 {width:.0f} {h:.0f}" '
          f'width="{width:.0f}" height="{h:.0f}" role="img" '
          f'aria-label="{html.escape(caption or "architecture diagram")}">']
 
@@ -373,7 +424,10 @@ def render_diagram(spec: dict) -> str:
         gy = min(m["y"] for m in ms) - GROUP_PAD - 10
         gw = max(m["x"] + m["w"] for m in ms) - gx + GROUP_PAD
         gh = max(m["y"] + m["h"] for m in ms) - gy + GROUP_PAD
-        p.append(f'<rect class="grp" x="{gx:.0f}" y="{gy:.0f}" '
+        # data-* rides on the <rect> here because check_arch's RE_RECT tolerates
+        # attributes between class and x. RE_PATH does not — see the edge loop.
+        p.append(f'<rect class="grp" data-group="{html.escape(g["id"])}" '
+                 f'x="{gx:.0f}" y="{gy:.0f}" '
                  f'width="{gw:.0f}" height="{gh:.0f}" rx="3"/>')
         p.append(f'<text class="grpl" x="{gx + 8:.0f}" y="{gy + 12:.0f}">'
                  f'{html.escape(g["label"])}</text>')
@@ -382,6 +436,17 @@ def render_diagram(spec: dict) -> str:
         a, b = geo[e["from"]], geo[e["to"]]
         d = route(e)
         is_back = layer[e["to"]] <= layer[e["from"]]
+        # Identity goes on a wrapping <g>, never on the <path> itself.
+        # check_arch.RE_PATH is r'<path class="([^"]*)" d="([^"]*)"' — it requires
+        # d to follow class with nothing in between. Slipping an id or data-* in
+        # there stops it matching *any* connector, so every page would pass while
+        # checking zero edges. A silent, total loss of the geometry gate.
+        # Two attributes, not one joined key. Any delimiter can appear inside a
+        # node id — `a -> b__c` and `a__b -> c` both flatten to "a__b__c" — and
+        # the failure is silent: querySelector returns the first match, so a step
+        # highlights the wrong edge and nothing says so.
+        p.append(f'<g data-edge-from="{html.escape(e["from"])}" '
+                 f'data-edge-to="{html.escape(e["to"])}">')
         if not is_back:
             p.append(f'<path class="wire" d="{d}"/>')
         if e.get("style") != "static" or is_back:
@@ -396,9 +461,13 @@ def render_diagram(spec: dict) -> str:
                 lx, ly = lane_l + 5, (a["y"] + b["y"]) / 2
             p.append(f'<text class="wlab" x="{lx:.0f}" y="{ly:.0f}">'
                      f'{html.escape(e["label"])}</text>')
+        p.append("</g>")
 
     for g in geo.values():
         nd = g["nd"]
+        p.append(f'<g id="f{fig}-nd-{_slug_id(nd["id"])}" '
+                 f'data-node="{html.escape(nd["id"])}" '
+                 f'role="graphics-symbol" aria-label="{_node_aria(nd)}">')
         p.append(f'<rect class="nd nd-{nd.get("kind", "module")}" x="{g["x"]:.0f}" '
                  f'y="{g["y"]:.0f}" width="{g["w"]:.0f}" height="{g["h"]:.0f}" rx="3"/>')
         x = g["x"] + 11
@@ -416,12 +485,194 @@ def render_diagram(spec: dict) -> str:
             ty_t = ty + (28 if nd.get("sub") else 14)
             p.append(f'<text class="ndt" x="{x:.0f}" y="{ty_t:.0f}">'
                      f'[{html.escape(nd["tech"])}]</text>')
+        p.append("</g>")
 
     p.append("</svg>")
+    p.append(_legend(nodes))
+    p.append(_alt_table(spec))
     if caption:
         p.append(f'<div class="figcap">{_inline(caption)}</div>')
     p.append("</div>")
     return "".join(p)
+
+
+# The border language only means something if the page says what it means. Built
+# from the kinds actually present, so a diagram with no secrets does not carry a
+# swatch for one.
+KIND_MEANING = {
+    "module": "code in this repo",
+    "service": "a process or entry point",
+    "store": "a database, table, queue or bucket",
+    "external": "something you do not control",
+    "secret": "a credential store",
+}
+
+
+def _legend(nodes: list) -> str:
+    used = []
+    for nd in nodes:
+        k = nd.get("kind", "module")
+        if k not in used and k in KIND_MEANING:
+            used.append(k)
+    if len(used) < 2:
+        return ""                       # one kind explains itself
+    # CSS swatches, not <svg> ones. check_arch finds diagrams by matching any
+    # <svg> carrying a viewBox, so an SVG legend gets counted and geometry-checked
+    # as if it were a sixth architecture diagram — it reported "6 diagrams" on a
+    # page with one. A span cannot be mistaken for a figure.
+    items = "".join(
+        f'<span class="lgi"><span class="lgs lgs-{k}" aria-hidden="true"></span>'
+        f'{html.escape(KIND_MEANING[k])}</span>'
+        for k in used
+    )
+    return f'<div class="legend">{items}</div>'
+
+
+class ArchFlowError(ValueError):
+    """A flow points at something that is not in the diagram.
+
+    Raised at build time, not lint time. A dangling reference is not a geometry
+    problem, so `check_arch.py` — which only ever reads the emitted SVG — cannot
+    see it. Catching it here means a typo fails the render loudly instead of
+    shipping a picker whose third step highlights nothing.
+    """
+
+
+def render_flow(spec: dict, views: dict, claimed: set | None = None) -> str:
+    """Render the walker for one ```archflow``` block.
+
+    `claimed` accumulates (figure, slug) pairs across *every* archflow block on
+    the page. Scoping it to one call was a real hole: a page that splits its happy
+    path and its error path into two blocks over the same view could declare the
+    same flow id twice and emit two elements with one DOM id, silently.
+    """
+    claimed = claimed if claimed is not None else set()
+    view_id = spec.get("view")
+    if view_id not in views:
+        raise ArchFlowError(
+            f"archflow references view {view_id!r}, which is not declared above it. "
+            f"Views available at this point: {sorted(views) or '(none)'}. "
+            f"An archflow block must follow the archview it walks through."
+        )
+    entry = views[view_id]
+    vspec, fig = entry["spec"], entry["fig"]
+    node_ids = {nd["id"] for nd in vspec["nodes"]}
+    edge_ids = {(e["from"], e["to"]) for e in vspec.get("edges", [])}
+
+    flows = spec.get("flows", [])
+    for fl in flows:
+        for required in ("id", "label"):
+            if not fl.get(required):
+                raise ArchFlowError(
+                    f"a flow in view {view_id!r} is missing {required!r}. "
+                    f"Every flow needs an id (for the deep link) and a label "
+                    f"(for the picker). Got keys: {sorted(fl)}"
+                )
+        fid = fl["id"]
+        # Collide on the *slug*, not the raw id. "Flow A" and "Flow-A" are two
+        # distinct strings that become one DOM id, which is exactly the kind of
+        # duplicate that renders fine and then misbehaves.
+        key = (fig, _slug_id(fid))
+        if key in claimed:
+            raise ArchFlowError(
+                f"flow id {fid!r} collides with another flow on view "
+                f"{view_id!r} (both become {_slug_id(fid)!r})"
+            )
+        claimed.add(key)
+        for k, st in enumerate(fl.get("steps", []), 1):
+            has = ("node" in st) + ("edge" in st)
+            if has != 1:
+                raise ArchFlowError(
+                    f"flow {fid!r} step {k} must carry exactly one of "
+                    f"'node' or 'edge', got {sorted(st)}"
+                )
+            if "node" in st and st["node"] not in node_ids:
+                raise ArchFlowError(
+                    f"flow {fid!r} step {k} points at node {st['node']!r}, "
+                    f"absent from view {view_id!r}. Nodes: {sorted(node_ids)}"
+                )
+            if "edge" in st:
+                pair = tuple(st["edge"])
+                if pair not in edge_ids:
+                    raise ArchFlowError(
+                        f"flow {fid!r} step {k} points at edge {pair}, absent "
+                        f"from view {view_id!r}. Edges: {sorted(edge_ids)}"
+                    )
+
+    opts, data = [], []
+    for k, fl in enumerate(flows):
+        opts.append(
+            f'<li role="option" id="fo-{fig}-{_slug_id(fl["id"])}" '
+            f'data-flow="{html.escape(fl["id"])}" tabindex="-1" '
+            f'aria-selected="{"true" if k == 0 else "false"}">'
+            f'{html.escape(fl["label"])}</li>'
+        )
+        steps = [
+            {"t": "node", "k": st["node"], "note": st.get("note", "")}
+            if "node" in st else
+            {"t": "edge", "f": st["edge"][0], "to": st["edge"][1],
+             "note": st.get("note", "")}
+            for st in fl.get("steps", [])
+        ]
+        data.append({"id": fl["id"], "label": fl["label"], "steps": steps})
+
+    payload = html.escape(json.dumps(data, separators=(",", ":")), quote=True)
+    return (
+        f'<div class="flowctl" data-view="fig-f{fig}" data-flows="{payload}">'
+        f'<div class="flowhd">'
+        f'<span class="flowlbl" id="fl-{fig}-lbl">Walk a flow</span>'
+        f'<a class="flowjump" href="#fig-f{fig}">jump to diagram &#8593;</a>'
+        f'</div>'
+        f'<ul class="flowlist" role="listbox" aria-labelledby="fl-{fig}-lbl" '
+        f'tabindex="0">{"".join(opts)}</ul>'
+        f'<div class="flownav">'
+        f'<button class="pz" type="button" data-flow-prev disabled>&#8592; prev</button>'
+        f'<span class="flowpos" data-flow-pos>&#8212;</span>'
+        f'<button class="pz" type="button" data-flow-next disabled>next &#8594;</button>'
+        f'<button class="pz flowclear" type="button" data-flow-clear>clear</button>'
+        f'</div>'
+        f'<p class="flowcap" data-flow-cap role="status" aria-live="polite" '
+        f'aria-atomic="true">Select a flow to trace it through the diagram.</p>'
+        f'</div>'
+    )
+
+
+def _alt_table(spec: dict) -> str:
+    """The diagram as a table, for anyone who cannot see the diagram.
+
+    A layered DAG carries its meaning in position and connection, and neither
+    survives an `aria-label` on the <svg>. Since the model is already structured
+    JSON, the honest text alternative is free — so there is no excuse for the
+    usual one-sentence summary that tells a screen-reader user nothing.
+    """
+    nodes = spec["nodes"]
+    edges = spec.get("edges", [])
+    by_id = {nd["id"]: nd for nd in nodes}
+
+    rows = []
+    for nd in nodes:
+        outs = [e for e in edges if e["from"] == nd["id"]]
+        if outs:
+            conn = "; ".join(
+                f'{html.escape(by_id.get(e["to"], {}).get("label", e["to"]))}'
+                + (f' ({html.escape(e["label"])})' if e.get("label") else "")
+                for e in outs
+            )
+        else:
+            conn = "—"
+        rows.append(
+            f'<tr><td>{html.escape(nd["label"])}</td>'
+            f'<td>{html.escape(KIND_MEANING.get(nd.get("kind", "module"), "component"))}</td>'
+            f'<td>{html.escape(nd.get("sub", "") or "—")}</td>'
+            f'<td>{conn}</td></tr>'
+        )
+    cap = html.escape(spec.get("caption", "") or "Diagram contents")
+    return (
+        f'<table class="sr-only"><caption>{cap} — text alternative</caption>'
+        f'<thead><tr><th>Component</th><th>Kind</th><th>Role</th>'
+        f'<th>Connects to</th></tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody></table>'
+    )
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -445,13 +696,31 @@ TEMPLATE = """<meta charset="utf-8">
 <meta name="source-sha256" content="{src_hash}">
 <meta name="renderer-sha256" content="{gen_hash}">
 <title>{title}</title>
+<script>
+/* Before first paint, deliberately. Setting the theme after the stylesheet has
+   painted shows the wrong one for a frame — the flash people notice and nobody
+   can un-see. Dark stays the default when nothing is stored. */
+(function(){{
+  try{{
+    var t=localStorage.getItem('arch-theme');
+    if(!t) t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
+    document.documentElement.setAttribute('data-theme',t);
+  }}catch(e){{document.documentElement.setAttribute('data-theme','dark');}}
+}})();
+</script>
 <style>
 :root{{
   --void:#060908; --panel:#0C1211; --panel2:#101817;
   --edge:#1C2827; --edge2:#283735;
   --accent:{accent}; --accent-dim:{accent}18; --accent-glow:{accent}66;
   --phos:#4BE38A; --phos-dim:#4BE38A14; --red:#E8664F;
-  --txt:#D6E0DD; --mid:#7C8B87; --faint:#4E5C58;
+  /* Contrast, not taste. The old ramp put --faint at 2.85:1 on --void and --mid
+     at 5.62:1; the dimmest tier carries table headers, figure captions and the
+     8px sub-labels inside every diagram, so it failed WCAG AA exactly where the
+     type is smallest. Lifting --faint alone would have collapsed it into --mid,
+     so the whole ramp is re-spaced. Now 5.04 / 8.15 / 14.82 on --void, and the
+     tightest of the three still clears 4.5:1 against --panel2. */
+  --txt:#D6E0DD; --mid:#9CA8A5; --faint:#70847E;
   --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
 }}
 body{{background:var(--void);color:var(--txt);font-family:var(--mono);
@@ -521,7 +790,111 @@ footer{{margin-top:3rem;border-top:1px solid var(--edge);padding-top:.9rem;displ
 button.pz{{font-family:var(--mono);font-size:.6rem;background:transparent;color:var(--accent);
   border:1px solid var(--edge2);padding:.2rem .55rem;cursor:pointer;letter-spacing:.08em}}
 button.pz:hover{{border-color:var(--accent)}}
+button.pz[disabled]{{opacity:.4;cursor:default;border-color:var(--edge)}}
 :focus-visible{{outline:1px solid var(--accent);outline-offset:2px}}
+
+/* Visible to a screen reader, absent from the page. Not display:none, which
+   removes it from the accessibility tree along with everything else. */
+.sr-only{{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}}
+
+.legend{{display:flex;flex-wrap:wrap;gap:.9rem;padding:.5rem .8rem;
+  border-top:1px solid var(--edge);font-size:.62rem;color:var(--faint)}}
+.lgi{{display:flex;align-items:center;gap:.35rem}}
+.lgs{{width:15px;height:10px;flex:none;border-radius:2px;
+  background:var(--panel2);border:1px solid var(--edge2)}}
+.lgs-store{{border-color:var(--phos);background:#0D1614}}
+.lgs-external{{border-style:dashed;background:#0A0F0E}}
+.lgs-service{{border-color:var(--accent)}}
+.lgs-secret{{border-color:var(--red);background:#160C0A}}
+:root[data-theme="light"] .lgs{{background:#FFFFFF}}
+:root[data-theme="light"] .lgs-store{{background:#F1F8F4}}
+:root[data-theme="light"] .lgs-external{{background:#F5F7F6}}
+:root[data-theme="light"] .lgs-secret{{background:#FDF3F1}}
+
+/* ── flow walker ───────────────────────────────────────────────────────── */
+.flowctl{{margin:.9rem 0 0;border:1px solid var(--edge);background:var(--panel)}}
+.flowhd{{display:flex;align-items:baseline;gap:.8rem;padding:.5rem .8rem;
+  border-bottom:1px solid var(--edge)}}
+.flowlbl{{font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}}
+.flowjump{{margin-left:auto;font-size:.6rem;color:var(--mid);text-decoration:none}}
+.flowjump:hover{{color:var(--accent)}}
+.flowlist{{list-style:none;margin:0;padding:.4rem;display:flex;flex-wrap:wrap;
+  gap:.35rem}}
+.flowlist li{{font-size:.66rem;padding:.2rem .55rem;border:1px solid var(--edge2);
+  color:var(--mid);cursor:pointer;max-width:none}}
+.flowlist li:hover{{border-color:var(--accent);color:var(--txt)}}
+.flowlist li[aria-selected="true"]{{border-color:var(--accent);color:var(--accent);
+  background:var(--accent-dim)}}
+.flownav{{display:flex;align-items:center;gap:.5rem;padding:0 .8rem .5rem}}
+.flowpos{{font-size:.6rem;color:var(--faint);letter-spacing:.08em;min-width:5rem}}
+.flowclear{{margin-left:auto}}
+.flowcap{{margin:0;padding:.5rem .8rem;border-top:1px solid var(--edge);
+  font-size:.7rem;color:var(--mid);min-height:1.2rem}}
+
+/* Dim with fill-opacity/stroke-opacity rather than `opacity`: the composite
+   property promotes every element to its own compositing layer, which is real
+   jank once a diagram has thirty boxes. These two are paint-only. */
+svg.flowing .nd,svg.flowing .wire,svg.flowing .wire-a,
+svg.flowing .ndl,svg.flowing .nds,svg.flowing .ndt,svg.flowing .wlab{{
+  fill-opacity:.18;stroke-opacity:.18;transition:fill-opacity .18s,stroke-opacity .18s}}
+svg.flowing [data-node].on-path .nd,svg.flowing [data-node].on-path .ndl,
+svg.flowing [data-node].on-path .nds,svg.flowing [data-node].on-path .ndt,
+svg.flowing [data-edge].on-path .wire,svg.flowing [data-edge].on-path .wire-a,
+svg.flowing [data-edge].on-path .wlab{{fill-opacity:1;stroke-opacity:1}}
+svg.flowing [data-node].at-step .nd{{stroke:var(--accent);stroke-width:2}}
+svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.4}}
+
+@media (prefers-reduced-motion:reduce){{
+  svg.flowing .nd,svg.flowing .wire,svg.flowing .wire-a,
+  svg.flowing .ndl,svg.flowing .nds,svg.flowing .ndt,svg.flowing .wlab{{transition:none}}
+}}
+
+/* ── light theme ───────────────────────────────────────────────────────────
+   An attribute override, not light-dark(). The dark skin leans on glow —
+   text-shadow, box-shadow, a scanline overlay — and those have to be switched
+   off as a group, which a per-value colour function cannot express. */
+:root[data-theme="light"]{{
+  --void:#F4F6F5; --panel:#FFFFFF; --panel2:#F9FBFA;
+  --edge:#D5DEDB; --edge2:#B9C6C2;
+  --phos:#0F7A44; --phos-dim:#0F7A4414; --red:#B3341C;
+  --txt:#12201C; --mid:#3F514C; --faint:#5A6B66;
+}}
+:root[data-theme="light"] body::before{{display:none}}
+:root[data-theme="light"] h1{{text-shadow:none}}
+:root[data-theme="light"] .led{{box-shadow:none}}
+:root[data-theme="light"] .figwrap{{background:#FFFFFF}}
+:root[data-theme="light"] .nd{{fill:#FFFFFF}}
+:root[data-theme="light"] .nd-store{{fill:#F1F8F4}}
+:root[data-theme="light"] .nd-external{{fill:#F5F7F6}}
+:root[data-theme="light"] .nd-secret{{fill:#FDF3F1}}
+
+/* ── print ─────────────────────────────────────────────────────────────────
+   The scanline overlay and a near-black page background are a screen
+   affectation; on paper they are a toner bill and an unreadable page. */
+@media print{{
+  :root{{
+    --void:#FFFFFF; --panel:#FFFFFF; --panel2:#FFFFFF;
+    --edge:#9AA8A4; --edge2:#6E7D79;
+    --txt:#000000; --mid:#1C2A26; --faint:#3D4B47; --phos:#0A5C33;
+  }}
+  @page{{margin:14mm}}
+  body{{background:#fff;font-size:10pt}}
+  body::before{{display:none}}
+  .bar{{position:static;border-bottom:1px solid var(--edge)}}
+  nav,button.pz,.flownav,.flowjump{{display:none}}
+  h1{{text-shadow:none}}
+  .led{{box-shadow:none}}
+  h2,h3{{break-after:avoid}}
+  pre,table,.figwrap,.flowctl,blockquote{{break-inside:avoid}}
+  .figwrap{{background:#fff}}
+  .nd{{fill:#fff}}
+  /* Every flow, spelled out — the picker is gone on paper, so the steps have to
+     be readable as a list or the section says nothing. */
+  .flowlist li{{border-color:var(--edge2)}}
+  a{{color:inherit;text-decoration:underline}}
+  a[href^="http"]::after{{content:" (" attr(href) ")";font-size:.8em;color:var(--faint)}}
+}}
 </style>
 
 <div class="rig">
@@ -536,20 +909,131 @@ button.pz:hover{{border-color:var(--accent)}}
 <footer>
   <span>GENERATED FROM DOCS/ARCHITECTURE.MD — DO NOT EDIT THIS FILE</span>
   <span>STRUCTURE ONLY, NO RUNTIME STATE</span>
-  <button class="pz" id="pz" aria-pressed="false">&#9208; PAUSE</button>
+  {published}
+  <span class="spacer"></span>
+  <button class="pz" id="th" type="button">&#9681; LIGHT</button>
+  <button class="pz" id="pz" type="button" aria-pressed="false">&#9208; PAUSE</button>
 </footer>
 </div>
 <script>
 (function(){{
+  var doc=document.documentElement;
+  /* One iteration helper. NodeList.forEach and Array.prototype.forEach.call were
+     both in use here; picking one keeps the intent obvious. */
+  function each(xs,fn){{Array.prototype.forEach.call(xs,fn);}}
+
+  /* theme toggle */
+  var t=document.getElementById('th');
+  function paint(){{
+    var light=doc.getAttribute('data-theme')==='light';
+    t.textContent=light?'\\u25D1 DARK':'\\u25D1 LIGHT';
+    t.setAttribute('aria-label',light?'Switch to dark theme':'Switch to light theme');
+  }}
+  paint();
+  t.addEventListener('click',function(){{
+    var next=doc.getAttribute('data-theme')==='light'?'dark':'light';
+    doc.setAttribute('data-theme',next);
+    try{{localStorage.setItem('arch-theme',next);}}catch(e){{}}
+    paint();
+  }});
+
+  /* pause. The animation is CSS keyframes, so a class is the whole mechanism.
+     The SVG animation-pause API this used to call drives SMIL, which no diagram
+     on this page uses — it was a no-op dressed up as a feature. */
   var b=document.getElementById('pz'),p=false;
   b.addEventListener('click',function(){{
     p=!p;document.body.classList.toggle('paused',p);
     b.setAttribute('aria-pressed',String(p));
     b.textContent=p?'\\u25B6 RESUME':'\\u23F8 PAUSE';
-    Array.prototype.forEach.call(document.querySelectorAll('svg'),function(s){{
-      if(p&&s.pauseAnimations)s.pauseAnimations();
-      if(!p&&s.unpauseAnimations)s.unpauseAnimations();
+  }});
+
+  /* flow walker */
+  each(document.querySelectorAll('.flowctl'),function(ctl){{
+    var svg=document.getElementById(ctl.getAttribute('data-view'));
+    if(!svg) return;
+    var flows;
+    try{{flows=JSON.parse(ctl.getAttribute('data-flows'));}}catch(e){{return;}}
+    if(!flows||!flows.length) return;
+
+    var list=ctl.querySelector('.flowlist'),
+        cap=ctl.querySelector('[data-flow-cap]'),
+        pos=ctl.querySelector('[data-flow-pos]'),
+        prev=ctl.querySelector('[data-flow-prev]'),
+        next=ctl.querySelector('[data-flow-next]'),
+        clear=ctl.querySelector('[data-flow-clear]'),
+        cur=-1,step=0;
+
+    function marks(){{
+      each(svg.querySelectorAll('.on-path,.at-step'),function(el){{
+        el.classList.remove('on-path','at-step');
+        el.removeAttribute('aria-current');
+      }});
+    }}
+    function q(v){{return typeof CSS!=='undefined'&&CSS.escape?CSS.escape(v):v;}}
+    function find(s){{
+      return s.t==='node'
+        ? svg.querySelector('[data-node="'+q(s.k)+'"]')
+        : svg.querySelector('[data-edge-from="'+q(s.f)+'"][data-edge-to="'+q(s.to)+'"]');
+    }}
+    function draw(){{
+      marks();
+      if(cur<0){{
+        svg.classList.remove('flowing');
+        each(list.querySelectorAll('li'),function(li){{li.setAttribute('aria-selected','false');}});
+        cap.textContent='Select a flow to trace it through the diagram.';
+        pos.textContent='\\u2014';
+        prev.disabled=next.disabled=true;
+        return;
+      }}
+      var f=flows[cur];
+      svg.classList.add('flowing');
+      each(list.querySelectorAll('li'),function(li,k){{
+        li.setAttribute('aria-selected',String(k===cur));
+      }});
+      each(f.steps,function(s){{
+        var el=find(s); if(el) el.classList.add('on-path');
+      }});
+      var at=f.steps[step],el=at&&find(at);
+      if(el){{el.classList.add('at-step');el.setAttribute('aria-current','step');}}
+      pos.textContent='step '+(step+1)+' / '+f.steps.length;
+      /* One whole-text write, not an append — partial updates get dropped. */
+      cap.textContent=(at&&at.note)?at.note:f.label;
+      prev.disabled=step<=0;
+      next.disabled=step>=f.steps.length-1;
+      try{{
+        history.replaceState(null,'','#flow='+encodeURIComponent(f.id)+'&step='+(step+1));
+      }}catch(e){{}}
+    }}
+    function pick(k,s){{cur=k;step=s||0;draw();}}
+
+    list.addEventListener('click',function(e){{
+      var li=e.target.closest('li'); if(!li) return;
+      pick(Array.prototype.indexOf.call(list.children,li),0);
     }});
+    list.addEventListener('keydown',function(e){{
+      var k=e.key;
+      if(k==='ArrowDown'||k==='ArrowRight'){{e.preventDefault();pick(Math.min((cur<0?-1:cur)+1,flows.length-1),0);}}
+      else if(k==='ArrowUp'||k==='ArrowLeft'){{e.preventDefault();pick(Math.max((cur<0?flows.length:cur)-1,0),0);}}
+      else if(k==='Home'){{e.preventDefault();pick(0,0);}}
+      else if(k==='End'){{e.preventDefault();pick(flows.length-1,0);}}
+      else if(k==='Escape'){{e.preventDefault();cur=-1;draw();}}
+    }});
+    prev.addEventListener('click',function(){{if(step>0){{step--;draw();}}}});
+    next.addEventListener('click',function(){{if(cur>=0&&step<flows[cur].steps.length-1){{step++;draw();}}}});
+    clear.addEventListener('click',function(){{cur=-1;draw();}});
+
+    function fromHash(){{
+      var m=/flow=([^&]+)(?:&step=(\\d+))?/.exec(location.hash||'');
+      if(!m) return false;
+      var id=decodeURIComponent(m[1]),k=-1;
+      each(flows,function(f,j){{if(f.id===id)k=j;}});
+      if(k<0) return false;                       /* unknown id: stay neutral */
+      var s=Math.max(0,Math.min((parseInt(m[2],10)||1)-1,flows[k].steps.length-1));
+      pick(k,s);
+      return true;
+    }}
+    window.addEventListener('hashchange',fromHash);
+    if(!fromHash()) draw();
   }});
 }})();
 </script>
@@ -583,12 +1067,18 @@ def build(md_path: Path) -> str:
         f'<a href="#{m.group(1)}">{html.escape(re.sub("<[^>]+>", "", m.group(2)))}</a>'
         for m in re.finditer(r'<h2 id="([^"]+)">(.*?)</h2>', body)
     )
+    # The page carries its own canonical link, so a copy that has been mailed
+    # around or re-hosted still says where the live one lives.
+    url = meta.get("published_url", "").strip()
+    published = (f'<a href="{html.escape(url, quote=True)}">CANONICAL COPY</a>'
+                 if url.startswith(("http://", "https://")) else "")
+
     return TEMPLATE.format(
         title=f"{repo} — Architecture",
         repo=html.escape(repo.upper()),
         accent=meta.get("accent", "#F5A623"),
         src_hash=_src_hash(md_path), gen_hash=_gen_hash(),
-        tags=tags, nav=nav, body=body,
+        tags=tags, nav=nav, body=body, published=published,
     )
 
 
@@ -633,6 +1123,9 @@ def main() -> int:
     ap.add_argument("-o", "--output", type=Path, default=None)
     ap.add_argument("--check", action="store_true",
                     help="exit 1 if the html is missing or older than the md")
+    ap.add_argument("--publish", action="store_true",
+                    help="after rendering, print the publish manifest line for "
+                         "the agent to act on (this script never uploads)")
     args = ap.parse_args()
     d_in, d_out = _default_paths(args.repo.resolve())
     args.input = args.input or d_in
@@ -655,9 +1148,28 @@ def main() -> int:
     # hook rewrites the staged copy, that conflicts with the working tree, and
     # the commit rolls back — in a loop. Cheap to emit clean; expensive to
     # diagnose at the commit.
-    page = "\n".join(ln.rstrip() for ln in build(args.input).split("\n"))
+    try:
+        page = "\n".join(ln.rstrip() for ln in build(args.input).split("\n"))
+    except ArchFlowError as exc:
+        # A dangling flow reference is a content bug with a precise location, so
+        # it gets a sentence rather than a traceback. Same exit code as a missing
+        # input: the render did not happen and nothing was written.
+        print(f"{args.input}: {exc}", file=sys.stderr)
+        return 2
     args.output.write_text(page, encoding="utf-8")
     print(f"wrote {args.output}  ({args.output.stat().st_size:,} bytes)")
+
+    if args.publish:
+        meta, _ = parse_frontmatter(args.input.read_text(encoding="utf-8"))
+        repo = meta.get("applies_to", args.input.parents[1].name)
+        url = meta.get("published_url", "").strip()
+        title = f'{repo} — Architecture'
+        if url.startswith(("http://", "https://")):
+            print(f'PUBLISH  {args.output}  url={url}  title="{title}"')
+        else:
+            # No address yet. Publishing mints one; writing it back into the
+            # frontmatter is what stops the next render minting another.
+            print(f'PUBLISH-NEW  {args.output}  title="{title}"')
     return 0
 
 

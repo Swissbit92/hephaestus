@@ -14,6 +14,9 @@ confidence it has not earned. So it is mutation-tested — defects are planted a
 it must find them.
 """
 
+import html
+import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -381,3 +384,395 @@ class TestPageAssembly:
         md.write_text(_fm("## S\n"), encoding="utf-8")
 
         assert "DO NOT EDIT" in render_arch.build(md).upper()
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DOM identity, accessibility and the flow walker
+# ════════════════════════════════════════════════════════════════════════════
+
+def _view(nodes, edges, vid="v1", groups=None):
+    return {"id": vid, "caption": "cap",
+            "nodes": nodes, "edges": edges, "groups": groups or []}
+
+
+def _block(lang, obj):
+    return f"```{lang}\n{json.dumps(obj)}\n```\n"
+
+
+class TestDiagramIdentity:
+    """Every emitted shape has to be findable from the model that produced it.
+
+    Without this the diagram is a picture: correct, and completely inert. The
+    flow walker, the text alternative and any future tooling all need a handle
+    back to the archview node that produced a given box.
+    """
+
+    def test_nodes_carry_scoped_id_and_data_node(self):
+        spec = _view([{"id": "alpha", "label": "Alpha"}], [])
+        out = render_arch.render_diagram(spec, 3)
+
+        assert 'id="f3-nd-alpha"' in out
+        assert 'data-node="alpha"' in out
+
+    def test_ids_are_scoped_per_figure_so_two_diagrams_cannot_collide(self):
+        """Two diagrams on one page may both name a node `wallet`. Unscoped ids
+        would make that invalid HTML and send getElementById to the wrong box."""
+        spec = _view([{"id": "wallet", "label": "W"}], [])
+        page = render_arch.render_markdown(
+            _block("archview", spec) + _block("archview", dict(spec, id="v2"))
+        )
+
+        assert 'id="f1-nd-wallet"' in page
+        assert 'id="f2-nd-wallet"' in page
+
+    @pytest.mark.parametrize("raw,slug", [
+        ("worker.py", "worker-py"),
+        ("a/b", "a-b"),
+        ("Has Spaces", "has-spaces"),
+        ("...", "x"),
+    ])
+    def test_slug_id_survives_ids_that_are_illegal_in_a_selector(self, raw, slug):
+        assert render_arch._slug_id(raw) == slug
+
+    def test_edges_carry_identity_on_a_wrapping_g_not_the_path(self):
+        """check_arch.RE_PATH demands d= immediately after class=. An attribute
+        slipped between them stops it matching *any* connector, so every page
+        would pass while checking nothing. This is that regression guard."""
+        spec = _view([{"id": "a", "label": "A"}, {"id": "b", "label": "B"}],
+                     [{"from": "a", "to": "b"}])
+        out = render_arch.render_diagram(spec)
+
+        assert 'data-edge-from="a" data-edge-to="b"' in out
+        assert '<path class="wire" d="' in out
+        assert check_arch.RE_PATH.search(out) is not None
+
+    def test_nodes_are_labelled_without_a_title_element(self):
+        """<title> renders as a native browser tooltip, which would fight the
+        flow caption. aria-label says the same thing and shows nothing."""
+        spec = _view([{"id": "a", "label": "A", "sub": "does things",
+                       "tech": "Python"}], [])
+        out = render_arch.render_diagram(spec)
+
+        assert "<title>" not in out
+        assert 'role="graphics-symbol"' in out
+        assert "A — does things — built with Python" in out
+
+    def test_text_alternative_table_names_every_node_and_its_targets(self):
+        spec = _view([{"id": "a", "label": "Alpha"}, {"id": "b", "label": "Beta"}],
+                     [{"from": "a", "to": "b", "label": "writes"}])
+        out = render_arch.render_diagram(spec)
+
+        assert 'class="sr-only"' in out
+        assert "<td>Alpha</td>" in out
+        assert "Beta (writes)" in out
+
+    def test_legend_is_not_an_svg_so_the_checker_cannot_count_it_as_a_diagram(self):
+        """An <svg viewBox> legend swatch is picked up by check_arch's diagram
+        regex — it reported six diagrams on a page holding one."""
+        spec = _view([{"id": "a", "label": "A", "kind": "store"},
+                      {"id": "b", "label": "B", "kind": "external"}], [])
+        out = render_arch.render_diagram(spec)
+
+        assert '<span class="lgs lgs-store"' in out
+        assert len(check_arch.RE_SVG.findall(out)) == 1
+
+    def test_legend_is_omitted_when_one_kind_explains_itself(self):
+        spec = _view([{"id": "a", "label": "A"}, {"id": "b", "label": "B"}], [])
+        assert 'class="legend"' not in render_arch.render_diagram(spec)
+
+
+class TestArchFlow:
+    """A flow that points at nothing must fail the build, not the reader.
+
+    check_arch only ever reads the emitted SVG, so a dangling reference is
+    invisible to it — a picker whose third step highlights nothing looks exactly
+    like one that works.
+    """
+
+    def _page(self, flows, view=None):
+        v = view or _view(
+            [{"id": "a", "label": "A"}, {"id": "b", "label": "B"}],
+            [{"from": "a", "to": "b"}],
+        )
+        return _block("archview", v) + _block("archflow", {"view": "v1", "flows": flows})
+
+    def test_a_valid_flow_emits_a_listbox_and_a_live_caption(self):
+        page = render_arch.render_markdown(self._page([
+            {"id": "f", "label": "Flow", "steps": [
+                {"node": "a", "note": "starts here"},
+                {"edge": ["a", "b"]},
+            ]},
+        ]))
+
+        assert 'role="listbox"' in page
+        assert 'aria-live="polite"' in page
+        assert 'data-view="fig-f1"' in page
+        assert "data-flow-next" in page
+
+    def test_unknown_view_names_what_is_available(self):
+        page = _block("archview", _view([{"id": "a", "label": "A"}], [])) + \
+            _block("archflow", {"view": "nope", "flows": []})
+        with pytest.raises(render_arch.ArchFlowError) as e:
+            render_arch.render_markdown(page)
+
+        assert "nope" in str(e.value)
+        assert "v1" in str(e.value)
+
+    def test_a_flow_declared_before_its_view_is_an_error_not_a_silent_pass(self):
+        """The registry is a single forward pass. Ordering is a real constraint,
+        so it has to fail loudly rather than render an inert picker."""
+        page = _block("archflow", {"view": "v1", "flows": []}) + \
+            _block("archview", _view([{"id": "a", "label": "A"}], []))
+        with pytest.raises(render_arch.ArchFlowError):
+            render_arch.render_markdown(page)
+
+    def test_step_pointing_at_a_missing_node_raises_with_the_valid_ids(self):
+        with pytest.raises(render_arch.ArchFlowError) as e:
+            render_arch.render_markdown(self._page([
+                {"id": "f", "label": "F", "steps": [{"node": "ghost"}]},
+            ]))
+
+        assert "ghost" in str(e.value)
+        assert "'a'" in str(e.value)
+
+    def test_step_pointing_at_a_missing_edge_raises(self):
+        with pytest.raises(render_arch.ArchFlowError):
+            render_arch.render_markdown(self._page([
+                {"id": "f", "label": "F", "steps": [{"edge": ["b", "a"]}]},
+            ]))
+
+    def test_a_step_must_be_exactly_one_of_node_or_edge(self):
+        with pytest.raises(render_arch.ArchFlowError):
+            render_arch.render_markdown(self._page([
+                {"id": "f", "label": "F", "steps": [{"node": "a", "edge": ["a", "b"]}]},
+            ]))
+
+    def test_duplicate_flow_ids_raise(self):
+        with pytest.raises(render_arch.ArchFlowError):
+            render_arch.render_markdown(self._page([
+                {"id": "dup", "label": "One", "steps": [{"node": "a"}]},
+                {"id": "dup", "label": "Two", "steps": [{"node": "b"}]},
+            ]))
+
+    def test_a_note_cannot_break_out_of_the_data_flows_attribute(self):
+        """Step notes are author-written prose that ends up inside an HTML
+        attribute holding JSON. If escaping is wrong the page stops being a
+        document and starts being an injection point."""
+        hostile = '</script><img src=x onerror=alert(1)>"\' & <b>b</b>'
+        page = render_arch.render_markdown(self._page([
+            {"id": "f", "label": "F", "steps": [{"node": "a", "note": hostile}]},
+        ]))
+        raw = re.search(r'data-flows="([^"]*)"', page).group(1)
+
+        assert '"' not in raw and "<" not in raw
+        assert json.loads(html.unescape(raw))[0]["steps"][0]["note"] == hostile
+
+    def test_an_unnamed_view_is_still_addressable_by_position(self):
+        v = _view([{"id": "a", "label": "A"}], [])
+        del v["id"]
+        page = _block("archview", v) + _block("archflow", {
+            "view": "f1", "flows": [{"id": "x", "label": "X", "steps": [{"node": "a"}]}]})
+
+        assert 'role="listbox"' in render_arch.render_markdown(page)
+
+    def test_a_page_with_a_flow_still_passes_the_geometry_checker(self):
+        """Groups, a back edge and a flow walker have never co-occurred on a real
+        page. This is the combination that would surface a routing bug latest."""
+        v = _view(
+            [{"id": "a", "label": "A"}, {"id": "b", "label": "B"},
+             {"id": "c", "label": "C"}],
+            [{"from": "a", "to": "b"}, {"from": "b", "to": "c"},
+             {"from": "c", "to": "a", "label": "retry"}],
+            groups=[{"id": "G", "label": "boundary", "members": ["a", "b"]}],
+        )
+        page = render_arch.render_markdown(
+            _block("archview", v) + _block("archflow", {"view": "v1", "flows": [
+                {"id": "f", "label": "F", "steps": [
+                    {"node": "a"}, {"edge": ["c", "a"]}]},
+            ]}))
+        body = check_arch.RE_SVG.findall(page)
+
+        assert len(body) == 1
+        assert check_arch.check_svg(body[0][1], body[0][0]) == []
+
+
+class TestThemeAndPrint:
+    def test_theme_is_stamped_before_the_stylesheet_to_avoid_a_flash(self, tmp_path):
+        """Setting the theme after paint shows the wrong one for a frame."""
+        md = tmp_path / "A.md"
+        md.write_text(_fm("## S\n"), encoding="utf-8")
+        out = render_arch.build(md)
+
+        assert out.index("arch-theme") < out.index("<style>")
+
+    def test_a_light_theme_and_print_rules_exist(self, tmp_path):
+        md = tmp_path / "A.md"
+        md.write_text(_fm("## S\n"), encoding="utf-8")
+        out = render_arch.build(md)
+
+        assert ':root[data-theme="light"]' in out
+        assert "@media print" in out
+
+    def test_the_dead_smil_pause_calls_are_gone(self, tmp_path):
+        """pauseAnimations() drives SMIL. Every animation here is CSS keyframes,
+        so the call never did anything."""
+        md = tmp_path / "A.md"
+        md.write_text(_fm("## S\n"), encoding="utf-8")
+
+        assert "pauseAnimations" not in render_arch.build(md)
+
+    def test_published_url_becomes_a_canonical_link(self, tmp_path):
+        md = tmp_path / "A.md"
+        md.write_text(
+            "---\ntitle: T\napplies_to: demo\n"
+            "published_url: https://example.invalid/a/b\n---\n\n## S\n",
+            encoding="utf-8")
+        out = render_arch.build(md)
+
+        assert 'href="https://example.invalid/a/b"' in out
+        assert "CANONICAL" in out
+
+    def test_a_non_url_is_not_rendered_as_a_link(self, tmp_path):
+        """A half-filled frontmatter field must not become a broken promise."""
+        md = tmp_path / "A.md"
+        md.write_text("---\ntitle: T\napplies_to: demo\npublished_url: tbd\n---\n\n## S\n",
+                      encoding="utf-8")
+
+        assert "CANONICAL" not in render_arch.build(md)
+
+
+class TestPublishManifest:
+    """`--publish` renders and then tells the agent what to do.
+
+    It deliberately does not upload. This renderer is pure stdlib with no network
+    and no credentials, and the moment it grows either, every repo that runs it
+    inherits that surface.
+    """
+
+    def _repo(self, tmp_path, extra=""):
+        d = tmp_path / "docs"
+        d.mkdir()
+        (d / "ARCHITECTURE.md").write_text(
+            f"---\ntitle: T\napplies_to: demo\n{extra}---\n\n## S\n", encoding="utf-8")
+        return tmp_path
+
+    def _run(self, repo, *flags):
+        return subprocess.run(
+            [sys.executable, str(TOOLS / "render.py"), str(repo), *flags],
+            capture_output=True, text=True)
+
+    def test_a_bound_doc_prints_its_existing_address(self, tmp_path):
+        r = self._run(self._repo(tmp_path, "published_url: https://example.invalid/x\n"),
+                      "--publish")
+
+        assert r.returncode == 0
+        assert "PUBLISH " in r.stdout
+        assert "url=https://example.invalid/x" in r.stdout
+
+    def test_an_unbound_doc_asks_for_a_new_address(self, tmp_path):
+        r = self._run(self._repo(tmp_path), "--publish")
+
+        assert r.returncode == 0
+        assert "PUBLISH-NEW" in r.stdout
+
+    def test_rendering_without_the_flag_prints_no_manifest(self, tmp_path):
+        r = self._run(self._repo(tmp_path, "published_url: https://example.invalid/x\n"))
+
+        assert "PUBLISH" not in r.stdout
+
+    def test_a_dangling_flow_reference_writes_nothing_and_exits_two(self, tmp_path):
+        """Half a page is worse than no page — it looks rendered."""
+        d = tmp_path / "docs"
+        d.mkdir()
+        view = {"id": "v", "caption": "c",
+                "nodes": [{"id": "a", "label": "A"}], "edges": []}
+        flow = {"view": "v", "flows": [
+            {"id": "f", "label": "F", "steps": [{"node": "ghost"}]}]}
+        (d / "ARCHITECTURE.md").write_text(
+            "---\ntitle: T\napplies_to: demo\n---\n\n"
+            + _block("archview", view) + _block("archflow", flow),
+            encoding="utf-8")
+
+        r = self._run(tmp_path)
+
+        assert r.returncode == 2
+        assert "ghost" in r.stderr
+        assert not (d / "ARCHITECTURE.html").exists()
+
+
+class TestFlowIdentityCannotCollide:
+    """Four ways a flow could quietly claim a handle that is not uniquely its own.
+
+    Every one of these renders successfully and looks right. They were found by
+    review, not by a failing page, which is the argument for keeping them here.
+    """
+
+    def _view(self, nodes, edges):
+        return {"id": "v", "caption": "c", "nodes": nodes, "edges": edges}
+
+    def test_two_ids_that_slugify_the_same_are_a_collision(self):
+        """'Flow A' and 'Flow-A' are different strings and one DOM id."""
+        page = _block("archview", self._view([{"id": "a", "label": "A"}], [])) + \
+            _block("archflow", {"view": "v", "flows": [
+                {"id": "Flow A", "label": "One", "steps": [{"node": "a"}]},
+                {"id": "Flow-A", "label": "Two", "steps": [{"node": "a"}]},
+            ]})
+        with pytest.raises(render_arch.ArchFlowError) as e:
+            render_arch.render_markdown(page)
+
+        assert "flow-a" in str(e.value)
+
+    def test_collision_is_detected_across_separate_archflow_blocks(self):
+        """Splitting the happy path and the error path into two blocks is a
+        reasonable way to write a page, and it used to defeat the check."""
+        v = _block("archview", self._view([{"id": "a", "label": "A"}], []))
+        one = _block("archflow", {"view": "v", "flows": [
+            {"id": "x", "label": "One", "steps": [{"node": "a"}]}]})
+        with pytest.raises(render_arch.ArchFlowError):
+            render_arch.render_markdown(v + one + one)
+
+    def test_a_flow_without_an_id_gets_a_sentence_not_a_keyerror(self):
+        page = _block("archview", self._view([{"id": "a", "label": "A"}], [])) + \
+            _block("archflow", {"view": "v", "flows": [
+                {"label": "No id", "steps": [{"node": "a"}]}]})
+        with pytest.raises(render_arch.ArchFlowError) as e:
+            render_arch.render_markdown(page)
+
+        assert "id" in str(e.value)
+
+    def test_a_flow_without_a_label_is_rejected_too(self):
+        page = _block("archview", self._view([{"id": "a", "label": "A"}], [])) + \
+            _block("archflow", {"view": "v", "flows": [
+                {"id": "x", "steps": [{"node": "a"}]}]})
+        with pytest.raises(render_arch.ArchFlowError):
+            render_arch.render_markdown(page)
+
+    def test_edge_identity_survives_a_node_id_containing_the_old_delimiter(self):
+        """Joining ids with '__' made (a -> b__c) and (a__b -> c) the same key,
+        and querySelector silently returned whichever came first."""
+        spec = self._view(
+            [{"id": "a", "label": "A"}, {"id": "b__c", "label": "BC"},
+             {"id": "a__b", "label": "AB"}, {"id": "c", "label": "C"}],
+            [{"from": "a", "to": "b__c"}, {"from": "a__b", "to": "c"}],
+        )
+        out = render_arch.render_diagram(spec)
+
+        assert 'data-edge-from="a" data-edge-to="b__c"' in out
+        assert 'data-edge-from="a__b" data-edge-to="c"' in out
+        assert "data-edge=" not in out
+
+
+class TestScaffoldTemplate:
+    def test_the_init_template_actually_renders(self, tmp_path):
+        """`/cms init` hands this file to a fresh repo. A scaffold that fails
+        `/cms render` is worse than no scaffold — the first thing the new repo
+        does with it is hit an error."""
+        tpl = (TOOLS.parent / "templates" / "ARCHITECTURE.md").read_text(encoding="utf-8")
+        d = tmp_path / "docs"
+        d.mkdir()
+        (d / "ARCHITECTURE.md").write_text(tpl.replace("{{REPO_NAME}}", "demo"),
+                                           encoding="utf-8")
+        out = render_arch.build(d / "ARCHITECTURE.md")
+
+        assert 'role="listbox"' in out          # it demonstrates archflow
+        assert "<svg" in out                    # and archview

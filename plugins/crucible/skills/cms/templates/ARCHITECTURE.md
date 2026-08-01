@@ -19,6 +19,7 @@ diagram yet — an empty diagram is worse than none.
 
 ```archview
 {
+  "id": "context",
   "caption": "What this repo is to everything around it.",
   "nodes": [
     {"id": "upstream", "label": "TBD upstream", "kind": "external"},
@@ -30,6 +31,28 @@ diagram yet — an empty diagram is worse than none.
     {"from": "upstream", "to": "entry", "label": "TBD"},
     {"from": "entry", "to": "store", "label": "writes"},
     {"from": "store", "to": "downstream", "label": "TBD"}
+  ]
+}
+```
+
+Once the model above is real, an `archflow` block walks it — same boxes, no second
+diagram to keep in step. Delete it if nothing here happens in a sequence worth
+tracing. It must stay *below* the view it names.
+
+```archflow
+{
+  "view": "context",
+  "flows": [
+    {
+      "id": "main-path",
+      "label": "TBD — the thing this repo does most often",
+      "steps": [
+        {"node": "upstream", "note": "TBD — one sentence per step, read aloud on arrival"},
+        {"edge": ["upstream", "entry"]},
+        {"node": "entry", "note": "TBD"},
+        {"edge": ["entry", "store"], "note": "TBD"}
+      ]
+    }
   ]
 }
 ```
