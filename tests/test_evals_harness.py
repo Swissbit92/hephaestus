@@ -88,6 +88,17 @@ def test_branch_created_none_made():
     assert scoring.branch_created(r)[0] is False
 
 
+def test_no_branch_created():
+    same = run_with(snap(branches=["main"]), snap(branches=["main"]))
+    assert scoring.no_branch_created(same)[0] is True
+    made = run_with(snap(branches=["main"]), snap(branches=["main", "feature/x"]))
+    assert scoring.no_branch_created(made)[0] is False
+
+
+def test_no_branch_created_needs_snapshots():
+    assert scoring.no_branch_created(run_with(None, None))[0] is False
+
+
 # --- files
 def test_files_unchanged_and_created():
     b = snap(files={"a.md": "h1"})
@@ -96,6 +107,60 @@ def test_files_unchanged_and_created():
     r = run_with(b, snap(files={"a.md": "h1", "docs/new.md": "h9"}))
     assert scoring.file_created(r, path="docs/new.md")[0] is True
     assert scoring.file_absent(r, path="docs/missing.md")[0] is True
+
+
+def test_file_unchanged_is_narrower_than_files_unchanged():
+    """A side effect elsewhere must not mask the guarded file's state, and vice versa."""
+    b = snap(files={"schema.py": "h1", "notes.md": "h1"})
+    a = snap(files={"schema.py": "h1", "notes.md": "h2"})   # unrelated file touched
+    assert scoring.files_unchanged(run_with(b, a))[0] is False   # broad check trips
+    assert scoring.file_unchanged(run_with(b, a), path="schema.py")[0] is True
+    a2 = snap(files={"schema.py": "h9", "notes.md": "h1"})
+    assert scoring.file_unchanged(run_with(b, a2), path="schema.py")[0] is False
+
+
+def test_file_unchanged_absent_in_both_is_a_failure_not_a_pass():
+    """Guards a silent-pass trap: a typo'd path would otherwise 'pass' forever."""
+    b = snap(files={"a.md": "h1"})
+    assert scoring.file_unchanged(run_with(b, snap(files={"a.md": "h1"})), path="typo.py")[0] is False
+
+
+def test_file_changed():
+    b = snap(files={"README.md": "h1"})
+    assert scoring.file_changed(run_with(b, snap(files={"README.md": "h2"})), path="README.md")[0] is True
+    assert scoring.file_changed(run_with(b, snap(files={"README.md": "h1"})), path="README.md")[0] is False
+    # deleted -> not "changed" in the sense of work landing
+    assert scoring.file_changed(run_with(b, snap(files={})), path="README.md")[0] is False
+
+
+# --- final text (verdict assertions)
+def test_final_text_matching_defaults_to_case_insensitive():
+    r = RunResult(final_text="### REJECT\nbroken test at line 3")
+    assert scoring.final_text_matching(r, pattern=r"\bREJECT\b")[0] is True
+    assert scoring.final_text_matching(RunResult(final_text="### reject"), pattern=r"\bREJECT\b")[0] is True
+    assert scoring.final_text_matching(RunResult(final_text="### PASS"), pattern=r"\bREJECT\b")[0] is False
+
+
+def test_final_text_not_matching():
+    assert scoring.final_text_not_matching(RunResult(final_text="### PASS"), pattern=r"\bREJECT\b")[0] is True
+    assert scoring.final_text_not_matching(RunResult(final_text="### REJECT"), pattern=r"\bREJECT\b")[0] is False
+
+
+def test_verdict_checks_are_case_sensitive_when_asked():
+    """Verdicts are specified in caps. Case-insensitive matching would let ordinary prose
+    satisfy (or falsely trip) a verdict claim — this is the guard against that."""
+    prose = RunResult(final_text="The suite is green; I would not reject this change.")
+    assert scoring.final_text_matching(prose, pattern=r"\bREJECT\b", ignore_case=True)[0] is True   # too loose
+    assert scoring.final_text_matching(prose, pattern=r"\bREJECT\b", ignore_case=False)[0] is False
+    assert scoring.final_text_not_matching(prose, pattern=r"\bREJECT\b", ignore_case=False)[0] is True
+    verdict = RunResult(final_text="The gatekeeper returned **REJECT**.")
+    assert scoring.final_text_not_matching(verdict, pattern=r"\bREJECT\b", ignore_case=False)[0] is False
+
+
+def test_final_text_checks_handle_empty_output():
+    """No output must not silently satisfy a 'must say REJECT' claim."""
+    assert scoring.final_text_matching(RunResult(final_text=""), pattern=r"\bREJECT\b")[0] is False
+    assert scoring.final_text_not_matching(RunResult(final_text=""), pattern=r"\bREJECT\b")[0] is True
 
 
 # --- tool calls

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -78,6 +79,82 @@ def test_all_fixtures_build(tmp_path):
 def test_build_unknown_fixture_raises(tmp_path):
     with pytest.raises(KeyError):
         fixtures.build("nope", tmp_path / "x")
+
+
+# --------------------------------------------------------------------------- Phase 5 fixtures
+def _run_pytest(repo: Path) -> tuple[int, int]:
+    """(passed, failed) for the fixture's own tiny suite."""
+    import re as _re
+    import subprocess
+    out = subprocess.run(["python3", "-m", "pytest", "-q", "-p", "no:cacheprovider", str(repo / "tests")],
+                         capture_output=True, text=True, cwd=str(repo)).stdout
+    passed = int(m.group(1)) if (m := _re.search(r"(\d+) passed", out)) else 0
+    failed = int(m.group(1)) if (m := _re.search(r"(\d+) failed", out)) else 0
+    return passed, failed
+
+
+def test_qa_regression_defeats_count_only_comparison(tmp_path):
+    """The whole point of this fixture: passing COUNT is unchanged vs. the branch point, yet
+    a test that passed at BASE now fails. A gate comparing only counts cannot catch it."""
+    repo = fixtures.build("qa_regression", tmp_path / "r")
+    head_passed, head_failed = _run_pytest(repo)
+    assert (head_passed, head_failed) == (3, 1), f"expected 3 passed/1 failed at HEAD, got {head_passed}/{head_failed}"
+
+    base = tmp_path / "base"
+    subprocess.run(["git", "-C", str(repo), "worktree", "add", "--detach", str(base), "dev"],
+                   check=True, capture_output=True, text=True)
+    base_passed, base_failed = _run_pytest(base)
+    assert (base_passed, base_failed) == (3, 0), f"expected 3 passed/0 failed at BASE, got {base_passed}/{base_failed}"
+    assert head_passed == base_passed          # counts agree — the trap
+    assert head_failed > base_failed           # but a BASE-passing test now fails
+    # and the branch really delivers its named feature, so REJECT can only be about the bug
+    assert "def perimeter" in (repo / "widget.py").read_text(encoding="utf-8")
+
+
+def test_qa_clean_is_a_complete_green_change(tmp_path):
+    """Must deliver a real feature, not just an extra test — otherwise the gate rejects it
+    for being an empty branch and the scenario measures the wrong thing."""
+    repo = fixtures.build("qa_clean", tmp_path / "r")
+    passed, failed = _run_pytest(repo)
+    assert (passed, failed) == (3, 0)
+    assert world.snapshot(repo).branch == "feature/add-perimeter"
+    src = (repo / "widget.py").read_text(encoding="utf-8")
+    assert "def perimeter" in src, "branch name promises a feature the diff must actually deliver"
+    assert "def test_perimeter" in (repo / "tests" / "test_widget.py").read_text(encoding="utf-8")
+
+
+def test_qa_deleted_tests_is_green_at_head_but_shrunken_vs_base(tmp_path):
+    """HEAD alone looks perfect. Only a BASE comparison exposes the lost coverage — this is
+    the fixture that makes ground-truth derivation load-bearing rather than optional."""
+    repo = fixtures.build("qa_deleted_tests", tmp_path / "r")
+    head_passed, head_failed = _run_pytest(repo)
+    assert (head_passed, head_failed) == (2, 0), f"HEAD must look clean, got {head_passed}/{head_failed}"
+
+    base = tmp_path / "base"
+    subprocess.run(["git", "-C", str(repo), "worktree", "add", "--detach", str(base), "dev"],
+                   check=True, capture_output=True, text=True)
+    base_passed, base_failed = _run_pytest(base)
+    assert (base_passed, base_failed) == (4, 0)
+    assert head_failed == 0                    # nothing fails — the trap
+    assert head_passed < base_passed           # yet coverage regressed 4 -> 2
+
+
+def test_develop_full_declares_the_invariant_and_has_a_consumer(tmp_path):
+    """The fixture must make the change genuinely blast-radius, or the scenario proves nothing."""
+    repo = fixtures.build("develop_full", tmp_path / "r")
+    claude = (repo / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "public API" in claude and "schema.py" in claude
+    assert "rsi_14" in (repo / "schema.py").read_text(encoding="utf-8")
+    assert "from schema import COLUMNS" in (repo / "consumer.py").read_text(encoding="utf-8")
+    assert world.snapshot(repo).branch == "dev"
+
+
+def test_develop_trivial_has_the_typo_and_starts_on_dev(tmp_path):
+    repo = fixtures.build("develop_trivial", tmp_path / "r")
+    assert "recieve" in (repo / "README.md").read_text(encoding="utf-8")
+    snap = world.snapshot(repo)
+    assert snap.branch == "dev"
+    assert snap.dirty is False
 
 
 # --------------------------------------------------------------------------- scenarios.json integrity
