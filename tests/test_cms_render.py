@@ -776,3 +776,53 @@ class TestScaffoldTemplate:
 
         assert 'role="listbox"' in out          # it demonstrates archflow
         assert "<svg" in out                    # and archview
+
+
+class TestChainLayout:
+    """A pipeline laid out as a column is worse than the list it replaced.
+
+    Seven sequential steps through the general layerer become seven rows — about
+    800px of vertical scroll for something that reads left to right. A path gets
+    serpentine placement instead; anything that branches is untouched.
+    """
+
+    def _chain(self, n):
+        return {"id": "c", "caption": "c",
+                "nodes": [{"id": f"s{i}", "label": f"step {i}"} for i in range(n)],
+                "edges": [{"from": f"s{i}", "to": f"s{i+1}"} for i in range(n - 1)]}
+
+    def test_a_path_is_detected_as_a_chain(self):
+        spec = self._chain(7)
+        assert render_arch._chain_order(spec["nodes"], spec["edges"]) == [
+            f"s{i}" for i in range(7)]
+
+    def test_a_branching_graph_is_not_a_chain(self):
+        nodes = [{"id": x, "label": x} for x in ("a", "b", "c", "d")]
+        edges = [{"from": "a", "to": "b"}, {"from": "a", "to": "c"},
+                 {"from": "b", "to": "d"}]
+        assert render_arch._chain_order(nodes, edges) is None
+
+    def test_a_cycle_is_not_a_chain(self):
+        nodes = [{"id": x, "label": x} for x in ("a", "b", "c", "d")]
+        edges = [{"from": "a", "to": "b"}, {"from": "b", "to": "c"},
+                 {"from": "c", "to": "d"}, {"from": "d", "to": "a"}]
+        assert render_arch._chain_order(nodes, edges) is None
+
+    def test_a_chain_is_wider_than_it_is_tall(self):
+        """The whole point. Under the layered engine this was a column."""
+        out = render_arch.render_diagram(self._chain(7))
+        m = re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', out)
+        w, h = float(m.group(1)), float(m.group(2))
+
+        assert w > h, f"chain rendered {w}x{h} — still a column"
+
+    def test_a_chain_still_passes_the_geometry_checker(self):
+        out = render_arch.render_diagram(self._chain(9))
+        vb, body = check_arch.RE_SVG.findall(out)[0]
+
+        assert check_arch.check_svg(body, vb) == []
+
+    def test_a_short_sequence_keeps_the_column(self):
+        """Below the floor, wrapping just looks arbitrary."""
+        assert render_arch._chain_order(*(lambda s: (s["nodes"], s["edges"]))(
+            self._chain(3))) is None

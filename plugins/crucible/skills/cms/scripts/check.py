@@ -14,6 +14,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -165,11 +166,39 @@ def check_architecture_page(repo: Path) -> list[Finding]:
                     "— re-render with `/cms render`")]
 
 
+# A numbered list or arrow cascade this long is a sequence, and a sequence is
+# what `archflow` renders. Four matches the chain layout's own floor.
+FLOW_STEP_FLOOR = 4
+RE_OL_STEP = re.compile(r"^\s*\d+\.\s+\S", re.M)
+RE_ARROW_STEP = re.compile(r"^\s*(->|→|├─|└─)", re.M)
+
+
+def check_flow_shaped_sections(repo: Path) -> list[Finding]:
+    """Warn when a doc describes a sequence in prose but never walks it.
+
+    This is the omission that motivated the check. The renderer grew `archflow`,
+    every repo already had its pipelines written as numbered lists, and not one
+    was converted — the capability shipped and the content did not. Nothing
+    caught it, because a list is valid markdown and the page rendered fine.
+    """
+    md = repo / "docs" / "ARCHITECTURE.md"
+    if not md.exists() or "```archflow" in (text := md.read_text(encoding="utf-8")):
+        return []
+    steps = len(RE_OL_STEP.findall(text)) + len(RE_ARROW_STEP.findall(text))
+    if steps < FLOW_STEP_FLOOR:
+        return []
+    return [Finding("warning", str(md),
+                    f"{steps} sequential steps are written as prose but this doc "
+                    f"has no ```archflow``` block — a sequence the reader has to "
+                    f"reassemble is exactly what archflow renders walkable")]
+
+
 def run_repo_check(repo: Path) -> list[Finding]:
     findings: list[Finding] = []
     findings.extend(check_required_files(repo))
     findings.extend(check_claude_md_size_trend(repo))
     findings.extend(check_architecture_page(repo))
+    findings.extend(check_flow_shaped_sections(repo))
     # Per-file checks
     for md in iter_md_files(repo, include_archive=False):
         required_fm = "/docs/" in str(md).replace("\\", "/") and md.name not in FRONTMATTER_EXEMPT

@@ -298,6 +298,101 @@ def _layer(nodes, edges):
     return layer, fwd, back
 
 
+CHAIN_MIN = 4          # below this a column is fine and wrapping just looks odd
+CHAIN_MAX_W = 1180     # wrap before the figure needs horizontal scrolling
+
+
+def _chain_order(nodes, edges):
+    """The node order if this graph is one unbranched path, else None.
+
+    A pipeline is a path: seven steps, each following exactly one other. Laid out
+    by the general layerer that becomes seven rows — a column of boxes roughly
+    800px tall, which is strictly worse than the numbered list it replaced. So a
+    path is detected and laid out differently, and everything else is untouched.
+    """
+    if len(nodes) < CHAIN_MIN:
+        return None
+    ids = {nd["id"] for nd in nodes}
+    if len(edges) != len(nodes) - 1:
+        return None
+    nxt, indeg = {}, {nid: 0 for nid in ids}
+    for e in edges:
+        if e["from"] in nxt or e.get("style") == "static":
+            return None                      # a branch, or a non-flow relation
+        nxt[e["from"]] = e["to"]
+        indeg[e["to"]] = indeg.get(e["to"], 0) + 1
+    if any(v > 1 for v in indeg.values()):
+        return None
+    starts = [nid for nid in ids if indeg[nid] == 0]
+    if len(starts) != 1:
+        return None
+    order, seen, cur = [], set(), starts[0]
+    while cur is not None:
+        if cur in seen:
+            return None                      # a cycle is not a chain
+        seen.add(cur)
+        order.append(cur)
+        cur = nxt.get(cur)
+    return order if len(order) == len(ids) else None
+
+
+def _place_chain(nodes, order):
+    """Serpentine rows: left-to-right, then right-to-left on the row below.
+
+    Consecutive steps end up either side by side or directly stacked, so every
+    connector is a straight line through empty space — no lanes, no crossings,
+    and the reader's eye never jumps back across the figure to find step 5.
+    """
+    by_id = {nd["id"]: nd for nd in nodes}
+    seq = [by_id[nid] for nid in order]
+
+    # How many fit per row before we exceed the wrap width.
+    per, acc = 0, 0.0
+    for nd in seq:
+        w = _node_w(nd)
+        step = w if per == 0 else w + COL_GAP
+        if acc + step > CHAIN_MAX_W and per:
+            break
+        acc += step
+        per += 1
+    per = max(2, per)
+    rows = [seq[i:i + per] for i in range(0, len(seq), per)]
+
+    row_h = [NODE_H[max(_lines(nd) for nd in r)] for r in rows]
+    widest = max(sum(_node_w(nd) for nd in r) + COL_GAP * (len(r) - 1) for r in rows)
+
+    geo, y = {}, PAD_Y
+    for r, row in enumerate(rows):
+        cells = list(row) if r % 2 == 0 else list(reversed(row))
+        used = sum(_node_w(nd) for nd in cells) + COL_GAP * (len(cells) - 1)
+        # Odd rows hug the right edge so the wrap lands directly under the last
+        # box of the row above rather than diagonally across the figure.
+        x = PAD_X if r % 2 == 0 else PAD_X + (widest - used)
+        for nd in cells:
+            w = _node_w(nd)
+            geo[nd["id"]] = {"x": x, "y": y, "w": w, "h": row_h[r], "nd": nd}
+            x += w + COL_GAP
+        y += row_h[r] + ROW_GAP
+
+    return geo, widest, y - ROW_GAP + PAD_Y
+
+
+def _chain_edge(a, b) -> str:
+    """Straight across within a row, straight down at the wrap."""
+    if abs(a["y"] - b["y"]) < 1:                       # same row, side by side
+        x1 = a["x"] + a["w"] if b["x"] > a["x"] else a["x"]
+        x2 = b["x"] - 5 if b["x"] > a["x"] else b["x"] + b["w"] + 5
+        yc = a["y"] + a["h"] / 2
+        return f"M{x1:.1f} {yc:.1f} L{x2:.1f} {yc:.1f}"
+    ax = a["x"] + a["w"] / 2
+    bx = b["x"] + b["w"] / 2
+    if abs(ax - bx) < 1.5:                             # stacked, straight drop
+        return f"M{ax:.1f} {a['y'] + a['h']:.1f} L{bx:.1f} {b['y'] - 5:.1f}"
+    mid = (a["y"] + a["h"] + b["y"]) / 2
+    return (f"M{ax:.1f} {a['y'] + a['h']:.1f} L{ax:.1f} {mid:.1f} "
+            f"L{bx:.1f} {mid:.1f} L{bx:.1f} {b['y'] - 5:.1f}")
+
+
 def _place(nodes, layer, groups):
     """Rows top-down, group-contiguous within a row, centred on a common spine."""
     member_of = {}
@@ -381,36 +476,46 @@ def render_diagram(spec: dict, fig: int = 1) -> str:
     nodes, edges = spec["nodes"], spec.get("edges", [])
     groups, caption = spec.get("groups", []), spec.get("caption", "")
 
-    layer, fwd, back = _layer(nodes, edges)
-    geo, w, h, bands = _place(nodes, layer, groups)
+    # A pure path gets the serpentine treatment; anything that branches keeps the
+    # layered engine. The two share every emission path below — only placement
+    # and connector routing differ.
+    chain = _chain_order(nodes, edges) if not groups else None
+    if chain:
+        geo, w, h = _place_chain(nodes, chain)
+        fwd, back = list(edges), []
+        width = PAD_X + w + PAD_X
+        route = lambda e: _chain_edge(geo[e["from"]], geo[e["to"]])  # noqa: E731
+        layer = {nid: k for k, nid in enumerate(chain)}
+    else:
+        layer, fwd, back = _layer(nodes, edges)
+        geo, w, h, bands = _place(nodes, layer, groups)
 
-    # Two lanes, both outside every node's x-extent. Forward edges that skip a
-    # row use the left one, back edges the right, so the two families never
-    # share a lane and overlay each other.
-    lane_r = PAD_X + w + 26
-    lane_l = PAD_X / 2
-    needs_lane = any(layer[e["to"]] - layer[e["from"]] > 1 for e in fwd)
-    width = lane_r + (150 if back else 0)
+        # Two lanes, both outside every node's x-extent. Forward edges that skip
+        # a row use the left one, back edges the right, so the two families never
+        # share a lane and overlay each other.
+        lane_r = PAD_X + w + 26
+        lane_l = PAD_X / 2
+        width = lane_r + (150 if back else 0)
 
-    last = max(bands)
+        last = max(bands)
 
-    def gap_above(lyr: int) -> float:
-        """Midpoint of the node-free band above a row. Row 0 has no row above
-        it, so it borrows the top padding."""
-        return PAD_Y / 2 if lyr <= 0 else (bands[lyr - 1][1] + bands[lyr][0]) / 2
+        def gap_above(lyr: int) -> float:
+            """Midpoint of the node-free band above a row. Row 0 has no row above
+            it, so it borrows the top padding."""
+            return PAD_Y / 2 if lyr <= 0 else (bands[lyr - 1][1] + bands[lyr][0]) / 2
 
-    def gap_below(lyr: int) -> float:
-        """Same, below. The last row borrows the bottom padding."""
-        return (bands[lyr][1] + PAD_Y / 2 if lyr >= last
-                else (bands[lyr][1] + bands[lyr + 1][0]) / 2)
+        def gap_below(lyr: int) -> float:
+            """Same, below. The last row borrows the bottom padding."""
+            return (bands[lyr][1] + PAD_Y / 2 if lyr >= last
+                    else (bands[lyr][1] + bands[lyr + 1][0]) / 2)
 
-    def route(e) -> str:
-        fl, tl = layer[e["from"]], layer[e["to"]]
-        a, b = geo[e["from"]], geo[e["to"]]
-        if tl == fl + 1:
-            return _adjacent_path(a, b)
-        lane = lane_l if tl > fl else lane_r
-        return _lane_path(a, b, lane, gap_below(fl), gap_above(tl))
+        def route(e) -> str:
+            fl, tl = layer[e["from"]], layer[e["to"]]
+            a, b = geo[e["from"]], geo[e["to"]]
+            if tl == fl + 1:
+                return _adjacent_path(a, b)
+            lane = lane_l if tl > fl else lane_r
+            return _lane_path(a, b, lane, gap_below(fl), gap_above(tl))
 
     p = [f'<div class="figwrap"><svg id="fig-f{fig}" viewBox="0 0 {width:.0f} {h:.0f}" '
          f'width="{width:.0f}" height="{h:.0f}" role="img" '
@@ -842,8 +947,18 @@ svg.flowing [data-node].on-path .nd,svg.flowing [data-node].on-path .ndl,
 svg.flowing [data-node].on-path .nds,svg.flowing [data-node].on-path .ndt,
 svg.flowing [data-edge].on-path .wire,svg.flowing [data-edge].on-path .wire-a,
 svg.flowing [data-edge].on-path .wlab{{fill-opacity:1;stroke-opacity:1}}
-svg.flowing [data-node].at-step .nd{{stroke:var(--accent);stroke-width:2}}
-svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.4}}
+/* The current step has to win against the node-kind colours, which already use
+   the accent. Border alone was ambiguous on a service node, so it also gets the
+   accent wash and a halo. */
+svg.flowing [data-node].at-step .nd{{stroke:var(--accent);stroke-width:2;
+  fill:var(--accent-dim);filter:drop-shadow(0 0 6px var(--accent-glow))}}
+svg.flowing [data-node].at-step .ndl{{fill:var(--accent)}}
+svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.6;
+  filter:drop-shadow(0 0 5px var(--accent-glow))}}
+@media (prefers-reduced-motion:reduce){{
+  svg.flowing [data-node].at-step .nd,
+  svg.flowing [data-edge].at-step .wire-a{{filter:none}}
+}}
 
 @media (prefers-reduced-motion:reduce){{
   svg.flowing .nd,svg.flowing .wire,svg.flowing .wire-a,

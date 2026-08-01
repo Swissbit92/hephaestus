@@ -373,3 +373,46 @@ def test_shipped_state_dir_holds_no_runtime_json():
     """Versioned starters only. A *.json here means something wrote runtime state
     back into the plugin."""
     assert list(common.SHIPPED_STATE_DIR.glob("*.json")) == []
+
+
+def test_flow_shaped_prose_without_archflow_is_flagged(tmp_path):
+    """The omission that motivated the check: archflow shipped, every repo had
+    its pipelines as numbered lists, and not one was converted. Nothing caught
+    it, because a list is valid markdown and the page rendered fine."""
+    d = tmp_path / "docs"
+    d.mkdir()
+    (d / "ARCHITECTURE.md").write_text(
+        "---\ntitle: T\nstatus: active\ncreated: 2026-01-01\n"
+        "last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: x\n---\n\n"
+        "## Pipeline\n\n1. one\n2. two\n3. three\n4. four\n5. five\n",
+        encoding="utf-8")
+
+    found = check.check_flow_shaped_sections(tmp_path)
+
+    assert len(found) == 1
+    assert "archflow" in found[0].message
+    assert found[0].level == "warning"          # advisory, never a hard gate
+
+
+def test_a_doc_that_already_walks_its_flow_is_silent(tmp_path):
+    d = tmp_path / "docs"
+    d.mkdir()
+    (d / "ARCHITECTURE.md").write_text(
+        "---\ntitle: T\nstatus: active\ncreated: 2026-01-01\n"
+        "last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: x\n---\n\n"
+        "1. one\n2. two\n3. three\n4. four\n\n```archflow\n{}\n```\n",
+        encoding="utf-8")
+
+    assert check.check_flow_shaped_sections(tmp_path) == []
+
+
+def test_a_couple_of_numbered_items_is_not_a_pipeline(tmp_path):
+    """A two-item list is a list. Flagging it would make the check cry wolf."""
+    d = tmp_path / "docs"
+    d.mkdir()
+    (d / "ARCHITECTURE.md").write_text(
+        "---\ntitle: T\nstatus: active\ncreated: 2026-01-01\n"
+        "last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: x\n---\n\n"
+        "1. one\n2. two\n", encoding="utf-8")
+
+    assert check.check_flow_shaped_sections(tmp_path) == []
