@@ -15,7 +15,7 @@ import subprocess
 from pathlib import Path
 
 from . import world
-from .model import RunResult, ToolCall
+from .model import RunResult, ToolCall, ToolResult
 
 DEFAULT_ALLOWED = ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "TodoWrite"]
 DEFAULT_TIMEOUT = 240
@@ -25,14 +25,32 @@ def cli_available() -> bool:
     return shutil.which("claude") is not None
 
 
-def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[ToolCall], str]:
+def _result_text(block: dict) -> str:
+    """A tool_result's content is either a plain string or a list of content blocks."""
+    c = block.get("content")
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):
+        return "\n".join(x.get("text", "") for x in c if isinstance(x, dict))
+    return ""
+
+
+def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[ToolCall],
+                                        list[ToolResult], str]:
     """Parse `--output-format stream-json` lines into (any_plugin_loaded, loaded_plugin_names,
-    skills, errors, tool_calls, final_text)."""
+    skills, errors, tool_calls, tool_results, final_text).
+
+    Tool *results* arrive on `user` events and are matched back to the tool that produced them
+    via tool_use_id. For an Agent/Task call that is the subagent's own output — what to assert
+    on when a subagent's verdict is the behaviour under test, since `final_text` is only the
+    orchestrator's paraphrase of it."""
     skills: list[str] = []
     errors: list = []
     loaded_plugins: list[str] = []
     plugin_loaded = False
     tool_calls: list[ToolCall] = []
+    tool_results: list[ToolResult] = []
+    id_to_name: dict[str, str] = {}
     final_text = ""
     for line in stdout.splitlines():
         line = line.strip()
@@ -53,9 +71,16 @@ def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[T
             for block in (ev.get("message", {}).get("content", []) or []):
                 if isinstance(block, dict) and block.get("type") == "tool_use":
                     tool_calls.append(ToolCall(name=block.get("name", ""), input=block.get("input", {}) or {}))
+                    if block.get("id"):
+                        id_to_name[block["id"]] = block.get("name", "")
+        elif t == "user":
+            for block in (ev.get("message", {}).get("content", []) or []):
+                if isinstance(block, dict) and block.get("type") == "tool_result":
+                    name = id_to_name.get(block.get("tool_use_id", ""), "")
+                    tool_results.append(ToolResult(name=name, text=_result_text(block)))
         elif t == "result":
             final_text = ev.get("result", "") or final_text
-    return plugin_loaded, loaded_plugins, skills, errors, tool_calls, final_text
+    return plugin_loaded, loaded_plugins, skills, errors, tool_calls, tool_results, final_text
 
 
 def run_skill(
@@ -107,11 +132,13 @@ def run_skill(
         stdout = e.stdout.decode() if isinstance(e.stdout, bytes) else (e.stdout or "")
         exit_ok = False
 
-    plugin_loaded, loaded_plugins, skills, errors, tool_calls, final_text = _parse_stream(stdout)
+    (plugin_loaded, loaded_plugins, skills, errors,
+     tool_calls, tool_results, final_text) = _parse_stream(stdout)
     after = world.snapshot(fixture_dir)
 
     return RunResult(
         plugin_loaded=plugin_loaded, loaded_plugins=loaded_plugins, skills=skills,
-        plugin_errors=errors, tool_calls=tool_calls, final_text=final_text,
+        plugin_errors=errors, tool_calls=tool_calls, tool_results=tool_results,
+        final_text=final_text,
         exit_ok=exit_ok, fixture_path=str(fixture_dir), before=before, after=after,
     )

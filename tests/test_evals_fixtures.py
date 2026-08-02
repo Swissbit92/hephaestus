@@ -137,6 +137,11 @@ def test_qa_deleted_tests_is_green_at_head_but_shrunken_vs_base(tmp_path):
     assert (base_passed, base_failed) == (4, 0)
     assert head_failed == 0                    # nothing fails — the trap
     assert head_passed < base_passed           # yet coverage regressed 4 -> 2
+    # The covered code must SURVIVE, or the removal is a legitimate refactor and
+    # CONDITIONAL_PASS is a correct verdict rather than a miss.
+    src = (repo / "widget.py").read_text(encoding="utf-8")
+    assert "def perimeter" in src, "perimeter() must still ship — otherwise dropping its tests is fine"
+    assert "perimeter" not in (repo / "tests" / "test_widget.py").read_text(encoding="utf-8")
 
 
 def test_develop_full_declares_the_invariant_and_has_a_consumer(tmp_path):

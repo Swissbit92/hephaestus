@@ -165,6 +165,36 @@ def final_text_not_matching(run: RunResult, pattern: str, ignore_case: bool = Tr
     return (not hit), f"final text free of /{pattern}/" if not hit else f"final text matched forbidden /{pattern}/"
 
 
+def _result_texts(run: RunResult, tool: str | None) -> list[str]:
+    return [tr.text for tr in run.tool_results if tool is None or tr.name == tool]
+
+
+def tool_result_matching(run: RunResult, pattern: str, tool: str | None = None,
+                         ignore_case: bool = True) -> tuple[bool, str]:
+    """A tool's own returned output matches. Prefer this over `final_text_*` whenever a
+    SUBAGENT's behaviour is what's under test: `final_text` is the orchestrator's paraphrase,
+    which varies run to run even when the subagent's verdict does not — gating on it measures
+    the retelling, not the thing."""
+    flags = re.I if ignore_case else 0
+    texts = _result_texts(run, tool)
+    if not texts:
+        return False, f"no tool_result captured{f' for {tool}' if tool else ''}"
+    hits = [t for t in texts if re.search(pattern, t, flags)]
+    return bool(hits), (f"{len(hits)}/{len(texts)} result(s) matched /{pattern}/" if hits
+                        else f"no {tool or 'tool'} result matched /{pattern}/")
+
+
+def tool_result_not_matching(run: RunResult, pattern: str, tool: str | None = None,
+                             ignore_case: bool = True) -> tuple[bool, str]:
+    flags = re.I if ignore_case else 0
+    texts = _result_texts(run, tool)
+    if not texts:
+        return False, f"no tool_result captured{f' for {tool}' if tool else ''}"
+    hits = [t for t in texts if re.search(pattern, t, flags)]
+    return (not hits), (f"no {tool or 'tool'} result matched /{pattern}/" if not hits
+                        else f"{len(hits)} result(s) matched forbidden /{pattern}/")
+
+
 def tool_called(run: RunResult, name: str) -> tuple[bool, str]:
     ok = any(tc.name == name for tc in run.tool_calls)
     return ok, f"{name} called" if ok else f"{name} never called"
@@ -209,6 +239,8 @@ CHECKS = {
     "file_frontmatter_or_absent": file_frontmatter_or_absent,
     "final_text_matching": final_text_matching,
     "final_text_not_matching": final_text_not_matching,
+    "tool_result_matching": tool_result_matching,
+    "tool_result_not_matching": tool_result_not_matching,
     "tool_called": tool_called,
     "tool_not_called": tool_not_called,
     "bash_matching": bash_matching,

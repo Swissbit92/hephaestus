@@ -128,7 +128,19 @@ is the absence of evidence.
 
 ## Verdict Format
 
-Always end with exactly one verdict:
+**Your final line must be machine-readable, exactly one of:**
+
+```
+QA-VERDICT: PASS
+QA-VERDICT: CONDITIONAL_PASS
+QA-VERDICT: REJECT
+```
+
+Nothing after it. A verdict that has to be inferred from prose gets inferred differently by
+different readers — and by the same reader on different days. Emit the token, then the reader
+does not have to interpret you.
+
+Above that line, give the human-readable verdict and its reasoning:
 
 ### PASS
 All checks passed. Correct, complete, and safe to proceed.

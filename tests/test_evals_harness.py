@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from harness import reliability, report, scoring, judge
-from harness.model import Criterion, RunResult, ToolCall, WorldSnapshot
+from harness.model import Criterion, RunResult, ToolCall, ToolResult, WorldSnapshot
 
 
 # --------------------------------------------------------------------------- reliability
@@ -161,6 +161,40 @@ def test_final_text_checks_handle_empty_output():
     """No output must not silently satisfy a 'must say REJECT' claim."""
     assert scoring.final_text_matching(RunResult(final_text=""), pattern=r"\bREJECT\b")[0] is False
     assert scoring.final_text_not_matching(RunResult(final_text=""), pattern=r"\bREJECT\b")[0] is True
+
+
+# --- tool results (a subagent's OWN output, not the orchestrator's paraphrase)
+def _res(*pairs) -> RunResult:
+    return RunResult(tool_results=[ToolResult(name=n, text=t) for n, t in pairs])
+
+
+def test_tool_result_matching_reads_the_subagents_own_output():
+    r = _res(("Bash", "3 passed"), ("Agent", "...reasoning...\nQA-VERDICT: REJECT"))
+    assert scoring.tool_result_matching(r, pattern=r"QA-VERDICT:\s*REJECT", tool="Agent")[0] is True
+    assert scoring.tool_result_not_matching(r, pattern=r"QA-VERDICT:\s*REJECT", tool="Agent")[0] is False
+
+
+def test_tool_result_is_unaffected_by_the_orchestrators_wording():
+    """The whole point: the subagent rejected, and it does not matter how the parent
+    summarised it. This is what made the final_text-based scenarios bounce."""
+    r = RunResult(final_text="Looks fine to me, nothing blocking.",
+                  tool_results=[ToolResult(name="Agent", text="QA-VERDICT: REJECT")])
+    assert scoring.final_text_matching(r, pattern=r"\bREJECT\b", ignore_case=False)[0] is False
+    assert scoring.tool_result_matching(r, pattern=r"QA-VERDICT:\s*REJECT", tool="Agent")[0] is True
+
+
+def test_tool_result_filters_by_tool():
+    """A Bash result mentioning the token must not satisfy a claim about the subagent."""
+    r = _res(("Bash", "grep QA-VERDICT: REJECT qa-gatekeeper.md"))
+    assert scoring.tool_result_matching(r, pattern=r"QA-VERDICT:\s*REJECT", tool="Agent")[0] is False
+
+
+def test_tool_result_absent_is_a_failure_in_both_directions():
+    """A wrong tool name (or a run where the subagent was never called) must not pass a
+    'must reject' claim NOR a 'must not reject' claim — absence of evidence is not either."""
+    empty = RunResult()
+    assert scoring.tool_result_matching(empty, pattern="x", tool="Agent")[0] is False
+    assert scoring.tool_result_not_matching(empty, pattern="x", tool="Agent")[0] is False
 
 
 # --- tool calls

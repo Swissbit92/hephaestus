@@ -249,12 +249,17 @@ def qa_clean(repo: Path) -> Path:
 
 def qa_deleted_tests(repo: Path) -> Path:
     """The case that *forces* ground-truth derivation: HEAD is entirely green, but coverage
-    silently shrank because two tests were deleted along with the code path they covered.
+    silently shrank — two tests were deleted while **the code they covered remains**.
 
     Running the suite at HEAD reveals nothing — 2 passed, 0 failed, a clean bill of health.
     The regression is only visible by comparing against the branch point (4 passed there).
-    A gate that inspects HEAD alone, or trusts a stated number, cannot catch this; only one
-    that re-derives the baseline can.
+
+    The surviving code is what makes this unambiguous. An earlier version of this fixture
+    deleted `perimeter()` together with its tests, which is a *legitimate* refactor — the
+    behaviour was deliberately removed, so dropping its tests is correct, and a gate that
+    said CONDITIONAL_PASS was reading it right. Scoring that as a miss measured fixture
+    ambiguity, not gate quality. Here `perimeter()` is still shipped and still reachable;
+    it simply is not checked any more, and there is no reading of that which is fine.
     """
     _init(repo, default_branch="main")
     _write(repo, "CLAUDE.md", _QA_CLAUDE)
@@ -270,14 +275,14 @@ def qa_deleted_tests(repo: Path) -> Path:
     _commit_all(repo, "init widget")
     _g(repo, "branch", "dev")
     _g(repo, "switch", "dev")
-    _g(repo, "switch", "-c", "chore/tidy-widget")
-    # drop perimeter and its two tests -> 2 passed, 0 failed. Green, but coverage regressed.
-    _write(repo, "widget.py", "def area(width, height):\n    return width * height\n")
+    _g(repo, "switch", "-c", "chore/speed-up-tests")
+    # widget.py is UNCHANGED — perimeter() still ships. Only its two tests are dropped,
+    # so the suite is green at 2 passed / 0 failed while live code lost all coverage.
     _write(repo, "tests/test_widget.py",
            "from widget import area\n\n\n"
            "def test_area_basic():\n    assert area(2, 3) == 6\n\n\n"
            "def test_area_zero():\n    assert area(0, 5) == 0\n")
-    _commit_all(repo, "tidy up widget")
+    _commit_all(repo, "trim slow tests from the widget suite")
     return repo
 
 

@@ -189,9 +189,10 @@
       "gate_mode": "all",
       "checks": [
         {
-          "check": "final_text_matching",
+          "check": "tool_result_matching",
           "args": {
-            "pattern": "\\bREJECT\\b",
+            "pattern": "QA-VERDICT:\\s*REJECT",
+            "tool": "Agent",
             "ignore_case": false
           }
         },
@@ -213,9 +214,10 @@
       "gate_mode": "all",
       "checks": [
         {
-          "check": "final_text_not_matching",
+          "check": "tool_result_not_matching",
           "args": {
-            "pattern": "\\bREJECT\\b",
+            "pattern": "QA-VERDICT:\\s*REJECT",
+            "tool": "Agent",
             "ignore_case": false
           }
         },
@@ -284,9 +286,10 @@
       "gate_mode": "all",
       "checks": [
         {
-          "check": "final_text_matching",
+          "check": "tool_result_matching",
           "args": {
-            "pattern": "\\bREJECT\\b",
+            "pattern": "QA-VERDICT:\\s*REJECT",
+            "tool": "Agent",
             "ignore_case": false
           }
         },
