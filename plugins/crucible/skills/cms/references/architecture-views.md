@@ -268,6 +268,63 @@ tempting and most rotten things to put in one. Prefer what is true because of a
 coloured is a row where nothing is. And check the semantics before reaching for
 amber: a safety feature being *on* is not a warning.
 
+## `archplot` — the mechanism figure
+
+Some things a page asserts are behaviours over a continuum, and a box-and-arrow
+diagram cannot hold them: *the position is indifferent to price*, *the gap
+between the thresholds is deliberate*, *the threshold is a curve, not a number*.
+`archplot` draws those.
+
+```json
+{
+  "schematic": true,
+  "caption": "The two legs are mirror images, so what you own never moves with price.",
+  "xlabel": "time \u2192",
+  "series": [
+    {"label": "price", "axis": "upper", "tone": "faint", "walk": {"seed": 7, "vol": 0.05}},
+    {"label": "spot leg", "tone": "good", "walk": {"seed": 7, "vol": 0.05}},
+    {"label": "perp leg", "tone": "bad", "walk": {"seed": 7, "vol": 0.05, "mirror": true}},
+    {"label": "net", "tone": "ink", "width": 2, "ramp": 0}
+  ]
+}
+```
+
+A series carries `points` (authored numbers), `walk` (a seeded random walk) or
+`ramp` (a straight line to a value). `tone` is one of `good` / `bad` / `accent` /
+`ink` / `faint` — theme variables, not colours, so the figure survives both
+themes; anything else fails the render. `axis: "upper"` puts a context series in
+its own strip above the main plot. `mirror` negates a walk from the *same* seed,
+which is how two legs stay exact mirrors instead of drifting apart.
+
+Optional: `thresholds` (labelled horizontal levels), `bands` (a shaded y-range),
+`marks` (labelled vertical moments), and `spans` — shaded bars underneath, whose
+extent is **computed by running a two-threshold gate over a named series**:
+
+```json
+"spans": [{"label": "sleeve active",
+           "gate": {"series": "btc funding", "on": 1.0, "off": 0.0}}]
+```
+
+That is the point of `spans`: the bars are derived from the drawn line, so the
+picture cannot quietly disagree with itself the way hand-placed rectangles can.
+
+**Generated data must declare `"schematic": true`, and the render refuses
+otherwise.** A curve drawn from a seed that reads as a measurement is the one
+way a figure like this actively misleads, so the claim is the author's to make
+explicitly. The badge appears in the caption. Note the limit honestly: the rule
+catches *generated* data, not authored numbers that happen to be invented — mark
+those `schematic` yourself.
+
+**Layout is the primitive's job, not yours.** The right-hand gutter is measured
+from the longest label so nothing is clipped; every gutter label — series end,
+threshold, band, span — is placed in one collision-avoiding pass; each label
+rides its own line's endpoint. All three of those were defects in hand-drawn
+SVG before this existed, and two of them recurred on the second figure.
+
+**Reach for ` ```html ` instead when the figure is not a plot.** The escape
+hatch is still there and still passes through untouched — a ladder, a state
+machine, a board. `archplot` is for series against an axis.
+
 ## Pills
 
 `[[ok:Passing]]`, `[[warn:Partial]]`, `[[bad:Global]]`, `[[mute:N/A]]` — inline,

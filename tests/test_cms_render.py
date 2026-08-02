@@ -1037,3 +1037,119 @@ class TestNodeDetail:
 
         assert "The node&#x27;s own words." in page or "The node's own words." in page
         assert 'data-note="The flow&#x27;s words."' not in page
+
+
+# --- archplot: the mechanism figure without the hand-rolled SVG ---------------
+# Every assertion below is a defect that actually happened while these figures
+# were being drawn by hand. The primitive exists to make them unrepeatable.
+
+def _plot(**over):
+    spec = {"series": [{"label": "a", "tone": "good", "points": [0, 1, 2, 1]}]}
+    spec.update(over)
+    return spec
+
+
+def test_generated_data_must_be_declared_schematic():
+    """A curve drawn from a seed that reads as a measurement is the one failure
+    mode of a figure like this, so the render refuses rather than guessing."""
+    spec = _plot(series=[{"label": "walk", "walk": {"seed": 1}}])
+
+    with pytest.raises(render_arch.ArchPlotError, match="schematic"):
+        render_arch.render_plot(spec)
+
+
+def test_generated_data_renders_once_declared():
+    spec = _plot(schematic=True, series=[{"label": "walk", "walk": {"seed": 1}}])
+
+    out = render_arch.render_plot(spec)
+
+    assert "<polyline" in out and "schem" in out
+
+
+def test_explicit_points_need_no_declaration():
+    """Authored numbers are the author's claim to defend; only generated ones
+    are forced to carry the badge."""
+    assert "<polyline" in render_arch.render_plot(_plot())
+
+
+def test_an_unlabelled_series_is_refused():
+    with pytest.raises(render_arch.ArchPlotError, match="no label"):
+        render_arch.render_plot(_plot(series=[{"points": [0, 1]}]))
+
+
+def test_an_unknown_tone_is_refused():
+    """Tones map to the theme's palette. A free-form colour is how a figure
+    ends up failing contrast in one theme and not the other."""
+    with pytest.raises(render_arch.ArchPlotError, match="tone"):
+        render_arch.render_plot(_plot(series=[{"label": "a", "tone": "hotpink",
+                                               "points": [0, 1]}]))
+
+
+def test_a_hedged_leg_is_the_exact_negation_of_its_leg():
+    """Two seeds would let the legs drift apart and quietly stop being a hedge."""
+    gen = {"seed": 5, "vol": 0.1}
+    a = render_arch._plot_walk(gen, 40)
+    b = render_arch._plot_walk({**gen, "mirror": True}, 40)
+
+    assert [round(x + y, 12) for x, y in zip(a, b)] == [0.0] * 40
+
+
+def test_gated_spans_are_derived_from_the_line_not_placed_by_hand():
+    vals = [2.0, 0.5, 0.4, -1.0, -0.5, 2.0]
+
+    assert render_arch._plot_gate(vals, on=1.0, off=0.0) == [
+        True,      # crossed on
+        True,      # inside the band: holds
+        True,      # still inside: still holds
+        False,     # clean exit below off
+        False,     # back inside the band from below: still off
+        True,      # crossed on again
+    ]
+
+
+def test_a_span_gating_on_a_missing_series_is_refused():
+    spec = _plot(spans=[{"label": "x", "gate": {"series": "nope", "on": 1, "off": 0}}])
+
+    with pytest.raises(render_arch.ArchPlotError, match="nope"):
+        render_arch.render_plot(spec)
+
+
+def _gutter_ys(svg):
+    """Baselines of the labels in the right-hand gutter."""
+    xs = [(float(m.group(1)), float(m.group(2)))
+          for m in re.finditer(r'<text class="nds" x="([\d.]+)" y="([\d.]+)"', svg)]
+    right = max(x for x, _ in xs)
+    return sorted(y for x, y in xs if x == right)
+
+
+def test_gutter_labels_never_land_on_each_other():
+    """The real defect: a series endpoint was nudged clear of other series but
+    not of the threshold labels, so 'price' and 'Close, actual' overprinted and
+    both became unreadable."""
+    spec = _plot(
+        series=[{"label": "price", "tone": "ink", "points": [5.0, 5.0]}],
+        thresholds=[{"value": 5.0, "label": "Close, actual", "tone": "good"},
+                    {"value": 5.0, "label": "Close, recorded", "tone": "bad"}])
+
+    ys = _gutter_ys(render_arch.render_plot(spec))
+
+    assert len(ys) == 3
+    assert all(b - a >= 10 for a, b in zip(ys, ys[1:])), ys
+
+
+def test_the_right_gutter_is_wide_enough_for_its_longest_label():
+    """Clipping was the first thing that went wrong by hand: the label was drawn
+    past the viewBox and simply vanished."""
+    long = "a considerably longer series label than usual"
+    svg = render_arch.render_plot(_plot(series=[{"label": long, "tone": "good",
+                                                 "points": [0, 1]}]))
+    width = float(re.search(r'viewBox="0 0 ([\d.]+)', svg).group(1))
+    x = max(float(m.group(1))
+            for m in re.finditer(r'<text class="nds" x="([\d.]+)"', svg))
+
+    assert x + len(long) * 5.6 <= width
+
+
+def test_an_empty_plot_is_refused():
+    with pytest.raises(render_arch.ArchPlotError):
+        render_arch.render_plot({"series": []})

@@ -130,6 +130,7 @@ def render_markdown(md: str) -> str:
     # the page reads, diagram first and then the walk through it.
     views: dict[str, dict] = {}
     fig_index = 0
+    plot_index = 0
     # A flow step's note explains the very box it points at, and the archview is
     # emitted before the archflow below it is parsed — so the notes are gathered
     # in one cheap pre-pass rather than making the author write each sentence
@@ -175,6 +176,9 @@ def render_markdown(md: str) -> str:
                 out.append(render_diagram(spec, fig_index))
             elif lang == "archstat":
                 out.append(render_stats(json.loads(body)))
+            elif lang == "archplot":
+                plot_index += 1
+                out.append(render_plot(json.loads(body), plot_index))
             elif lang == "archflow":
                 out.append(render_flow(json.loads(body), views, claimed_flows))
             elif lang == "html":
@@ -778,6 +782,233 @@ class ArchStatError(ValueError):
     """A gauge row that would render as a blank or a lie."""
 
 
+class ArchPlotError(ValueError):
+    """A plot that would mislead: unlabelled, unscaled, or synthetic-as-measured."""
+
+
+PLOT_TONES = {"good": "--phos", "bad": "--red", "accent": "--accent",
+              "ink": "--txt", "faint": "--edge2"}
+
+
+def _plot_walk(gen: dict, n: int) -> list[float]:
+    """A deterministic random walk from a seed.
+
+    Deterministic because a figure that redraws differently on every render is
+    a diff with no meaning. The seed is written in the document, so the picture
+    is reproducible from its source like everything else on the page.
+    """
+    import random
+    rng = random.Random(gen.get("seed", 0))
+    vol, drift = float(gen.get("vol", 0.01)), float(gen.get("drift", 0.0))
+    v, out = 0.0, []
+    for _ in range(n):
+        v += rng.gauss(drift, vol)
+        out.append(v)
+    # A hedged leg is the negation of the leg it hedges. Expressing that as a
+    # flag over the same seed keeps the two lines exact mirrors — drawing them
+    # from two seeds would let them drift apart and quietly stop being a hedge.
+    return [-x for x in out] if gen.get("mirror") else out
+
+
+def _plot_gate(vals: list[float], on: float, off: float) -> list[bool]:
+    """Run a two-threshold gate over a series, exactly as the code under test
+    would. The shaded spans are therefore derived from the drawn line rather
+    than positioned by hand — the two cannot drift apart and quietly disagree.
+    """
+    out, cur = [], False
+    for v in vals:
+        if v > on:
+            cur = True
+        elif v < off:
+            cur = False
+        out.append(cur)
+    return out
+
+
+def render_plot(spec: dict, fig: int = 1) -> str:
+    """A labelled line plot: the mechanism socket, without the hand-rolled SVG.
+
+    Exists because the alternative is authoring raw SVG per figure, which costs
+    the same effort every time and silently reintroduces the same three defects:
+    end-labels clipped by the viewBox, a label sitting beside the wrong line
+    because it was positioned by hand, and a tone that fails contrast. Those are
+    layout problems, so the layout engine should own them, not the author.
+    """
+    series = spec.get("series") or []
+    if not series:
+        raise ArchPlotError("archplot needs at least one series")
+
+    n = max((len(s["points"]) for s in series if s.get("points")), default=0) \
+        or int(spec.get("samples", 120))
+    generated = False
+    for k, s in enumerate(series, 1):
+        if not s.get("label"):
+            raise ArchPlotError(f"series {k} has no label; an unlabelled line "
+                                f"teaches nothing")
+        if "points" not in s:
+            if "walk" not in s and "ramp" not in s:
+                raise ArchPlotError(
+                    f"series {s['label']!r} has no 'points', 'walk' or 'ramp'")
+            generated = True
+            s["points"] = (_plot_walk(s["walk"], n) if "walk" in s else
+                           [i / (n - 1) * float(s["ramp"]) for i in range(n)])
+        tone = s.get("tone", "ink")
+        if tone not in PLOT_TONES:
+            raise ArchPlotError(f"series {s['label']!r} tone {tone!r} is not one "
+                                f"of {sorted(PLOT_TONES)}")
+    # The invariant worth having: a picture drawn from a seed must never be
+    # readable as a measurement. Marking it is the author's call to make
+    # explicitly, so the render refuses rather than guessing.
+    if generated and not spec.get("schematic"):
+        raise ArchPlotError(
+            "this plot generates its own data, so it must set \"schematic\": true — "
+            "a synthetic curve that reads as a measurement is the one failure mode "
+            "of a figure like this")
+
+    W = int(spec.get("width", 820))
+    H = int(spec.get("height", 260))
+    LEFT = 56
+    # The gutter is measured from the longest label rather than guessed, which
+    # is what stops the end-labels being clipped by the viewBox.
+    labels = [s["label"] for s in series] + \
+             [t.get("label", "") for t in spec.get("thresholds", [])]
+    RIGHT = max(70, int(max((len(x) for x in labels), default=8) * 5.6) + 16)
+    spans = spec.get("spans") or []
+    # Span bars sit below the plot and the x-label sits below those. Reserving
+    # for only one of the two is how the label ends up drawn across the bars.
+    BOT = H - (46 if spans else 18)
+
+    upper = [s for s in series if s.get("axis") == "upper"]
+    main = [s for s in series if s.get("axis") != "upper"]
+    top = 16
+    ub = top + (H * 0.30 if upper else 0)
+    mid = (ub + BOT) / 2
+
+    def X(i: int) -> float:
+        return LEFT + i * (W - LEFT - RIGHT) / max(n - 1, 1)
+
+    lo = min((min(s["points"]) for s in main), default=-1.0)
+    hi = max((max(s["points"]) for s in main), default=1.0)
+    for t in spec.get("thresholds", []):
+        lo, hi = min(lo, t["value"]), max(hi, t["value"])
+    rng_ = (hi - lo) or 1.0
+    pad = rng_ * 0.12
+
+    def Y(v: float) -> float:
+        return BOT - (v - lo + pad) / (rng_ + 2 * pad) * (BOT - ub)
+
+    p = [f'<div class="figwrap"><svg id="fig-p{fig}" viewBox="0 0 {W} {H}" '
+         f'width="{W}" height="{H}" role="img" aria-label='
+         f'"{html.escape(spec.get("alt") or spec.get("caption", "plot"))}">']
+
+    # Every label in the right-hand gutter — band, threshold, series end, span —
+    # competes for the same column, so they are collected here and placed in one
+    # pass at the end. Deconflicting only series against each other was a real
+    # defect: a series endpoint landed on top of a threshold label and both
+    # became unreadable.
+    gutter: list[tuple[float, str, str]] = []
+
+    for b in spec.get("bands", []):
+        y0, y1 = Y(b["to"]), Y(b["from"])
+        p.append(f'<rect x="{LEFT}" y="{y0:.1f}" width="{X(n-1)-LEFT:.1f}" '
+                 f'height="{abs(y1-y0):.1f}" fill="var(--txt)" opacity=".05"/>')
+        if b.get("label"):
+            gutter.append(((y0 + y1) / 2, b["label"], "var(--faint)"))
+
+    # Vertical marks: a moment on the x-axis rather than a level on the y-axis.
+    # Some mechanisms are about *when* something happens, and a horizontal
+    # threshold cannot say that.
+    for k, mk in enumerate(spec.get("marks", [])):
+        x = X(int(mk["at"]))
+        col = f'var({PLOT_TONES[mk.get("tone", "faint")]})'
+        p.append(f'<line x1="{x:.1f}" y1="{ub:.1f}" x2="{x:.1f}" y2="{BOT:.1f}" '
+                 f'stroke="{col}" stroke-dasharray="3 3" opacity=".8"/>')
+        if mk.get("label"):
+            # Alternate the label baseline so two nearby marks do not collide.
+            ly = ub - 4 + (10 if k % 2 else 0)
+            anchor = "end" if x > W - RIGHT - 40 else "start"
+            p.append(f'<text class="nds" x="{x + (-4 if anchor == "end" else 4):.1f}" '
+                     f'y="{ly:.1f}" text-anchor="{anchor}" fill="{col}">'
+                     f'{html.escape(mk["label"])}</text>')
+
+    for t in spec.get("thresholds", []):
+        y, col = Y(t["value"]), f'var({PLOT_TONES[t.get("tone", "faint")]})'
+        p.append(f'<line x1="{LEFT}" y1="{y:.1f}" x2="{X(n-1):.1f}" y2="{y:.1f}" '
+                 f'stroke="{col}" stroke-dasharray="5 4"/>')
+        if t.get("label"):
+            gutter.append((y, t["label"], col))
+
+    if upper:
+        ulo = min(min(s["points"]) for s in upper)
+        uhi = max(max(s["points"]) for s in upper)
+        urng = (uhi - ulo) or 1.0
+        for s in upper:
+            pts = " ".join(f"{X(i):.1f},{top + 8 + (1-(v-ulo)/urng)*(ub-top-18):.1f}"
+                           for i, v in enumerate(s["points"]))
+            p.append(f'<polyline fill="none" stroke="var({PLOT_TONES[s.get("tone","faint")]})" '
+                     f'stroke-width="1.2" points="{pts}"/>')
+            p.append(f'<text class="nds" x="{LEFT}" y="{top}">'
+                     f'{html.escape(s["label"])}</text>')
+
+    # Endpoint labels, nudged apart when two lines finish close together — the
+    # label belongs to its own line, and overlapping text belongs to neither.
+    for s in main:
+        col = f'var({PLOT_TONES[s.get("tone", "ink")]})'
+        pts = " ".join(f"{X(i):.1f},{Y(v):.1f}" for i, v in enumerate(s["points"]))
+        dash = ' stroke-dasharray="4 3"' if s.get("dash") else ""
+        p.append(f'<polyline fill="none" stroke="{col}" stroke-width='
+                 f'"{s.get("width", 1.4)}"{dash} points="{pts}"/>')
+        gutter.append((Y(s["points"][-1]), s["label"], col))
+
+    by_label = {s["label"]: s for s in series}
+    for sp in spans:
+        g, src = sp.get("gate") or {}, None
+        src = by_label.get(g.get("series", ""))
+        if not src:
+            raise ArchPlotError(
+                f"span {sp.get('label')!r} gates on series {g.get('series')!r}, "
+                f"which is not one of {sorted(by_label)}")
+        state = _plot_gate(src["points"], g["on"], g["off"])
+        y, h = BOT + 12, 16
+        i = 0
+        while i < n:
+            if state[i]:
+                j = i
+                while j + 1 < n and state[j + 1]:
+                    j += 1
+                p.append(f'<rect x="{X(i):.1f}" y="{y}" '
+                         f'width="{max(X(j)-X(i), 2):.1f}" height="{h}" '
+                         f'fill="var(--phos)" opacity=".3"/>')
+                i = j + 1
+            else:
+                i += 1
+        if sp.get("label"):
+            gutter.append((y + h / 2, sp["label"], "var(--faint)"))
+
+    placed: list[float] = []
+    for y, text, col in sorted(gutter, key=lambda g: g[0]):
+        while any(abs(y - q) < 11 for q in placed):
+            y += 11
+        placed.append(y)
+        p.append(f'<text class="nds" x="{X(n-1)+8:.0f}" y="{y+3:.1f}" '
+                 f'fill="{col}">{html.escape(text)}</text>')
+
+    if spec.get("xlabel"):
+        p.append(f'<text class="nds" x="{LEFT}" y="{H-5}">'
+                 f'{html.escape(spec["xlabel"])}</text>')
+    p.append("</svg>")
+    cap = spec.get("caption", "")
+    if spec.get("schematic"):
+        cap = ('<span class="schem">schematic</span> ' + _inline(cap)) if cap \
+            else '<span class="schem">schematic</span>'
+    elif cap:
+        cap = _inline(cap)
+    if cap:
+        p.append(f'<div class="figcap">{cap}</div>')
+    p.append("</div>")
+    return "".join(p)
+
+
 class ArchFlowError(ValueError):
     """A flow points at something that is not in the diagram.
 
@@ -1104,6 +1335,9 @@ td{{color:var(--mid)}} td code{{color:var(--phos)}}
   radial-gradient(ellipse at 50% 40%,#151D28 0%,#0A0E13 82%);overflow-x:auto}}
 .figwrap svg{{display:block;margin:0 auto}}
 .figcap{{border-top:1px solid var(--edge);padding:.45rem .8rem;font-size:.66rem;color:var(--faint)}}
+.schem{{display:inline-block;border:1px solid var(--edge2);border-radius:2px;
+  padding:0 .3rem;margin-right:.35rem;font-size:.6rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--mid)}}
 .nd{{fill:var(--panel2);stroke:var(--edge2);stroke-width:1}}
 .nd-store{{stroke:var(--phos);fill:#0F1C1B}}
 .nd-external{{stroke:var(--edge2);stroke-dasharray:4 3;fill:#0E141C}}
@@ -1623,6 +1857,36 @@ def build_text(md_path: Path) -> str:
                         what = st.get("node") or " -> ".join(st.get("edge", []))
                         note = f' — {st["note"]}' if st.get("note") else ""
                         out.append(f"  {k}. {what}{note}")
+            elif lang == "archplot":
+                # A picture is the one thing this file cannot carry, so it
+                # carries what the picture asserts instead.
+                try:
+                    spec = json.loads("\n".join(buf))
+                except ValueError:
+                    continue
+                kind = "schematic" if spec.get("schematic") else "plot"
+                out.append(f'[{kind}] {spec.get("caption", "")}'.rstrip())
+                for s in spec.get("series", []):
+                    out.append(f'  - line: {s["label"]}')
+                for t in spec.get("thresholds", []):
+                    out.append(f'  - threshold: {t.get("label", t["value"])}'
+                               f' at {t["value"]}')
+                for b in spec.get("bands", []):
+                    out.append(f'  - band {b["from"]} to {b["to"]}'
+                               f'{": " + b["label"] if b.get("label") else ""}')
+                for sp in spec.get("spans", []):
+                    g = sp.get("gate") or {}
+                    out.append(f'  - shaded where {g.get("series")} is gated on'
+                               f' (on above {g.get("on")}, off below {g.get("off")}):'
+                               f' {sp.get("label", "")}')
+            elif lang == "archstat":
+                try:
+                    spec = json.loads("\n".join(buf))
+                except ValueError:
+                    continue
+                for g in spec:
+                    note = f' ({g["note"]})' if g.get("note") else ""
+                    out.append(f'  - {g["label"]}: {g["value"]}{note}')
             elif lang == "html":
                 continue                      # presentation only, no content
             else:

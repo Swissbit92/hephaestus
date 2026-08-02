@@ -142,6 +142,10 @@ impossible instead of merely policed.
 - A fenced ` ```archstat ` block renders a gauge row: the few facts worth having
   before the prose. Values are written, never computed — a gauge row is where
   "STRUCTURE ONLY, NO RUNTIME STATE" usually dies.
+- A fenced ` ```archplot ` block draws a mechanism as a plot: series, thresholds,
+  bands, vertical marks, and gated spans derived from a named series. Generated
+  data must declare `"schematic": true` or the render refuses. Use ` ```html ` when
+  the figure is not a plot.
 - `[[ok:…]]` / `[[warn:…]]` / `[[bad:…]]` / `[[mute:…]]` render inline state
   pills, usable in any table cell. Four states and no more; the label carries the
   meaning so they survive greyscale and print.
