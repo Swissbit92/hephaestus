@@ -416,3 +416,134 @@ def test_a_couple_of_numbered_items_is_not_a_pipeline(tmp_path):
         "1. one\n2. two\n", encoding="utf-8")
 
     assert check.check_flow_shaped_sections(tmp_path) == []
+
+
+# ── content-shape detection ─────────────────────────────────────────────────
+# Half of these assert SILENCE. A shape linter earns its keep by what it does
+# not say: developers tolerate roughly a 5% false-positive rate and stop reading
+# warnings past 20%, so every rule here is paired with the case it must ignore.
+
+def _doc(tmp_path, body):
+    d = tmp_path / "docs"
+    d.mkdir(exist_ok=True)
+    (d / "ARCHITECTURE.md").write_text(
+        "---\ntitle: T\nstatus: active\ncreated: 2026-01-01\n"
+        "last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: x\n---\n\n" + body,
+        encoding="utf-8")
+    return tmp_path
+
+
+def test_an_arrow_cascade_in_a_plain_fence_is_flagged(tmp_path):
+    """The wave the first version of this check missed entirely: six pipelines
+    sitting inside code fences, invisible to a rule that only read prose."""
+    r = _doc(tmp_path, "## P\n\n```\nload -> check -> build -> screen -> emit\n```\n")
+
+    found = check.check_flow_shaped_sections(r)
+
+    assert any("arrow cascade" in f.message for f in found)
+    assert any("archflow" in f.message for f in found)
+
+
+def test_a_shell_pipeline_is_not_a_flow(tmp_path):
+    """`cat x | grep y | sort` is a shell pipe, not a conceptual pipeline. The
+    language tag is what tells them apart."""
+    r = _doc(tmp_path, "## P\n\n```bash\ncat a | grep b -> c\nx -> y -> z -> w -> v\n```\n")
+
+    assert [f for f in check.check_flow_shaped_sections(r)
+            if "arrow cascade" in f.message] == []
+
+
+def test_a_type_signature_fence_is_not_a_flow(tmp_path):
+    r = _doc(tmp_path, "## P\n\n```python\ndef f(a) -> B: ...\ndef g(b) -> C: ...\n"
+                       "def h(c) -> D: ...\ndef i(d) -> E: ...\n```\n")
+
+    assert [f for f in check.check_flow_shaped_sections(r)
+            if "arrow cascade" in f.message] == []
+
+
+def test_a_three_hop_chain_is_prose_shorthand(tmp_path):
+    """'A -> B -> C' is a sentence. Flagging it is how a linter gets ignored."""
+    r = _doc(tmp_path, "## P\n\n```\nload -> check -> emit\n```\n")
+
+    assert [f for f in check.check_flow_shaped_sections(r)
+            if "arrow cascade" in f.message] == []
+
+
+def test_a_term_description_list_is_flagged_as_a_table(tmp_path):
+    r = _doc(tmp_path, "## F\n\n"
+             "- `sleeve` — the discriminator\n"
+             "- `spot_qty` — running total across legs\n"
+             "- `stop_loss_price` — ratchets up, never down\n"
+             "- `avg_entry_price` — weighted across legs\n")
+
+    found = check.check_list_shaped_like_a_table(r)
+
+    assert len(found) == 1
+    assert "two-column table written as a list" in found[0].message
+
+
+def test_three_bullets_are_a_list(tmp_path):
+    """Google and Microsoft both draw the line here: two or three similar items
+    are a list, not a table."""
+    r = _doc(tmp_path, "## F\n\n- `a` — one\n- `b` — two\n- `c` — three\n")
+
+    assert check.check_list_shaped_like_a_table(r) == []
+
+
+def test_a_list_of_config_values_is_not_a_table(tmp_path):
+    """`KEY: \\`value\\`` is a config example. The description side being pure
+    code is the tell."""
+    r = _doc(tmp_path, "## F\n\n- `A` — `1`\n- `B` — `2`\n- `C` — `3`\n- `D` — `4`\n")
+
+    assert check.check_list_shaped_like_a_table(r) == []
+
+
+def test_ordinary_prose_bullets_are_left_alone(tmp_path):
+    r = _doc(tmp_path, "## F\n\n- The first thing that happens here\n"
+                       "- Something else entirely\n- A third unrelated point\n"
+                       "- And a fourth\n")
+
+    assert check.check_list_shaped_like_a_table(r) == []
+
+
+def test_consecutive_numbered_rows_inside_a_table_are_flagged(tmp_path):
+    """The real case: a register of modules where seven of eleven rows are
+    numbered steps. A whole-table ratio rule refuses to call that a flow and
+    misses the sequence buried in it."""
+    r = _doc(tmp_path, "## P\n\n| Module | Purpose |\n|---|---|\n"
+             "| a.py | shared protocol |\n"
+             "| b.py | the runner |\n"
+             "| s1.py | Step 1: scan |\n| s2.py | Step 2: generate |\n"
+             "| s3.py | Step 3: build |\n| s4.py | Step 4: screen |\n")
+
+    found = check.check_table_shaped_like_a_flow(r)
+
+    assert len(found) == 1
+    assert "1..4" in found[0].message
+
+
+def test_a_table_of_non_consecutive_ids_is_not_a_flow(tmp_path):
+    """Ticket numbers are not steps. Consecutiveness is the whole signal."""
+    r = _doc(tmp_path, "## T\n\n| Ref | Note |\n|---|---|\n"
+             "| Step 4 | a |\n| Step 9 | b |\n| Step 2 | c |\n| Step 7 | d |\n")
+
+    assert check.check_table_shaped_like_a_flow(r) == []
+
+
+def test_a_plain_reference_table_is_left_alone(tmp_path):
+    r = _doc(tmp_path, "## T\n\n| Component | Module |\n|---|---|\n"
+             "| Config | config.py |\n| DB | db.py |\n"
+             "| Sizing | sizing.py |\n| State | state.py |\n")
+
+    assert check.check_table_shaped_like_a_flow(r) == []
+
+
+def test_a_doc_that_already_uses_the_right_forms_is_silent(tmp_path):
+    """The end state. All three detections quiet on a doc doing it right."""
+    r = _doc(tmp_path, "## P\n\n```archflow\n{}\n```\n\n"
+             "| Component | Module |\n|---|---|\n| Config | config.py |\n"
+             "| DB | db.py |\n| Sizing | sizing.py |\n")
+
+    assert (check.check_flow_shaped_sections(r)
+            + check.check_list_shaped_like_a_table(r)
+            + check.check_table_shaped_like_a_flow(r)) == []

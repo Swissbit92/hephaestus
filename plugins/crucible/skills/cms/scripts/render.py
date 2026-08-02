@@ -399,10 +399,17 @@ def _place_chain(nodes, order):
 
 
 def _chain_edge(a, b) -> str:
-    """Straight across within a row, straight down at the wrap."""
+    """Straight across within a row, straight down at the wrap.
+
+    Endpoints are rounded to whole pixels because the rects are emitted at zero
+    decimal places and the paths at one: a node placed at x=201.5 renders as
+    `202` while its right edge computes to 349.5, and the checker — reading only
+    what shipped — correctly calls a connector starting there *inside the box*.
+    The geometry was right and the rendering disagreed with it.
+    """
     if abs(a["y"] - b["y"]) < 1:                       # same row, side by side
-        x1 = a["x"] + a["w"] if b["x"] > a["x"] else a["x"]
-        x2 = b["x"] - 5 if b["x"] > a["x"] else b["x"] + b["w"] + 5
+        x1 = round(a["x"] + a["w"]) + 1 if b["x"] > a["x"] else round(a["x"]) - 1
+        x2 = round(b["x"]) - 5 if b["x"] > a["x"] else round(b["x"] + b["w"]) + 5
         yc = a["y"] + a["h"] / 2
         return f"M{x1:.1f} {yc:.1f} L{x2:.1f} {yc:.1f}"
     ax = a["x"] + a["w"] / 2
@@ -593,6 +600,11 @@ def render_diagram(spec: dict, fig: int = 1) -> str:
         nd = g["nd"]
         p.append(f'<g id="f{fig}-nd-{_slug_id(nd["id"])}" '
                  f'data-node="{html.escape(nd["id"])}" '
+                 f'data-label="{html.escape(nd["label"], quote=True)}" '
+                 f'data-sub="{html.escape(nd.get("sub", "") or "", quote=True)}" '
+                 f'data-tech="{html.escape(nd.get("tech", "") or "", quote=True)}" '
+                 f'data-kind="{html.escape(KIND_MEANING.get(nd.get("kind", "module"), "component"), quote=True)}" '
+                 f'tabindex="0" '
                  f'role="graphics-symbol" aria-label="{_node_aria(nd)}">')
         p.append(f'<rect class="nd nd-{nd.get("kind", "module")}" x="{g["x"]:.0f}" '
                  f'y="{g["y"]:.0f}" width="{g["w"]:.0f}" height="{g["h"]:.0f}" rx="3"/>')
@@ -615,6 +627,15 @@ def render_diagram(spec: dict, fig: int = 1) -> str:
 
     p.append("</svg>")
     p.append(_legend(nodes))
+    # A readout on EVERY diagram, not only the ones a flow happens to walk.
+    # "What is this box" is the question every diagram gets asked, and the model
+    # already holds the answer — it was reaching only screen readers.
+    p.append(f'<div class="inspect" data-inspect="fig-f{fig}">'
+             f'<span class="ins-hint">Select a box — or use Tab and Enter — '
+             f'to see what it is.</span>'
+             f'<span class="ins-body" hidden aria-live="polite">'
+             f'<b class="ins-t"></b><span class="ins-k"></span>'
+             f'<span class="ins-s"></span></span></div>')
     p.append(_alt_table(spec))
     if caption:
         p.append(f'<div class="figcap">{_inline(caption)}</div>')
@@ -875,8 +896,14 @@ TEMPLATE = """<meta charset="utf-8">
 </script>
 <style>
 :root{{
-  --void:#060908; --panel:#0C1211; --panel2:#101817;
-  --edge:#1C2827; --edge2:#283735;
+  /* Ink, not phosphor. The green-black CRT read as a costume — a terminal
+     pastiche worn by a document that is not a terminal. These are blue-biased
+     neutrals: the ground of a technical plate, which is what the page actually
+     is. --faint is lifted from the study's #6E7C8C, which measured 3.84:1 on
+     --panel2 and would have re-introduced exactly the contrast bug fixed two
+     versions ago. */
+  --void:#0B0F14; --panel:#121822; --panel2:#18202C;
+  --edge:#25303E; --edge2:#33414F;
   /* Derived, not concatenated. This used to build the tints by appending hex
      alpha to the frontmatter value ({{accent}}18), which silently assumes a
      6-digit hex and produces garbage for any other notation. color-mix in oklch
@@ -886,14 +913,14 @@ TEMPLATE = """<meta charset="utf-8">
   --accent-dim:color-mix(in oklch, var(--accent) 12%, transparent);
   --accent-glow:color-mix(in oklch, var(--accent) 40%, transparent);
   --accent-soft:color-mix(in oklch, var(--accent) 22%, var(--panel));
-  --phos:#4BE38A; --phos-dim:#4BE38A14; --red:#E8664F;
+  --phos:#3DD68C; --phos-dim:color-mix(in oklch, var(--phos) 14%, transparent); --red:#FF6B5B;
   /* Contrast, not taste. The old ramp put --faint at 2.85:1 on --void and --mid
      at 5.62:1; the dimmest tier carries table headers, figure captions and the
      8px sub-labels inside every diagram, so it failed WCAG AA exactly where the
      type is smallest. Lifting --faint alone would have collapsed it into --mid,
      so the whole ramp is re-spaced. Now 5.04 / 8.15 / 14.82 on --void, and the
      tightest of the three still clears 4.5:1 against --panel2. */
-  --txt:#D6E0DD; --mid:#9CA8A5; --faint:#70847E;
+  --txt:#E8EAED; --mid:#A7B2C0; --faint:#7B8897;
   --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
   /* ui-serif resolves to New York on macOS and a real text face elsewhere. No
      webfont, so nothing to block and nothing to wait for. It is here to give
@@ -906,8 +933,9 @@ body{{background:var(--void);color:var(--txt);font-family:var(--mono);
   /* Every digit the same width. This page is mostly numbers in columns, and
      proportional figures make them fail to line up vertically. */
   font-variant-numeric:tabular-nums}}
-body::before{{content:"";position:fixed;inset:0;pointer-events:none;z-index:99;
-  background:repeating-linear-gradient(180deg,transparent 0 2px,rgba(0,0,0,.22) 2px 3px);opacity:.5}}
+/* The scanline overlay is gone. It was the loudest part of the costume, it
+   printed badly, and it sat at z-index 99 over everything including focus
+   rings. */
 .rig{{max-width:70rem;margin:0 auto;padding:0 clamp(.75rem,3vw,1.75rem) 4rem}}
 .bar{{border:1px solid var(--edge);background:linear-gradient(180deg,var(--panel2),var(--panel));
   display:flex;flex-wrap:wrap;align-items:center;gap:.85rem;padding:.8rem 1.1rem;
@@ -1009,14 +1037,14 @@ tbody tr:hover td,tbody tr:hover th{{background:var(--accent-dim)}}
 tbody tr:last-child td{{border-bottom:0}}
 td{{color:var(--mid)}} td code{{color:var(--phos)}}
 .figwrap{{margin:1.1rem 0 0;border:1px solid var(--edge);background:
-  radial-gradient(ellipse at 50% 40%,#0E1614 0%,#070B0A 82%);overflow-x:auto}}
+  radial-gradient(ellipse at 50% 40%,#151D28 0%,#0A0E13 82%);overflow-x:auto}}
 .figwrap svg{{display:block;margin:0 auto}}
 .figcap{{border-top:1px solid var(--edge);padding:.45rem .8rem;font-size:.66rem;color:var(--faint)}}
 .nd{{fill:var(--panel2);stroke:var(--edge2);stroke-width:1}}
-.nd-store{{stroke:var(--phos);fill:#0D1614}}
-.nd-external{{stroke:var(--edge2);stroke-dasharray:4 3;fill:#0A0F0E}}
+.nd-store{{stroke:var(--phos);fill:#0F1C1B}}
+.nd-external{{stroke:var(--edge2);stroke-dasharray:4 3;fill:#0E141C}}
 .nd-service{{stroke:var(--accent)}}
-.nd-secret{{stroke:var(--red);fill:#160C0A}}
+.nd-secret{{stroke:var(--red);fill:#1E1114}}
 .ndl{{font-size:10.5px;fill:var(--txt);font-family:var(--mono)}}
 .nds{{font-size:8px;fill:var(--faint);font-family:var(--mono)}}
 .ndt{{font-size:7.5px;fill:var(--accent);font-family:var(--mono);opacity:.85;letter-spacing:.04em}}
@@ -1047,14 +1075,32 @@ button.pz[disabled]{{opacity:.4;cursor:default;border-color:var(--edge)}}
 .lgi{{display:flex;align-items:center;gap:.35rem}}
 .lgs{{width:15px;height:10px;flex:none;border-radius:2px;
   background:var(--panel2);border:1px solid var(--edge2)}}
-.lgs-store{{border-color:var(--phos);background:#0D1614}}
-.lgs-external{{border-style:dashed;background:#0A0F0E}}
+.lgs-store{{border-color:var(--phos);background:#0F1C1B}}
+.lgs-external{{border-style:dashed;background:#0E141C}}
 .lgs-service{{border-color:var(--accent)}}
-.lgs-secret{{border-color:var(--red);background:#160C0A}}
+.lgs-secret{{border-color:var(--red);background:#1E1114}}
 :root[data-theme="light"] .lgs{{background:#FFFFFF}}
 :root[data-theme="light"] .lgs-store{{background:#F1F8F4}}
 :root[data-theme="light"] .lgs-external{{background:#F5F7F6}}
 :root[data-theme="light"] .lgs-secret{{background:#FDF3F1}}
+
+/* ── node inspector ─────────────────────────────────────────────────────
+   Every box is selectable, on every diagram. Hover shows it is live; focus
+   shows it for the keyboard. */
+[data-node]{{cursor:pointer}}
+[data-node]:hover .nd{{stroke:var(--accent)}}
+[data-node]:focus{{outline:none}}
+[data-node]:focus-visible .nd{{stroke:var(--accent);stroke-width:2}}
+[data-node].picked .nd{{stroke:var(--accent);stroke-width:2;
+  fill:color-mix(in oklch,var(--accent) 10%,var(--panel2))}}
+[data-node].picked .ndl{{fill:var(--accent)}}
+.inspect{{border-top:1px solid var(--edge);padding:.55rem .8rem;font-size:.7rem;
+  min-height:2.4rem;display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}}
+.ins-hint{{color:var(--faint)}}
+.ins-t{{font-family:var(--serif);font-size:1rem;font-weight:400;color:var(--txt)}}
+.ins-k{{font-size:.57rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);border:1px solid var(--edge2);padding:.08rem .38rem;border-radius:2px}}
+.ins-s{{color:var(--mid)}}
 
 /* ── flow walker ───────────────────────────────────────────────────────── */
 .flowctl{{margin:.9rem 0 0;border:1px solid var(--edge);background:var(--panel)}}
@@ -1223,6 +1269,34 @@ svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.6;
     }});
   }});
 
+  /* node inspector — on every diagram, flow or not */
+  each(document.querySelectorAll('.inspect'),function(box){{
+    var svg=document.getElementById(box.getAttribute('data-inspect'));
+    if(!svg) return;
+    var hint=box.querySelector('.ins-hint'), body=box.querySelector('.ins-body'),
+        t=box.querySelector('.ins-t'), k=box.querySelector('.ins-k'),
+        s=box.querySelector('.ins-s');
+    function show(g){{
+      each(svg.querySelectorAll('[data-node].picked'),function(o){{o.classList.remove('picked');}});
+      g.classList.add('picked');
+      t.textContent=g.getAttribute('data-label')||'';
+      k.textContent=g.getAttribute('data-kind')||'';
+      var bits=[g.getAttribute('data-sub'),g.getAttribute('data-tech')].filter(Boolean);
+      s.textContent=bits.join(' · ');
+      hint.hidden=true; body.hidden=false;
+      /* If a flow walks this view and the box is on it, move the walk too —
+         clicking a step and stepping to it should not be different actions. */
+      var ctl=document.querySelector('.flowctl[data-view="'+svg.id+'"]');
+      if(ctl&&ctl.__jump) ctl.__jump(g.getAttribute('data-node'));
+    }}
+    each(svg.querySelectorAll('[data-node]'),function(g){{
+      g.addEventListener('click',function(){{show(g);}});
+      g.addEventListener('keydown',function(e){{
+        if(e.key==='Enter'||e.key===' '){{e.preventDefault();show(g);}}
+      }});
+    }});
+  }});
+
   /* flow walker */
   each(document.querySelectorAll('.flowctl'),function(ctl){{
     var svg=document.getElementById(ctl.getAttribute('data-view'));
@@ -1281,6 +1355,21 @@ svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.6;
       }}catch(e){{}}
     }}
     function pick(k,s){{cur=k;step=s||0;draw();}}
+
+    /* Clicking a box on the diagram jumps the walk to the step that uses it.
+       Searches the selected flow first so an id appearing in two flows does not
+       yank you out of the one you are reading. */
+    ctl.__jump=function(nodeId){{
+      var order=[]; if(cur>=0) order.push(cur);
+      flows.forEach(function(_,j){{ if(j!==cur) order.push(j); }});
+      for(var a=0;a<order.length;a++){{
+        var j=order[a], st=flows[j].steps;
+        for(var i=0;i<st.length;i++){{
+          if(st[i].t==='node'&&st[i].k===nodeId){{ pick(j,i); return true; }}
+        }}
+      }}
+      return false;                          /* not on any flow: inspect only */
+    }};
 
     list.addEventListener('click',function(e){{
       var li=e.target.closest('li'); if(!li) return;
