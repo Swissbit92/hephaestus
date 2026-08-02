@@ -130,6 +130,21 @@ def render_markdown(md: str) -> str:
     # the page reads, diagram first and then the walk through it.
     views: dict[str, dict] = {}
     fig_index = 0
+    # A flow step's note explains the very box it points at, and the archview is
+    # emitted before the archflow below it is parsed — so the notes are gathered
+    # in one cheap pre-pass rather than making the author write each sentence
+    # twice. An explicit note on the node still wins.
+    step_notes: dict[str, dict] = {}
+    for fm in re.finditer(r"^```archflow\n(.*?)^```", md, re.S | re.M):
+        try:
+            fspec = json.loads(fm.group(1))
+        except ValueError:
+            continue
+        bucket = step_notes.setdefault(fspec.get("view"), {})
+        for fl in fspec.get("flows", []):
+            for st in fl.get("steps", []):
+                if st.get("node") and st.get("note"):
+                    bucket.setdefault(st["node"], st["note"])
     # Page-scoped, so two archflow blocks over the same view cannot both claim
     # one flow id and emit two elements sharing a DOM id.
     claimed_flows: set = set()
@@ -152,9 +167,11 @@ def render_markdown(md: str) -> str:
                 spec = json.loads(body)
                 # An unnamed view still gets a stable handle, so adding an `id`
                 # later is an edit to one block rather than a renumbering.
-                views[spec.get("id") or f"f{fig_index}"] = {
-                    "fig": fig_index, "spec": spec,
-                }
+                vid = spec.get("id") or f"f{fig_index}"
+                for nd in spec["nodes"]:
+                    if not nd.get("note") and nd["id"] in step_notes.get(vid, {}):
+                        nd["note"] = step_notes[vid][nd["id"]]
+                views[vid] = {"fig": fig_index, "spec": spec}
                 out.append(render_diagram(spec, fig_index))
             elif lang == "archstat":
                 out.append(render_stats(json.loads(body)))
@@ -283,6 +300,33 @@ def _node_aria(nd: dict) -> str:
     if nd.get("tech"):
         parts.append(f'built with {nd["tech"]}')
     return html.escape(" — ".join(parts))
+
+
+def _node_note(nd: dict) -> str:
+    """The authored sentence, or an honest admission that there is not one.
+
+    Deliberately NOT synthesized from the graph. Every tool that shows node
+    detail — Ilograph, Structurizr, IcePanel, Backstage — takes this sentence
+    from the author, because label + kind + a three-word subtitle is not enough
+    signal to build one from, and a bad generated sentence is worse than a short
+    honest gap. The relationship line below IS derived, because that is a
+    traversal rather than a claim.
+    """
+    return nd.get("note") or ""
+
+
+def _node_links(nd: dict, spec: dict) -> str:
+    """Who feeds this and what it feeds — mechanical, so safe to generate."""
+    label = {n["id"]: n["label"] for n in spec["nodes"]}
+    edges = spec.get("edges", [])
+    ins = [label.get(e["from"], e["from"]) for e in edges if e["to"] == nd["id"]]
+    outs = [label.get(e["to"], e["to"]) for e in edges if e["from"] == nd["id"]]
+    bits = []
+    if ins:
+        bits.append("← " + ", ".join(ins))
+    if outs:
+        bits.append("→ " + ", ".join(outs))
+    return "   ".join(bits)
 
 
 def _lines(nd: dict) -> int:
@@ -603,6 +647,8 @@ def render_diagram(spec: dict, fig: int = 1) -> str:
                  f'data-label="{html.escape(nd["label"], quote=True)}" '
                  f'data-sub="{html.escape(nd.get("sub", "") or "", quote=True)}" '
                  f'data-tech="{html.escape(nd.get("tech", "") or "", quote=True)}" '
+                 f'data-note="{html.escape(_node_note(nd), quote=True)}" '
+                 f'data-links="{html.escape(_node_links(nd, spec), quote=True)}" '
                  f'data-kind="{html.escape(KIND_MEANING.get(nd.get("kind", "module"), "component"), quote=True)}" '
                  f'tabindex="0" '
                  f'role="graphics-symbol" aria-label="{_node_aria(nd)}">')
@@ -630,12 +676,30 @@ def render_diagram(spec: dict, fig: int = 1) -> str:
     # A readout on EVERY diagram, not only the ones a flow happens to walk.
     # "What is this box" is the question every diagram gets asked, and the model
     # already holds the answer — it was reaching only screen readers.
+    # Inline below the figure, and the box reserves its height up front so
+    # selecting a node does not shove the page down. Empty-state copy names the
+    # three things you will get rather than announcing that nothing is selected.
     p.append(f'<div class="inspect" data-inspect="fig-f{fig}">'
-             f'<span class="ins-hint">Select a box — or use Tab and Enter — '
-             f'to see what it is.</span>'
+             f'<span class="ins-hint">Click a box to see what it is, what it '
+             f'does, and how it connects.</span>'
              f'<span class="ins-body" hidden aria-live="polite">'
-             f'<b class="ins-t"></b><span class="ins-k"></span>'
-             f'<span class="ins-s"></span></span></div>')
+             f'<span class="ins-head"><b class="ins-t"></b>'
+             f'<span class="ins-k"></span><span class="ins-tech"></span></span>'
+             f'<span class="ins-s"></span><span class="ins-links"></span></span></div>')
+    # A walker on every diagram. Where an archflow declares a path it walks that
+    # path and says so; otherwise it tours the boxes in layout order and says
+    # THAT. Labelling the difference is the point: a derived order presented as
+    # a narrative is the same lie as a synthesized description, one level up.
+    order = ",".join(g["nd"]["id"] for g in geo.values())
+    p.append(f'<div class="tour" data-tour="fig-f{fig}" '
+             f'data-order="{html.escape(order, quote=True)}">'
+             f'<span class="tourlbl" data-tour-lbl>Tour<span class="tourwhy">'
+             f' &middot; layout order</span></span>'
+             f'<button class="pz" type="button" data-tour-prev disabled>&#8592; prev</button>'
+             f'<span class="tourpos" data-tour-pos>&#8212;</span>'
+             f'<button class="pz" type="button" data-tour-next>next &#8594;</button>'
+             f'<button class="pz tourclear" type="button" data-tour-clear>clear</button>'
+             f'</div>')
     p.append(_alt_table(spec))
     if caption:
         p.append(f'<div class="figcap">{_inline(caption)}</div>')
@@ -1094,13 +1158,29 @@ button.pz[disabled]{{opacity:.4;cursor:default;border-color:var(--edge)}}
 [data-node].picked .nd{{stroke:var(--accent);stroke-width:2;
   fill:color-mix(in oklch,var(--accent) 10%,var(--panel2))}}
 [data-node].picked .ndl{{fill:var(--accent)}}
-.inspect{{border-top:1px solid var(--edge);padding:.55rem .8rem;font-size:.7rem;
-  min-height:2.4rem;display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}}
+/* The readout was one flex child holding three inline spans, so the label, the
+   kind and the subtitle ran together into "refuse — rung restscode in this
+   repo". The gap has to be on the element whose children they are. */
+.inspect{{border-top:1px solid var(--edge);padding:.6rem .8rem;font-size:.72rem;
+  min-height:5.2rem}}
 .ins-hint{{color:var(--faint)}}
-.ins-t{{font-family:var(--serif);font-size:1rem;font-weight:400;color:var(--txt)}}
-.ins-k{{font-size:.57rem;letter-spacing:.12em;text-transform:uppercase;
+.ins-head{{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;
+  margin-bottom:.3rem}}
+.ins-t{{font-family:var(--serif);font-size:1.05rem;font-weight:400;color:var(--txt)}}
+.ins-k{{font-size:.55rem;letter-spacing:.12em;text-transform:uppercase;
   color:var(--faint);border:1px solid var(--edge2);padding:.08rem .38rem;border-radius:2px}}
-.ins-s{{color:var(--mid)}}
+.ins-tech{{font-size:.6rem;color:var(--accent);letter-spacing:.04em}}
+.ins-s{{display:block;color:var(--mid);max-width:68ch;text-wrap:pretty}}
+.ins-links{{display:block;margin-top:.3rem;font-size:.63rem;color:var(--faint);
+  font-family:var(--mono)}}
+.ins-none{{color:var(--faint);font-style:italic}}
+.tour{{display:flex;align-items:center;gap:.5rem;padding:.5rem .8rem;
+  border-top:1px solid var(--edge);background:var(--panel2);flex-wrap:wrap}}
+.tourlbl{{font-size:.57rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);min-width:9rem}}
+.tourwhy{{color:var(--edge2)}}
+.tourpos{{font-size:.6rem;color:var(--faint);letter-spacing:.08em;min-width:6rem}}
+.tourclear{{margin-left:auto}}
 
 /* ── flow walker ───────────────────────────────────────────────────────── */
 .flowctl{{margin:.9rem 0 0;border:1px solid var(--edge);background:var(--panel)}}
@@ -1269,25 +1349,51 @@ svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.6;
     }});
   }});
 
-  /* node inspector — on every diagram, flow or not */
+  /* node inspector + tour — on every diagram, flow or not */
   each(document.querySelectorAll('.inspect'),function(box){{
     var svg=document.getElementById(box.getAttribute('data-inspect'));
     if(!svg) return;
     var hint=box.querySelector('.ins-hint'), body=box.querySelector('.ins-body'),
         t=box.querySelector('.ins-t'), k=box.querySelector('.ins-k'),
-        s=box.querySelector('.ins-s');
-    function show(g){{
+        tech=box.querySelector('.ins-tech'), s=box.querySelector('.ins-s'),
+        links=box.querySelector('.ins-links'),
+        tour=document.querySelector('.tour[data-tour="'+svg.id+'"]'),
+        order=tour?tour.getAttribute('data-order').split(','):[],
+        at=-1;
+
+    function show(g,quiet){{
       each(svg.querySelectorAll('[data-node].picked'),function(o){{o.classList.remove('picked');}});
       g.classList.add('picked');
       t.textContent=g.getAttribute('data-label')||'';
       k.textContent=g.getAttribute('data-kind')||'';
-      var bits=[g.getAttribute('data-sub'),g.getAttribute('data-tech')].filter(Boolean);
-      s.textContent=bits.join(' · ');
+      var tv=g.getAttribute('data-tech'); tech.textContent=tv?'['+tv+']':'';
+      /* Purpose first. A node with no authored note says so rather than
+         showing a sentence assembled out of its own metadata. */
+      var note=g.getAttribute('data-note'), sub=g.getAttribute('data-sub');
+      if(note){{ s.textContent=note; s.className='ins-s'; }}
+      else if(sub){{ s.textContent=sub; s.className='ins-s'; }}
+      else {{ s.textContent='No description written for this one yet.';
+              s.className='ins-s ins-none'; }}
+      links.textContent=g.getAttribute('data-links')||'';
       hint.hidden=true; body.hidden=false;
-      /* If a flow walks this view and the box is on it, move the walk too —
-         clicking a step and stepping to it should not be different actions. */
+      if(!quiet){{
+        var idx=order.indexOf(g.getAttribute('data-node'));
+        if(idx>=0) at=idx;
+        pos();
+      }}
       var ctl=document.querySelector('.flowctl[data-view="'+svg.id+'"]');
       if(ctl&&ctl.__jump) ctl.__jump(g.getAttribute('data-node'));
+    }}
+    function nodeAt(i){{
+      return svg.querySelector('[data-node="'+
+        (typeof CSS!=='undefined'&&CSS.escape?CSS.escape(order[i]):order[i])+'"]');
+    }}
+    function pos(){{
+      if(!tour) return;
+      tour.querySelector('[data-tour-pos]').textContent =
+        at<0 ? '\u2014' : (at+1)+' / '+order.length;
+      tour.querySelector('[data-tour-prev]').disabled = at<=0;
+      tour.querySelector('[data-tour-next]').disabled = at>=order.length-1;
     }}
     each(svg.querySelectorAll('[data-node]'),function(g){{
       g.addEventListener('click',function(){{show(g);}});
@@ -1295,6 +1401,23 @@ svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.6;
         if(e.key==='Enter'||e.key===' '){{e.preventDefault();show(g);}}
       }});
     }});
+    if(tour){{
+      tour.querySelector('[data-tour-next]').addEventListener('click',function(){{
+        if(at<order.length-1){{at++;var g=nodeAt(at); if(g) show(g,true); pos();}}
+      }});
+      tour.querySelector('[data-tour-prev]').addEventListener('click',function(){{
+        if(at>0){{at--;var g=nodeAt(at); if(g) show(g,true); pos();}}
+      }});
+      tour.querySelector('[data-tour-clear]').addEventListener('click',function(){{
+        each(svg.querySelectorAll('[data-node].picked'),function(o){{o.classList.remove('picked');}});
+        at=-1; hint.hidden=false; body.hidden=true; pos();
+      }});
+      /* If a flow walks this view, the tour is that flow — say so. */
+      var ctl=document.querySelector('.flowctl[data-view="'+svg.id+'"]');
+      if(ctl) tour.querySelector('[data-tour-lbl]').innerHTML=
+        'Tour<span class="tourwhy"> &middot; or pick a flow below</span>';
+      pos();
+    }}
   }});
 
   /* flow walker */

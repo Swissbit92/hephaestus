@@ -971,3 +971,69 @@ class TestHeadingsAreFindable:
 
         assert "--serif:ui-serif" in out
         assert "h2{margin:2.4rem 0 0;font-family:var(--serif);font-size:1.5rem" in out
+
+
+class TestNodeDetail:
+    """The readout said "refuse — rung restscode in this repo" — three inline
+    spans with no gap between them. Structure, not string-sniffing, is what
+    these assert."""
+
+    def _v(self, **extra):
+        nd = {"id": "a", "label": "Refuse", "sub": "rung rests", "kind": "module"}
+        nd.update(extra)
+        return {"id": "v", "caption": "c", "nodes": [nd, {"id": "b", "label": "B"}],
+                "edges": [{"from": "a", "to": "b"}]}
+
+    def test_the_three_fields_are_separate_elements(self):
+        out = render_arch.render_diagram(self._v())
+
+        assert 'class="ins-head"' in out       # label/kind/tech get their own row
+        assert 'class="ins-s"' in out          # the sentence is its own block
+        assert 'class="ins-links"' in out
+
+    def test_an_authored_note_is_what_the_reader_sees(self):
+        out = render_arch.render_diagram(self._v(note="Refuses the crossing and leaves the rung resting."))
+
+        assert 'data-note="Refuses the crossing and leaves the rung resting."' in out
+
+    def test_a_node_without_a_note_says_so_rather_than_inventing_one(self):
+        """No tool synthesizes this sentence from label+kind, because there is
+        not enough signal — a bad generated sentence is worse than a short gap."""
+        out = render_arch.render_diagram(self._v())
+
+        assert 'data-note=""' in out
+
+    def test_relationships_are_derived_because_that_is_a_traversal(self):
+        out = render_arch.render_diagram(self._v())
+
+        assert "→ B" in out
+
+    def test_every_diagram_gets_a_walker_not_only_flow_ones(self):
+        """The ask was prev/next everywhere. A diagram with no authored sequence
+        still gets one — labelled as layout order, so it does not pass a derived
+        order off as a narrative."""
+        out = render_arch.render_diagram(self._v())
+
+        assert 'class="tour"' in out
+        assert "data-tour-prev" in out and "data-tour-next" in out
+        assert "layout order" in out
+
+    def test_a_flow_step_note_reaches_the_node_it_describes(self):
+        """The archview is emitted before the archflow below it is parsed, so
+        this only works via a pre-pass — and without it the author would have to
+        write the same sentence twice."""
+        v = self._v()
+        fl = {"view": "v", "flows": [{"id": "f", "label": "F", "steps": [
+            {"node": "a", "note": "Over the cap, so the crossing is refused."}]}]}
+        page = render_arch.render_markdown(_block("archview", v) + _block("archflow", fl))
+
+        assert 'data-note="Over the cap, so the crossing is refused."' in page
+
+    def test_an_explicit_node_note_beats_the_flow_step_note(self):
+        v = self._v(note="The node's own words.")
+        fl = {"view": "v", "flows": [{"id": "f", "label": "F", "steps": [
+            {"node": "a", "note": "The flow's words."}]}]}
+        page = render_arch.render_markdown(_block("archview", v) + _block("archflow", fl))
+
+        assert "The node&#x27;s own words." in page or "The node's own words." in page
+        assert 'data-note="The flow&#x27;s words."' not in page
