@@ -133,6 +133,21 @@ Catch issues before they compound.
 Anything a script can decide, a script decides. Run these in the main loop and carry the
 **results** into the review; do not ask a subagent to remember to run them.
 
+**First, find out what this project supports** — the right gates differ per project, and a
+repo may hold several independent ones:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/detect_profile.py"   # + --repo/--max-depth/--json
+```
+
+`0` = project roots found, each with its gates · `2` = **could not determine** · `3` =
+**no markers: nothing to gate — a SKIP, not a pass.** Run the gates it lists, per root.
+Anything reported as a *capability* (e.g. a browser suite with no server wired) is **not**
+a gate: running it against nothing collects zero tests, and zero tests passing is not a
+pass. Report it, don't gate on it.
+
+Then run the coverage check for each Python root it reported:
+
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/coverage_delta.py"   # + --repo/--target/--base/--collect-cmd as needed
 ```
@@ -141,6 +156,23 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/coverage_delta.py"   # + --repo/--target/
 are gone; this is a REJECT unless each removal has a stated reason (behaviour deliberately
 deleted, or the test moved and appears under ADDED) · `2` = **could not determine, which is
 not a pass** — fix the invocation (usually `--collect-cmd`) and re-run.
+
+Then run the repo's standing constraints, if it has any:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/invariants_run.py"   # + --repo/--file
+```
+
+`0` = every wired check passed · `1` = **an invariant was violated** — a constraint agreed to
+hold for all work here no longer does · `2` = could not determine · `3` = **nothing
+enforceable** (no file, or no entry has a check yet) — a SKIP, not a pass.
+
+This exists because a constraint stated once is least salient exactly when it is about to be
+broken, and restating it does not help: the thing doing the forgetting is the thing being
+asked to remember. A script does not care how long ago the rule was written.
+
+Profile catalogue and the deliberate non-goals:
+[references/evidence-profiles.md](references/evidence-profiles.md).
 
 Why this sits here and not in the gatekeeper's instructions: it was measured. Asking the
 agent to compare test sets by eye caught a green-but-shrunken suite 3 times in 6; giving it

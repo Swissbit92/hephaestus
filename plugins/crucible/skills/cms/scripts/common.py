@@ -64,13 +64,22 @@ _BASE_ALLOWLIST = {
     "README.md", "CLAUDE.md", "CHANGELOG.md",
     "VISION.md", "ARCHITECTURE.md", "ROADMAP.md",
     "LESSONS_LEARNED.md",
+    # A standing constraint outlives every task by definition — archiving one because it
+    # is old would delete precisely the thing that was supposed to survive the work.
+    "INVARIANTS.md",
 }
 
 # Files that legitimately carry NO frontmatter — the root special files. This is a
 # SEPARATE concern from archiving: docs under docs/ (ARCHITECTURE, ROADMAP, ...) are
 # archive-allowlisted but still REQUIRE frontmatter, so they must NOT be exempted here.
 # Keyed by basename; only meaningful for files under docs/ (root files are never gated).
-FRONTMATTER_EXEMPT = {"README.md", "CLAUDE.md", "CHANGELOG.md", "SECURITY.md"}
+#
+# INVARIANTS.md is the one docs/ file exempted, and deliberately so: the staleness fields
+# (`last_reviewed_on` / `review_in`) ask "is this still true?" on a timer, which is the
+# right question for a description of the system and the wrong one for a rule about it. A
+# constraint does not expire because nobody looked at it; dating one manufactures exactly
+# the rot the file exists to prevent. Retirement is a deliberate edit, never a timeout.
+FRONTMATTER_EXEMPT = {"README.md", "CLAUDE.md", "CHANGELOG.md", "SECURITY.md", "INVARIANTS.md"}
 
 # Archive-candidate filename patterns (case-insensitive match on name).
 ARCHIVE_PATTERNS = [

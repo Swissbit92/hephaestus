@@ -144,6 +144,72 @@ def test_qa_deleted_tests_is_green_at_head_but_shrunken_vs_base(tmp_path):
     assert "perimeter" not in (repo / "tests" / "test_widget.py").read_text(encoding="utf-8")
 
 
+# --------------------------------------------------------------------------- truth-gate fixtures
+# Each locks the property that makes the fixture falsifiable BY CONSTRUCTION. Without these
+# a fixture can drift into ambiguity and the eval silently starts measuring something else —
+# which happened three times while building this suite.
+
+def test_qa_vacuous_assertion_is_green_wrong_and_unpinned(tmp_path):
+    repo = fixtures.build("qa_vacuous_assertion", tmp_path / "r")
+    assert _run_pytest(repo) == (2, 0), "suite must be green — the defect is invisible to it"
+    src = (repo / "pricing.py").read_text(encoding="utf-8")
+    tst = (repo / "tests" / "test_pricing.py").read_text(encoding="utf-8")
+    assert "price - rate" in src, "arithmetic must actually be wrong"
+    assert "assert result is not None" in tst, "assertion must not pin a value"
+    # the discriminator: the wrong impl and a correct one disagree on this input
+    assert 100.0 - 0.1 != 100.0 * (1 - 0.1)
+
+
+def test_qa_pinned_assertion_twin_is_correct_and_pinned(tmp_path):
+    repo = fixtures.build("qa_pinned_assertion", tmp_path / "r")
+    assert _run_pytest(repo) == (3, 0)
+    src = (repo / "pricing.py").read_text(encoding="utf-8")
+    tst = (repo / "tests" / "test_pricing.py").read_text(encoding="utf-8")
+    assert "price * (1 - rate)" in src
+    assert "== 90.0" in tst, "twin must pin the expected value"
+    assert "is not None" not in tst
+
+
+def test_qa_invented_mock_contradicts_the_checked_in_vendor_doc(tmp_path):
+    """The contradiction must be textual and absolute, not a matter of degree."""
+    repo = fixtures.build("qa_invented_mock", tmp_path / "r")
+    assert _run_pytest(repo) == (2, 0)
+    doc = (repo / "docs" / "VENDOR_API.md").read_text(encoding="utf-8")
+    src = (repo / "quote.py").read_text(encoding="utf-8")
+    tst = (repo / "tests" / "test_quote.py").read_text(encoding="utf-8")
+    assert '"rate"' in doc and "no `price` field" in doc
+    assert 'payload["price"]' in src, "code must read the undocumented key"
+    assert '"price": 12.5' in tst, "mock must be shaped to the code's belief, not the doc"
+
+
+def test_qa_decorative_guard_is_referenced_but_never_invoked(tmp_path):
+    """Not orphaned (grep finds `self.guard`), yet no request is ever checked."""
+    repo = fixtures.build("qa_decorative_guard", tmp_path / "r")
+    assert _run_pytest(repo) == (2, 0)
+    handler = (repo / "handler.py").read_text(encoding="utf-8")
+    assert "self.guard = is_authorized" in handler, "reference must exist — else it's merely orphaned"
+    assert "self.guard(" not in handler, "guard must never be called from the entry point"
+    tst = (repo / "tests" / "test_handler.py").read_text(encoding="utf-8")
+    assert "is_authorized({})" in tst, "test proves the logic by direct import, not reachability"
+
+
+def test_qa_wired_guard_twin_is_reachable_from_the_entry_point(tmp_path):
+    repo = fixtures.build("qa_wired_guard", tmp_path / "r")
+    assert _run_pytest(repo) == (2, 0)
+    handler = (repo / "handler.py").read_text(encoding="utf-8")
+    assert "self.guard(request)" in handler
+    tst = (repo / "tests" / "test_handler.py").read_text(encoding="utf-8")
+    assert "Handler().handle({})" in tst, "twin must exercise the guard THROUGH the entry point"
+
+
+def test_qa_swallowed_write_hides_failure_behind_a_success_return(tmp_path):
+    repo = fixtures.build("qa_swallowed_write", tmp_path / "r")
+    assert _run_pytest(repo) == (2, 0)
+    src = (repo / "store.py").read_text(encoding="utf-8")
+    assert "except Exception:" in src and "pass" in src
+    assert "return True" in src, "the swallow must be paired with an unconditional success"
+
+
 def test_develop_full_declares_the_invariant_and_has_a_consumer(tmp_path):
     """The fixture must make the change genuinely blast-radius, or the scenario proves nothing."""
     repo = fixtures.build("develop_full", tmp_path / "r")

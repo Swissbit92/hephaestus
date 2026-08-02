@@ -286,6 +286,233 @@ def qa_deleted_tests(repo: Path) -> Path:
     return repo
 
 
+# --------------------------------------------------------------------------- truth-gate fixtures
+# Each pairs a COMPLETE, correctly-named change with a defect the test suite cannot see,
+# so the suite is green and the branch delivers what its name promises. Where a false
+# alarm is the real risk, a twin fixture carries the same feature done right.
+
+def qa_vacuous_assertion(repo: Path) -> Path:
+    """Green suite, wrong arithmetic: the test only asserts that *a* value came back.
+
+    `apply_discount(100.0, 0.1)` should be 90.0; this returns 99.9 (it subtracts the rate
+    instead of applying it). `assert result is not None` passes for either implementation —
+    and for almost any other. Only an assertion that pins the expected value can fail."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "pricing.py", "def subtotal(items):\n    return sum(items)\n")
+    _write(repo, "tests/test_pricing.py",
+           "from pricing import subtotal\n\n\n"
+           "def test_subtotal():\n    assert subtotal([1, 2, 3]) == 6\n")
+    _commit_all(repo, "init pricing")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/add-discount")
+    _write(repo, "pricing.py",
+           "def subtotal(items):\n    return sum(items)\n\n\n"
+           "def apply_discount(price, rate):\n"
+           '    """Apply a fractional discount, e.g. rate=0.1 for 10% off."""\n'
+           "    return price - rate\n")
+    _write(repo, "tests/test_pricing.py",
+           "from pricing import subtotal, apply_discount\n\n\n"
+           "def test_subtotal():\n    assert subtotal([1, 2, 3]) == 6\n\n\n"
+           "def test_apply_discount():\n"
+           "    result = apply_discount(100.0, 0.1)\n"
+           "    assert result is not None\n")
+    _commit_all(repo, "add apply_discount + test")
+    return repo
+
+
+def qa_pinned_assertion(repo: Path) -> Path:
+    """Twin of qa_vacuous_assertion: correct arithmetic, assertion pins the expected value
+    derived independently. Must NOT be rejected — guards the false-alarm direction."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "pricing.py", "def subtotal(items):\n    return sum(items)\n")
+    _write(repo, "tests/test_pricing.py",
+           "from pricing import subtotal\n\n\n"
+           "def test_subtotal():\n    assert subtotal([1, 2, 3]) == 6\n")
+    _commit_all(repo, "init pricing")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/add-discount")
+    _write(repo, "pricing.py",
+           "def subtotal(items):\n    return sum(items)\n\n\n"
+           "def apply_discount(price, rate):\n"
+           '    """Apply a fractional discount, e.g. rate=0.1 for 10% off."""\n'
+           "    return price * (1 - rate)\n")
+    _write(repo, "tests/test_pricing.py",
+           "from pricing import subtotal, apply_discount\n\n\n"
+           "def test_subtotal():\n    assert subtotal([1, 2, 3]) == 6\n\n\n"
+           "def test_apply_discount():\n"
+           "    # 10% off 100.00 is 90.00 — computed by hand, not copied from the output\n"
+           "    assert apply_discount(100.0, 0.1) == 90.0\n\n\n"
+           "def test_apply_discount_zero():\n"
+           "    assert apply_discount(50.0, 0.0) == 50.0\n")
+    _commit_all(repo, "add apply_discount + test")
+    return repo
+
+
+def qa_invented_mock(repo: Path) -> Path:
+    """Green suite, wrong field: the vendor documents `rate`, the code reads `price`, and
+    the mock was shaped to the code's belief rather than the documented response.
+
+    The contradiction is textual and absolute — the documented key is checked into the repo
+    — so this is not a matter of degree. In production the call returns `rate` and the code
+    raises KeyError; the suite never notices because the mock agrees with the bug."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "docs/VENDOR_API.md",
+           "# Vendor API (verbatim from the vendor's published docs)\n\n"
+           "`GET /v1/quote` returns exactly:\n\n"
+           "```json\n{\"symbol\": \"ABC\", \"rate\": 12.5, \"asof\": \"2026-01-01\"}\n```\n\n"
+           "There is no `price` field. The value lives under `rate`.\n")
+    _write(repo, "quote.py", "def parse_symbol(payload):\n    return payload[\"symbol\"]\n")
+    _write(repo, "tests/test_quote.py",
+           "from quote import parse_symbol\n\n\n"
+           "def test_parse_symbol():\n    assert parse_symbol({\"symbol\": \"ABC\"}) == \"ABC\"\n")
+    _commit_all(repo, "init quote")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/read-quote-rate")
+    _write(repo, "quote.py",
+           "def parse_symbol(payload):\n    return payload[\"symbol\"]\n\n\n"
+           "def read_rate(payload):\n"
+           '    """Pull the quoted rate out of a /v1/quote response."""\n'
+           "    return payload[\"price\"]\n")
+    _write(repo, "tests/test_quote.py",
+           "from quote import parse_symbol, read_rate\n\n\n"
+           "def test_parse_symbol():\n    assert parse_symbol({\"symbol\": \"ABC\"}) == \"ABC\"\n\n\n"
+           "def test_read_rate():\n"
+           "    fake_response = {\"symbol\": \"ABC\", \"price\": 12.5}\n"
+           "    assert read_rate(fake_response) == 12.5\n")
+    _commit_all(repo, "read the quoted rate")
+    return repo
+
+
+_GUARD_BASE_HANDLER = (
+    "from guard import is_authorized\n\n\n"
+    "class Handler:\n"
+    "    def __init__(self):\n"
+    "        self.guard = is_authorized\n\n"
+    "    def handle(self, request):\n"
+)
+
+
+def qa_decorative_guard(repo: Path) -> Path:
+    """A safety control that is referenced but never invoked.
+
+    `self.guard = is_authorized` means grep finds a reference, so the control is NOT
+    orphaned — and a test that imports `is_authorized` and calls it directly proves the
+    logic works. Neither fact establishes that any request is ever checked: `handle()`
+    never calls `self.guard`. Only tracing an entry point to the call site catches it."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "handler.py", "class Handler:\n    def handle(self, request):\n        return {\"ok\": True}\n")
+    _write(repo, "tests/test_handler.py",
+           "from handler import Handler\n\n\n"
+           "def test_handle():\n    assert Handler().handle({})[\"ok\"] is True\n")
+    _commit_all(repo, "init handler")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/add-auth-guard")
+    _write(repo, "guard.py",
+           "def is_authorized(request):\n"
+           '    """Reject any request without an admin token."""\n'
+           "    return request.get(\"token\") == \"admin\"\n")
+    # referenced on self, never called in handle() -> the request is not actually guarded
+    _write(repo, "handler.py", _GUARD_BASE_HANDLER + "        return {\"ok\": True}\n")
+    _write(repo, "tests/test_handler.py",
+           "from handler import Handler\n"
+           "from guard import is_authorized\n\n\n"
+           "def test_handle():\n    assert Handler().handle({})[\"ok\"] is True\n\n\n"
+           "def test_is_authorized_rejects_anonymous():\n"
+           "    # calls the guard directly — proves the logic, not that it runs\n"
+           "    assert is_authorized({}) is False\n"
+           "    assert is_authorized({\"token\": \"admin\"}) is True\n")
+    _commit_all(repo, "add authorization guard")
+    return repo
+
+
+def qa_wired_guard(repo: Path) -> Path:
+    """Twin of qa_decorative_guard: the handler actually calls the guard, so an
+    unauthorized request is refused. Must NOT be rejected."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "handler.py", "class Handler:\n    def handle(self, request):\n        return {\"ok\": True}\n")
+    _write(repo, "tests/test_handler.py",
+           "from handler import Handler\n\n\n"
+           "def test_handle():\n    assert Handler().handle({})[\"ok\"] is True\n")
+    _commit_all(repo, "init handler")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/add-auth-guard")
+    _write(repo, "guard.py",
+           "def is_authorized(request):\n"
+           '    """Reject any request without an admin token."""\n'
+           "    return request.get(\"token\") == \"admin\"\n")
+    _write(repo, "handler.py", _GUARD_BASE_HANDLER +
+           "        if not self.guard(request):\n"
+           "            return {\"ok\": False, \"error\": \"forbidden\"}\n"
+           "        return {\"ok\": True}\n")
+    _write(repo, "tests/test_handler.py",
+           "from handler import Handler\n\n\n"
+           "def test_handle_allows_admin():\n"
+           "    assert Handler().handle({\"token\": \"admin\"})[\"ok\"] is True\n\n\n"
+           "def test_handle_refuses_anonymous():\n"
+           "    # exercises the guard THROUGH the entry point, not by importing it\n"
+           "    assert Handler().handle({})[\"ok\"] is False\n")
+    _commit_all(repo, "add authorization guard")
+    return repo
+
+
+def qa_swallowed_write(repo: Path) -> Path:
+    """A failure converted into a wrong-but-quiet result.
+
+    `save()` wraps the write in `except Exception: pass`, so a failed write reports success
+    and the caller proceeds on state that was never persisted. The test exercises only the
+    happy path, so the suite is green and the silent branch is never entered."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "store.py",
+           "def load(path):\n"
+           "    with open(path, encoding=\"utf-8\") as fh:\n"
+           "        return fh.read()\n")
+    _write(repo, "tests/test_store.py",
+           "from store import load\n\n\n"
+           "def test_load(tmp_path):\n"
+           "    p = tmp_path / \"a.txt\"\n"
+           "    p.write_text(\"hi\", encoding=\"utf-8\")\n"
+           "    assert load(str(p)) == \"hi\"\n")
+    _commit_all(repo, "init store")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/add-retry-safe-save")
+    _write(repo, "store.py",
+           "def load(path):\n"
+           "    with open(path, encoding=\"utf-8\") as fh:\n"
+           "        return fh.read()\n\n\n"
+           "def save(path, data):\n"
+           '    """Write data, reporting success to the caller."""\n'
+           "    try:\n"
+           "        with open(path, \"w\", encoding=\"utf-8\") as fh:\n"
+           "            fh.write(data)\n"
+           "    except Exception:\n"
+           "        pass\n"
+           "    return True\n")
+    _write(repo, "tests/test_store.py",
+           "from store import load, save\n\n\n"
+           "def test_load(tmp_path):\n"
+           "    p = tmp_path / \"a.txt\"\n"
+           "    p.write_text(\"hi\", encoding=\"utf-8\")\n"
+           "    assert load(str(p)) == \"hi\"\n\n\n"
+           "def test_save(tmp_path):\n"
+           "    p = tmp_path / \"b.txt\"\n"
+           "    assert save(str(p), \"data\") is True\n"
+           "    assert load(str(p)) == \"data\"\n")
+    _commit_all(repo, "add retry-safe save")
+    return repo
+
+
 _DEVELOP_CLAUDE = """# Demo pipeline
 
 ## Critical invariants (read every session)
@@ -336,6 +563,12 @@ FIXTURES = {
     "qa_regression": qa_regression,
     "qa_clean": qa_clean,
     "qa_deleted_tests": qa_deleted_tests,
+    "qa_vacuous_assertion": qa_vacuous_assertion,
+    "qa_pinned_assertion": qa_pinned_assertion,
+    "qa_invented_mock": qa_invented_mock,
+    "qa_decorative_guard": qa_decorative_guard,
+    "qa_wired_guard": qa_wired_guard,
+    "qa_swallowed_write": qa_swallowed_write,
     "develop_full": develop_full,
     "develop_trivial": develop_trivial,
 }

@@ -323,6 +323,156 @@
           "check": "not_pushed"
         }
       ]
+    },
+    {
+      "id": "qa-gatekeeper/rejects-vacuous-assertion",
+      "skill": "qa-gatekeeper",
+      "plugin": "crucible",
+      "fixture": "qa_vacuous_assertion",
+      "prompt": "Use the crucible:qa-gatekeeper agent to review this branch before I merge it. The suite is green.",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "tool_result_matching",
+          "args": {
+            "pattern": "QA-VERDICT:\\s*REJECT",
+            "tool": "Agent",
+            "ignore_case": false
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "qa-gatekeeper/no-false-alarm-on-pinned-assertion",
+      "skill": "qa-gatekeeper",
+      "plugin": "crucible",
+      "fixture": "qa_pinned_assertion",
+      "prompt": "Use the crucible:qa-gatekeeper agent to review this branch before I merge it. The suite is green.",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "tool_result_not_matching",
+          "args": {
+            "pattern": "QA-VERDICT:\\s*REJECT",
+            "tool": "Agent",
+            "ignore_case": false
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "qa-gatekeeper/rejects-invented-mock",
+      "skill": "qa-gatekeeper",
+      "plugin": "crucible",
+      "fixture": "qa_invented_mock",
+      "prompt": "Use the crucible:qa-gatekeeper agent to review this branch before I merge it. The suite is green.",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "tool_result_matching",
+          "args": {
+            "pattern": "QA-VERDICT:\\s*REJECT",
+            "tool": "Agent",
+            "ignore_case": false
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "qa-gatekeeper/rejects-decorative-guard",
+      "skill": "qa-gatekeeper",
+      "plugin": "crucible",
+      "fixture": "qa_decorative_guard",
+      "prompt": "Use the crucible:qa-gatekeeper agent to review this branch before I merge it. The suite is green.",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "tool_result_matching",
+          "args": {
+            "pattern": "QA-VERDICT:\\s*REJECT",
+            "tool": "Agent",
+            "ignore_case": false
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "qa-gatekeeper/no-false-alarm-on-wired-guard",
+      "skill": "qa-gatekeeper",
+      "plugin": "crucible",
+      "fixture": "qa_wired_guard",
+      "prompt": "Use the crucible:qa-gatekeeper agent to review this branch before I merge it. The suite is green.",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "tool_result_not_matching",
+          "args": {
+            "pattern": "QA-VERDICT:\\s*REJECT",
+            "tool": "Agent",
+            "ignore_case": false
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "qa-gatekeeper/rejects-swallowed-exception",
+      "skill": "qa-gatekeeper",
+      "plugin": "crucible",
+      "fixture": "qa_swallowed_write",
+      "prompt": "Use the crucible:qa-gatekeeper agent to review this branch before I merge it. The suite is green.",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "tool_result_matching",
+          "args": {
+            "pattern": "QA-VERDICT:\\s*REJECT",
+            "tool": "Agent",
+            "ignore_case": false
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
     }
   ]
 }
