@@ -343,6 +343,101 @@ def check_table_shaped_like_a_flow(repo: Path) -> list[Finding]:
     return out
 
 
+# Some sections have a canonical form regardless of how their content is shaped.
+# "Key invariants" as six long bullets slips every ratio-based rule — only half
+# match `term: description` — but it is still a three-column table wearing a
+# list. Matching on the section NAME is exact, so this costs no false positives.
+CANONICAL_TABLE_SECTIONS = {
+    "key invariants": "invariant · what it guarantees · where it is enforced",
+    "invariants": "invariant · what it guarantees · where it is enforced",
+    "error taxonomy": "error · class · what happens",
+    "glossary": "term · what it means here",
+}
+# Three-plus letters, all caps, not a common English word shouted for emphasis.
+RE_ACRONYM = re.compile(r"\b([A-Z]{3,6})\b")
+# Emphasis in these docs is written in caps, so the extractor has to know the
+# difference between an initialism and a raised voice. Everything below is a
+# shouted English word, a token every reader already knows, or a ticker.
+ACRONYM_STOPWORDS = {
+    "THE", "AND", "NOT", "ALL", "ONE", "TWO", "NEVER", "ONLY", "MUST", "READ",
+    "WRITE", "TODO", "NOTE", "AFTER", "BEFORE", "BOTH", "CANNOT", "DOES", "DONE",
+    "EVERY", "FROM", "INTO", "THIS", "THAT", "WHEN", "WITH", "WHOLE", "SAME",
+    "BUY", "SELL", "DATE", "TIME", "NULL", "NONE", "TRUE", "FALSE", "OFF",
+    "API", "URL", "HTTP", "HTTPS", "JSON", "YAML", "HTML", "CSS", "SQL", "CPU",
+    "RAM", "GPU", "SSD", "UTC", "CET", "CEST", "CSV", "REST", "CLI", "ADR",
+}
+GLOSSARY_ACRONYM_FLOOR = 8
+
+
+def _project_words(repo: Path) -> set[str]:
+    """Caps-tokens that are just this project's own name.
+
+    A repo called `acme-exec` says ACME on every other line. That is a proper
+    noun the reader is already standing inside, not a term the doc owes them a
+    definition for. Derived from the path so the rule carries no project names
+    of its own.
+    """
+    return {w.upper() for w in re.split(r"[^A-Za-z0-9]+", repo.name) if len(w) >= 3}
+
+
+def check_named_section_shape(repo: Path) -> list[Finding]:
+    """Sections whose name implies a table, written as bullets."""
+    got = _md(repo)
+    if not got:
+        return []
+    md, text = got
+    out, lines = [], text.split("\n")
+    in_fence, heading, hline, bullets, has_table = False, None, 0, 0, False
+
+    def flush() -> None:
+        if heading and bullets >= 4 and not has_table:
+            out.append(Finding("warning", f"{md}:{hline}",
+                               f'"{heading}" is {bullets} bullets — a section with '
+                               f'this name reads as a table: {CANONICAL_TABLE_SECTIONS[heading.lower()]}'))
+
+    for i, ln in enumerate(lines, 1):
+        if ln.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if ln.startswith("## "):
+            flush()
+            title = ln[3:].strip()
+            heading = title if title.lower() in CANONICAL_TABLE_SECTIONS else None
+            hline, bullets, has_table = i, 0, False
+        elif heading:
+            if ln.startswith(("-", "*")) and ln[1:2] == " ":
+                bullets += 1
+            elif ln.strip().startswith("|"):
+                has_table = True
+    flush()
+    return out
+
+
+def check_missing_glossary(repo: Path) -> list[Finding]:
+    """A doc thick with acronyms and no glossary.
+
+    Not "every doc needs one" — most do not. The signal is density: past a
+    handful of distinct initialisms the reader is being asked to already know
+    the vocabulary, which is exactly the assumption a glossary exists to drop.
+    """
+    got = _md(repo)
+    if not got:
+        return []
+    md, text = got
+    if re.search(r"^##\s+glossary", text, re.I | re.M):
+        return []
+    ignore = ACRONYM_STOPWORDS | _project_words(repo)
+    found = {a for a in RE_ACRONYM.findall(text) if a not in ignore}
+    if len(found) < GLOSSARY_ACRONYM_FLOOR:
+        return []
+    sample = ", ".join(sorted(found)[:6])
+    return [Finding("warning", str(md),
+                    f"{len(found)} distinct acronyms ({sample}…) and no Glossary "
+                    f"section — the doc assumes a vocabulary it never defines")]
+
+
 def run_repo_check(repo: Path) -> list[Finding]:
     findings: list[Finding] = []
     findings.extend(check_required_files(repo))
@@ -351,6 +446,8 @@ def run_repo_check(repo: Path) -> list[Finding]:
     findings.extend(check_flow_shaped_sections(repo))
     findings.extend(check_list_shaped_like_a_table(repo))
     findings.extend(check_table_shaped_like_a_flow(repo))
+    findings.extend(check_named_section_shape(repo))
+    findings.extend(check_missing_glossary(repo))
     # Per-file checks
     for md in iter_md_files(repo, include_archive=False):
         required_fm = "/docs/" in str(md).replace("\\", "/") and md.name not in FRONTMATTER_EXEMPT

@@ -547,3 +547,119 @@ def test_a_doc_that_already_uses_the_right_forms_is_silent(tmp_path):
     assert (check.check_flow_shaped_sections(r)
             + check.check_list_shaped_like_a_table(r)
             + check.check_table_shaped_like_a_flow(r)) == []
+
+
+# --- sections whose NAME implies a shape -------------------------------------
+# Ratio rules read the content; these read the heading. "Key invariants" as six
+# long bullets matches no content rule (only half are `term — description`) yet
+# is unambiguously a table, so the name is the only reliable signal.
+
+def test_key_invariants_as_bullets_is_flagged(tmp_path):
+    r = _doc(tmp_path, "## Key invariants\n\n"
+             "- The executor never sizes a position it did not read from `strategy_signals`.\n"
+             "- A carry entry snaps to the exact hedge ratio or it does not open at all.\n"
+             "- `pnl_pct` is computed against notional, never against margin.\n"
+             "- Live mode refuses to start when the clock has drifted past 2s.\n")
+
+    found = check.check_named_section_shape(r)
+
+    assert len(found) == 1
+    assert "invariant" in found[0].message
+
+
+def test_key_invariants_already_a_table_is_silent(tmp_path):
+    r = _doc(tmp_path, "## Key invariants\n\n"
+             "| Invariant | Guarantees | Enforced in |\n|---|---|---|\n"
+             "| Signals are read-only | no write-back | `store.py` |\n"
+             "| Hedge is exact | no residual delta | `carry.py` |\n")
+
+    assert check.check_named_section_shape(r) == []
+
+
+def test_a_short_invariants_section_is_left_alone(tmp_path):
+    """Same floor as every other shape rule: three items are a list."""
+    r = _doc(tmp_path, "## Key invariants\n\n- one\n- two\n- three\n")
+
+    assert check.check_named_section_shape(r) == []
+
+
+def test_a_differently_named_section_is_not_matched(tmp_path):
+    """The rule is exact-name, not fuzzy — that is what keeps it free of
+    false positives."""
+    r = _doc(tmp_path, "## Design notes\n\n- a\n- b\n- c\n- d\n- e\n")
+
+    assert check.check_named_section_shape(r) == []
+
+
+def test_bullets_inside_a_fence_do_not_count(tmp_path):
+    r = _doc(tmp_path, "## Key invariants\n\n```text\n- a\n- b\n- c\n- d\n```\n")
+
+    assert check.check_named_section_shape(r) == []
+
+
+def test_the_last_section_in_the_file_is_still_checked(tmp_path):
+    """Regression: a flush-on-next-heading loop silently skips the final
+    section when the file ends without another `##`."""
+    r = _doc(tmp_path, "## Intro\n\ntext\n\n## Error taxonomy\n\n"
+             "- `NetworkError` — retried three times, then fatal\n"
+             "- `InsufficientFunds` — fatal, alerts red\n"
+             "- `AuthenticationError` — fatal, alerts red\n"
+             "- `ExchangeError` — fatal, alerts red\n")
+
+    found = check.check_named_section_shape(r)
+
+    assert len(found) == 1
+    assert "Error taxonomy" in found[0].message
+
+
+# --- acronym density without a glossary --------------------------------------
+
+def test_an_acronym_dense_doc_without_a_glossary_is_flagged(tmp_path):
+    r = _doc(tmp_path, "## Notes\n\n"
+             "The WFO run feeds CPCV and MCPT, and the OHLCV rows carry SMA, EMA, "
+             "RSI, ATR and VWAP before the DCA sleeve sees them.\n")
+
+    found = check.check_missing_glossary(r)
+
+    assert len(found) == 1
+    assert "no Glossary" in found[0].message
+
+
+def test_a_glossary_silences_it(tmp_path):
+    r = _doc(tmp_path, "## Notes\n\nWFO CPCV MCPT OHLCV SMA EMA RSI ATR VWAP DCA\n\n"
+             "## Glossary\n\n| Term | Means |\n|---|---|\n| WFO | walk-forward |\n")
+
+    assert check.check_missing_glossary(r) == []
+
+
+def test_a_doc_with_few_acronyms_needs_no_glossary(tmp_path):
+    r = _doc(tmp_path, "## Notes\n\nThe RSI and the ATR are computed per bar.\n")
+
+    assert check.check_missing_glossary(r) == []
+
+
+def test_shouted_english_is_not_an_acronym(tmp_path):
+    """These docs write emphasis in caps. Without a stopword list every
+    NEVER/ALWAYS/MUST would read as an initialism and the rule would fire on
+    every well-written page."""
+    r = _doc(tmp_path, "## Notes\n\nNEVER write here. THIS is NOT a place THAT "
+             "ALL code CANNOT reach. EVERY caller MUST read BEFORE it does.\n")
+
+    assert check.check_missing_glossary(r) == []
+
+
+def test_the_projects_own_name_is_not_a_term_it_owes_a_definition(tmp_path):
+    """Derived from the repo path, so the rule ships no project names."""
+    d = tmp_path / "ACME-WIDGET"
+    (d / "docs").mkdir(parents=True)
+    (d / "docs" / "ARCHITECTURE.md").write_text(
+        "---\ntitle: T\nstatus: active\ncreated: 2026-01-01\n"
+        "last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: x\n---\n\n"
+        "## Notes\n\nACME reads WIDGET rows. ACME never writes. WIDGET is append-only. "
+        "ACME and WIDGET share GRP, TFX, QQL, ZZT, PLM, KRW, BND, VNX.\n",
+        encoding="utf-8")
+
+    found = check.check_missing_glossary(d)
+
+    assert len(found) == 1
+    assert "ACME" not in found[0].message and "WIDGET" not in found[0].message
