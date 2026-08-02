@@ -28,4 +28,4 @@ Statement: Every gate distinguishes "passed" from "could not determine", and the
 reads as success.
 Falsifiable: WHEN a Phase 4.0 script cannot complete its check THE SYSTEM SHALL exit with a
 code distinct from success.
-Check: none yet
+Check: scripts/checks/undetermined_is_not_a_pass.sh

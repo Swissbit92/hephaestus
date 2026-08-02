@@ -447,20 +447,31 @@ def qa_wired_guard(repo: Path) -> Path:
     _g(repo, "switch", "dev")
     _g(repo, "switch", "-c", "feature/add-auth-guard")
     _write(repo, "guard.py",
+           "import os\n\n\n"
            "def is_authorized(request):\n"
-           '    """Reject any request without an admin token."""\n'
-           "    return request.get(\"token\") == \"admin\"\n")
+           '    """True when the request carries the configured token."""\n'
+           "    if not isinstance(request, dict):\n"
+           "        return False\n"
+           "    expected = os.environ.get(\"APP_TOKEN\")\n"
+           "    return bool(expected) and request.get(\"token\") == expected\n")
     _write(repo, "handler.py", _GUARD_BASE_HANDLER +
            "        if not self.guard(request):\n"
            "            return {\"ok\": False, \"error\": \"forbidden\"}\n"
            "        return {\"ok\": True}\n")
     _write(repo, "tests/test_handler.py",
+           "import handler\n"
            "from handler import Handler\n\n\n"
-           "def test_handle_allows_admin():\n"
-           "    assert Handler().handle({\"token\": \"admin\"})[\"ok\"] is True\n\n\n"
-           "def test_handle_refuses_anonymous():\n"
+           "def test_handle_allows_configured_token(monkeypatch):\n"
+           "    monkeypatch.setenv(\"APP_TOKEN\", \"s3cret\")\n"
+           "    assert Handler().handle({\"token\": \"s3cret\"})[\"ok\"] is True\n\n\n"
+           "def test_handle_refuses_anonymous(monkeypatch):\n"
+           "    monkeypatch.setenv(\"APP_TOKEN\", \"s3cret\")\n"
            "    # exercises the guard THROUGH the entry point, not by importing it\n"
-           "    assert Handler().handle({})[\"ok\"] is False\n")
+           "    assert Handler().handle({})[\"ok\"] is False\n\n\n"
+           "def test_handle_refuses_malformed_input(monkeypatch):\n"
+           "    monkeypatch.setenv(\"APP_TOKEN\", \"s3cret\")\n"
+           "    for bad in (None, \"str\", []):\n"
+           "        assert Handler().handle(bad)[\"ok\"] is False\n")
     _commit_all(repo, "add authorization guard")
     return repo
 

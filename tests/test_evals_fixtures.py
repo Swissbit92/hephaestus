@@ -195,11 +195,16 @@ def test_qa_decorative_guard_is_referenced_but_never_invoked(tmp_path):
 
 def test_qa_wired_guard_twin_is_reachable_from_the_entry_point(tmp_path):
     repo = fixtures.build("qa_wired_guard", tmp_path / "r")
-    assert _run_pytest(repo) == (2, 0)
+    assert _run_pytest(repo) == (3, 0)
     handler = (repo / "handler.py").read_text(encoding="utf-8")
     assert "self.guard(request)" in handler
     tst = (repo / "tests" / "test_handler.py").read_text(encoding="utf-8")
     assert "Handler().handle({})" in tst, "twin must exercise the guard THROUGH the entry point"
+    # The twin must not carry unrelated defects a reviewer would rightly flag — otherwise
+    # its rejection says nothing about the property under test. Two were found the hard way.
+    guard = (repo / "guard.py").read_text(encoding="utf-8")
+    assert "isinstance(request, dict)" in guard, "must not crash on malformed input"
+    assert '== "admin"' not in guard, "must not hardcode a credential"
 
 
 def test_qa_swallowed_write_hides_failure_behind_a_success_return(tmp_path):

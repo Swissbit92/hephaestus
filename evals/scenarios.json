@@ -361,9 +361,9 @@
         {
           "check": "tool_result_not_matching",
           "args": {
-            "pattern": "QA-VERDICT:\\s*REJECT",
+            "pattern": "vacuous|does not (?:pin|assert)|weak assertion|only asserts that|assert(?:s|ion)? .{0,20}not None",
             "tool": "Agent",
-            "ignore_case": false
+            "ignore_case": true
           }
         },
         {
@@ -436,9 +436,9 @@
         {
           "check": "tool_result_not_matching",
           "args": {
-            "pattern": "QA-VERDICT:\\s*REJECT",
+            "pattern": "never (?:called|invoked)|not (?:reachable|wired|called)|unreached|decorative|no caller",
             "tool": "Agent",
-            "ignore_case": false
+            "ignore_case": true
           }
         },
         {
