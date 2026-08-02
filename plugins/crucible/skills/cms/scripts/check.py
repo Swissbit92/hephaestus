@@ -446,6 +446,54 @@ def check_missing_glossary(repo: Path) -> list[Finding]:
     return [Finding("warning", str(md),
                     f"{len(found)} distinct acronyms ({sample}…) and no Glossary "
                     f"section — the doc assumes a vocabulary it never defines")]
+_NO_CHECK = {"", "none", "none yet", "todo", "tbd", "-", "n/a"}
+
+
+def check_invariants_have_checks(repo: Path) -> list[Finding]:
+    """Warn about a standing constraint that is stated but not enforceable.
+
+    Warning, never error — and that distinction is the design, not a compromise. An
+    invariant with no check is still worth having written down; erroring on one would
+    teach people to stop writing them down, which costs more than the missing check. The
+    nudge points at the gap without punishing the intent.
+
+    No file means nothing to say: a repo with no standing constraints is not a repo doing
+    something wrong.
+    """
+    path = repo / "docs" / "INVARIANTS.md"
+    if not path.exists():
+        return []
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+
+    findings: list[Finding] = []
+    state = {"title": None, "status": "active", "check": ""}
+
+    def flush() -> None:
+        title = state["title"]
+        if (title and "{{" not in title                       # skip the scaffold placeholder
+                and state["status"].strip().lower() == "active"
+                and state["check"].strip().lower() in _NO_CHECK):
+            findings.append(Finding(
+                "warning", str(path),
+                f"invariant '{title}' is active but has no Check: — stated, not enforced. "
+                "Rewrite it in a falsifiable form and wire a check to it."))
+
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith("## "):
+            flush()
+            state.update(title=s[3:].strip(), status="active", check="")
+        elif state["title"]:
+            low = s.lower()
+            if low.startswith("status:"):
+                state["status"] = s.split(":", 1)[1]
+            elif low.startswith("check:"):
+                state["check"] = s.split(":", 1)[1]
+    flush()
+    return findings
 
 
 def run_repo_check(repo: Path) -> list[Finding]:
@@ -458,6 +506,7 @@ def run_repo_check(repo: Path) -> list[Finding]:
     findings.extend(check_table_shaped_like_a_flow(repo))
     findings.extend(check_named_section_shape(repo))
     findings.extend(check_missing_glossary(repo))
+    findings.extend(check_invariants_have_checks(repo))
     # Per-file checks
     for md in iter_md_files(repo, include_archive=False):
         required_fm = "/docs/" in str(md).replace("\\", "/") and md.name not in FRONTMATTER_EXEMPT
