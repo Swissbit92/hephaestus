@@ -663,3 +663,39 @@ def test_the_projects_own_name_is_not_a_term_it_owes_a_definition(tmp_path):
 
     assert len(found) == 1
     assert "ACME" not in found[0].message and "WIDGET" not in found[0].message
+
+
+def test_an_annotated_pipeline_with_drawn_connectors_is_flagged(tmp_path):
+    """The rule used to suppress exactly this: heavy annotation made it read as
+    a code listing. But lines that are nothing but a downward arrow are drawn
+    stage boundaries — the block is a diagram, and annotation density is not
+    evidence against that."""
+    r = _doc(tmp_path, "## P\n\n```\n"
+             "--mode compare --wfo --configs a.json,b.json\n"
+             "    ↓\n"
+             "Load carry + directional data ONCE in parent process\n"
+             "    ↓\n"
+             "Build flat work list: [(config_idx, win_id, path, spec), ...]\n"
+             "    ↓\n"
+             "ProcessPoolExecutor(max_workers=min(25, cpu_count()=16),\n"
+             "                    initializer=_init_worker)\n"
+             "    ↓ per job worker:\n"
+             "    run_single_window(config, carry, hourly, spec)\n"
+             "    ↓\n"
+             "compare_n_results() — composite score\n"
+             "```\n")
+
+    found = check.check_flow_shaped_sections(r)
+
+    assert any("arrow cascade" in f.message for f in found)
+
+
+def test_a_codey_fence_without_drawn_connectors_is_still_skipped(tmp_path):
+    """The codeyness guard still does its job when nothing is drawn — this is
+    inline code with arrows in it, not a diagram."""
+    r = _doc(tmp_path, "## P\n\n```\n"
+             "f(a=1, b=2) -> g(c=3, d=4) -> h(e=5, f=6) -> i(g=7, h=8) -> j(k=9)\n"
+             "```\n")
+
+    assert [f for f in check.check_flow_shaped_sections(r)
+            if "arrow cascade" in f.message] == []

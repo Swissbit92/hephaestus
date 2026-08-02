@@ -182,6 +182,9 @@ CODE_LANGS = {"bash", "sh", "zsh", "shell", "console", "python", "py", "js",
 
 RE_OL_STEP = re.compile(r"^\s*\d+\.\s+\S", re.M)
 RE_ARROW_STEP = re.compile(r"^\s*(->|→|├─|└─)", re.M)
+# A line that is only a downward arrow, optionally with a short label after it
+# ("↓ per job worker:"). Hand-drawn stage boundary — never valid in real code.
+RE_CONNECTOR_LINE = re.compile(r"^[ \t]*↓[ \t]*.{0,40}$", re.M)
 RE_FENCE = re.compile(r"^```([a-zA-Z0-9_-]*)\n(.*?)^```", re.S | re.M)
 RE_TERM_ITEM = re.compile(r"^[-*]\s+`?\*{0,2}([A-Za-z_][\w./\[\]-]*)\*{0,2}`?\s*(—|–|:)\s+(\S.*)$")
 # Anywhere in the row, not just the first cell — the ordinal is as often buried
@@ -224,13 +227,20 @@ def check_flow_shaped_sections(repo: Path) -> list[Finding]:
         lang, body = m.group(1).strip().lower(), m.group(2)
         if lang in CODE_LANGS or lang in {"archview", "archflow", "archstat", "html"}:
             continue
-        hops = body.count("->") + body.count("→")
+        # A line that is nothing but a downward arrow is a stage boundary
+        # someone hand-drew. It counts as a hop: a pipeline drawn vertically is
+        # still a pipeline, and counting only `->`/`→` scored the vertical ones
+        # at zero — which is why the longest pipelines in the corpus, the ones
+        # most worth making walkable, were the ones the rule never saw.
+        drawn = len(RE_CONNECTOR_LINE.findall(body))
+        hops = body.count("->") + body.count("→") + drawn
         # A conceptual pipeline is short named stages. A block dense with
-        # parentheses, equals signs or commas is annotated code or a fan-out
-        # sketch — CRA's parallel-WFO diagram is the real example, and ASCII is
-        # the right form for it. Skipping these is what keeps the rule honest.
+        # parentheses, equals signs or commas is usually annotated code, so
+        # codeyness suppresses the rule — unless the block drew its own
+        # connectors, which no code listing, shell pipeline or type signature
+        # ever does. Annotation density is not evidence against being a diagram.
         codey = body.count("(") + body.count("=") + body.count(",")
-        if hops >= FLOW_STEP_FLOOR and codey <= hops:
+        if hops >= FLOW_STEP_FLOOR and (codey <= hops or drawn >= FLOW_STEP_FLOOR):
             line = text[:m.start()].count("\n") + 1
             out.append(Finding("warning", f"{md}:{line}",
                                f"a {hops}-step arrow cascade in a code fence — this is a "
