@@ -195,6 +195,40 @@ def tool_result_not_matching(run: RunResult, pattern: str, tool: str | None = No
                         else f"{len(hits)} result(s) matched forbidden /{pattern}/")
 
 
+VERDICT_RE = re.compile(r"QA-VERDICT:\s*([A-Z_]+)")
+
+
+def subagent_verdict(run: RunResult, allowed: list[str] | None = None,
+                     forbidden: list[str] | None = None, tool: str = "Agent") -> tuple[bool, str]:
+    """Assert a subagent's machine-readable verdict, and say WHICH failure occurred.
+
+    Three very different things can go wrong, and a regex over the result text reports
+    all three as one message — which is how "the subagent was never invoked" got recorded
+    when the subagent had in fact run and simply omitted its verdict line:
+
+    1. no result at all — not invoked, or the run was cut short before it returned;
+    2. a result with no verdict token — it ran but broke its own output contract;
+    3. a verdict that is the wrong one — the actual finding, and the only one of the three
+       that says anything about the gate's judgement.
+
+    Naming them separately is the point. Only (3) is evidence about the skill.
+    """
+    texts = [tr.text for tr in run.tool_results if tr.name == tool]
+    if not texts:
+        return False, (f"no {tool} result captured — the subagent was not invoked, or the "
+                       "run ended before it returned. Says nothing about its judgement.")
+    verdicts = [m.group(1) for t in texts if (m := VERDICT_RE.search(t))]
+    if not verdicts:
+        return False, (f"{tool} returned output but emitted no QA-VERDICT line — its output "
+                       "contract was not honoured, so there is no verdict to judge.")
+    actual = verdicts[0]
+    if allowed and actual not in allowed:
+        return False, f"verdict was {actual}; expected one of {allowed}"
+    if forbidden and actual in forbidden:
+        return False, f"verdict was {actual}, which is forbidden here"
+    return True, f"verdict {actual}"
+
+
 def tool_called(run: RunResult, name: str) -> tuple[bool, str]:
     ok = any(tc.name == name for tc in run.tool_calls)
     return ok, f"{name} called" if ok else f"{name} never called"
@@ -240,6 +274,7 @@ CHECKS = {
     "final_text_matching": final_text_matching,
     "final_text_not_matching": final_text_not_matching,
     "tool_result_matching": tool_result_matching,
+    "subagent_verdict": subagent_verdict,
     "tool_result_not_matching": tool_result_not_matching,
     "tool_called": tool_called,
     "tool_not_called": tool_not_called,

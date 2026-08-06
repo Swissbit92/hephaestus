@@ -19,11 +19,18 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 
 ## Branch model (read before starting work)
 
-- **Integration branch:** `main`. It is always releasable.
+- **Integration branch:** `dev`. Feature work branches off it and merges back into it.
+- **Release branch:** `main`. It is always releasable, and it is what the installed
+  marketplace clone tracks — so anything merged here changes the tooling every session on
+  this machine loads. That is the reason for the extra hop: `dev` is where work lands,
+  `main` is where it is published.
 - **Work happens on short-lived feature branches** named Conventional-Branch style:
   `<type>/<short-description>` in kebab-case — `feature/…`, `bugfix/…`, `hotfix/…`, `chore/…`.
-- **Integrate via merge or PR back into `main`.** Never commit feature work directly to `main`.
-- Tags are per-plugin: `<plugin>-v<x.y.z>` (e.g. `crucible-v0.2.0`).
+- **Integrate via merge or PR into `dev`.** Never commit feature work directly to `dev` or
+  `main`. Promote `dev` → `main` as a separate, deliberate step once the work is verified
+  **on the merged tree** — a branch that passes alone and a merge that passes are different
+  claims, and `main` moving underneath a long-lived branch is not hypothetical here.
+- Tags are per-plugin: `<plugin>-v<x.y.z>` (e.g. `crucible-v0.2.0`), cut from `main`.
 
 > The `start-branch` / `finish-branch` skills detect this model from this file — keep the
 > section above accurate.

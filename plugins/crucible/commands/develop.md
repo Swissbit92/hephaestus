@@ -137,14 +137,19 @@ Anything a script can decide, a script decides. Run these in the main loop and c
 repo may hold several independent ones:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/detect_profile.py"   # + --repo/--max-depth/--json
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/detect_profile.py" --emit-gates   # + --repo/--max-depth
 ```
 
-`0` = project roots found, each with its gates · `2` = **could not determine** · `3` =
-**no markers: nothing to gate — a SKIP, not a pass.** Run the gates it lists, per root.
-Anything reported as a *capability* (e.g. a browser suite with no server wired) is **not**
-a gate: running it against nothing collects zero tests, and zero tests passing is not a
-pass. Report it, don't gate on it.
+`0` = one runnable command per line on stdout, already scoped to the right directory ·
+`2` = **could not determine** · `3` = **nothing runnable — a SKIP, not a pass.**
+
+**Run every line it prints**, and treat a non-zero exit from any of them as a QA failure.
+Drop `--emit-gates` for the human-readable report, or add `--json` for the full structure.
+
+Anything the detector calls a *capability* — a browser suite whose config starts no server,
+say — is deliberately **not** printed as runnable; it goes to stderr instead. Running one
+against nothing collects zero tests and exits clean, and zero tests passing is not a pass.
+That is why the split exists in the tool rather than in your judgement.
 
 Then run the coverage check for each Python root it reported:
 

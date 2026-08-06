@@ -248,27 +248,37 @@ def test_scenarios_file_loads_and_has_entries():
     assert len(scs) >= 8
 
 
-def test_twin_scenarios_assert_on_the_verdict_not_on_prose():
+def test_gatekeeper_scenarios_assert_on_the_verdict_not_on_prose():
     """A word cannot say whether it was used to accuse or to clear.
 
-    The wired-guard twin first asserted the review text did not contain 'decorative',
+    The wired-guard twin first asserted the review text contained no 'decorative',
     'never called' and similar. It failed 3/3 — on a review that concluded
     CONDITIONAL_PASS and said, in as many words, "Wiring — guard is live, not
     decorative". That is an exoneration, and the pattern counted it as an accusation.
-    Polarity is not recoverable from a keyword, so the twins gate on the machine-readable
-    verdict instead, which has exactly one meaning.
+    Polarity is not recoverable from a keyword, so these gate on the machine-readable
+    verdict, which has exactly one meaning.
     """
-    scs = {s["id"]: s for s in _load_scenarios()}
-    twins = [i for i in scs if "no-false-alarm" in i]
-    assert len(twins) >= 3
-    for tid in twins:
-        checks = scs[tid]["checks"]
-        first = checks[0]
-        assert first["check"] == "tool_result_not_matching", f"{tid}: must gate on a verdict"
-        assert first["args"]["pattern"] == r"QA-VERDICT:\s*REJECT", \
-            f"{tid}: gate on the verdict token, never on descriptive prose"
-        assert first["args"]["ignore_case"] is False
-        assert first["args"]["tool"] == "Agent", f"{tid}: must read the subagent's own output"
+    scs = [s for s in _load_scenarios() if s["skill"] == "qa-gatekeeper"]
+    assert len(scs) >= 6
+    for s in scs:
+        kinds = [c["check"] for c in s["checks"]]
+        assert "subagent_verdict" in kinds, f"{s['id']}: must gate on the subagent's verdict"
+        assert not any(k.startswith("final_text") for k in kinds), \
+            f"{s['id']}: final_text is the ORCHESTRATOR's paraphrase, not the subagent's verdict"
+        v = next(c for c in s["checks"] if c["check"] == "subagent_verdict")
+        args = v.get("args", {})
+        assert ("allowed" in args) ^ ("forbidden" in args), \
+            f"{s['id']}: state exactly one of allowed/forbidden"
+
+
+def test_subagent_scenarios_get_headroom_for_a_nested_run():
+    """A scenario that spawns a subagent pays for two nested runs, the inner one usually
+    running a whole test suite. Too tight a timeout truncates it, and the result then reads
+    as 'the subagent produced nothing' — a claim about the skill that was really about the
+    clock. Observed runs land at 70-120s, so the default 240s is thin under load."""
+    for s in _load_scenarios():
+        if s["skill"] == "qa-gatekeeper":
+            assert s.get("timeout", 0) >= 600, f"{s['id']}: needs headroom for a nested run"
 
 
 def test_forbidden_command_patterns_target_execution_not_mention():
