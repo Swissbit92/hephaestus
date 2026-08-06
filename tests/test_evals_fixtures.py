@@ -162,7 +162,12 @@ def test_qa_vacuous_assertion_is_green_wrong_and_unpinned(tmp_path):
 
 def test_qa_pinned_assertion_twin_is_correct_and_pinned(tmp_path):
     repo = fixtures.build("qa_pinned_assertion", tmp_path / "r")
-    assert _run_pytest(repo) == (3, 0)
+    assert _run_pytest(repo) == (7, 0)
+    src = (repo / "pricing.py").read_text(encoding="utf-8")
+    # A twin must not carry unrelated defects; a reviewer that flags one is right, and
+    # the scenario then measures the wrong thing. Unvalidated money maths was flagged.
+    assert "raise ValueError" in src, "must validate its domain"
+    assert "pytest.raises(ValueError)" in (repo / "tests" / "test_pricing.py").read_text(encoding="utf-8")
     src = (repo / "pricing.py").read_text(encoding="utf-8")
     tst = (repo / "tests" / "test_pricing.py").read_text(encoding="utf-8")
     assert "price * (1 - rate)" in src
@@ -241,6 +246,29 @@ def _load_scenarios():
 def test_scenarios_file_loads_and_has_entries():
     scs = _load_scenarios()
     assert len(scs) >= 8
+
+
+def test_twin_scenarios_assert_on_the_verdict_not_on_prose():
+    """A word cannot say whether it was used to accuse or to clear.
+
+    The wired-guard twin first asserted the review text did not contain 'decorative',
+    'never called' and similar. It failed 3/3 — on a review that concluded
+    CONDITIONAL_PASS and said, in as many words, "Wiring — guard is live, not
+    decorative". That is an exoneration, and the pattern counted it as an accusation.
+    Polarity is not recoverable from a keyword, so the twins gate on the machine-readable
+    verdict instead, which has exactly one meaning.
+    """
+    scs = {s["id"]: s for s in _load_scenarios()}
+    twins = [i for i in scs if "no-false-alarm" in i]
+    assert len(twins) >= 3
+    for tid in twins:
+        checks = scs[tid]["checks"]
+        first = checks[0]
+        assert first["check"] == "tool_result_not_matching", f"{tid}: must gate on a verdict"
+        assert first["args"]["pattern"] == r"QA-VERDICT:\s*REJECT", \
+            f"{tid}: gate on the verdict token, never on descriptive prose"
+        assert first["args"]["ignore_case"] is False
+        assert first["args"]["tool"] == "Agent", f"{tid}: must read the subagent's own output"
 
 
 def test_forbidden_command_patterns_target_execution_not_mention():
