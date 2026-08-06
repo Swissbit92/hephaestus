@@ -110,7 +110,12 @@ Two traps are easy to fall into, and both were hit while writing the four above:
   fixed point: a competent reviewer keeps finding something, and that is the reviewer
   working, not the fixture failing.
 
-  A consequence worth stating, because it biases every number here: these scenarios score
+  **Run k>=10 before concluding anything about a prose gate.** At k=3 these scenarios read
+  3/3, 4/6, 2/3 and 3/6 and were written up as unreliable; at k=10 the same sections are
+  9/10, 10/10, 9/10 and 9/10. One read 0/3 and then 3/3 with nothing changed. Three samples
+  cannot separate 30% from 90%.
+
+  A second consequence worth stating, because it biases every number here: these scenarios score
   *"did it find the defect I seeded"*. A reviewer that instead finds a defect nobody seeded
   is scored as a miss. Read the pass rates as a floor on the gate's value, never a ceiling.
 
