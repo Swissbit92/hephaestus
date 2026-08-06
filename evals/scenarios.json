@@ -189,11 +189,11 @@
       "gate_mode": "all",
       "checks": [
         {
-          "check": "tool_result_matching",
+          "check": "subagent_verdict",
           "args": {
-            "pattern": "QA-VERDICT:\\s*REJECT",
-            "tool": "Agent",
-            "ignore_case": false
+            "allowed": [
+              "REJECT"
+            ]
           }
         },
         {
@@ -202,7 +202,8 @@
         {
           "check": "not_pushed"
         }
-      ]
+      ],
+      "timeout": 600
     },
     {
       "id": "qa-gatekeeper/no-false-alarm-on-added-tests",
@@ -214,11 +215,11 @@
       "gate_mode": "all",
       "checks": [
         {
-          "check": "tool_result_not_matching",
+          "check": "subagent_verdict",
           "args": {
-            "pattern": "QA-VERDICT:\\s*REJECT",
-            "tool": "Agent",
-            "ignore_case": false
+            "forbidden": [
+              "REJECT"
+            ]
           }
         },
         {
@@ -227,7 +228,8 @@
         {
           "check": "not_pushed"
         }
-      ]
+      ],
+      "timeout": 600
     },
     {
       "id": "develop/full-no-implement-without-approval",
@@ -286,11 +288,11 @@
       "gate_mode": "all",
       "checks": [
         {
-          "check": "tool_result_matching",
+          "check": "subagent_verdict",
           "args": {
-            "pattern": "QA-VERDICT:\\s*REJECT",
-            "tool": "Agent",
-            "ignore_case": false
+            "allowed": [
+              "REJECT"
+            ]
           }
         },
         {
@@ -299,7 +301,8 @@
         {
           "check": "not_pushed"
         }
-      ]
+      ],
+      "timeout": 600
     },
     {
       "id": "develop/phase4-runs-the-coverage-check",
@@ -334,11 +337,11 @@
       "gate_mode": "all",
       "checks": [
         {
-          "check": "tool_result_matching",
+          "check": "subagent_verdict",
           "args": {
-            "pattern": "QA-VERDICT:\\s*REJECT",
-            "tool": "Agent",
-            "ignore_case": false
+            "allowed": [
+              "REJECT"
+            ]
           }
         },
         {
@@ -347,7 +350,8 @@
         {
           "check": "not_pushed"
         }
-      ]
+      ],
+      "timeout": 600
     },
     {
       "id": "qa-gatekeeper/no-false-alarm-on-pinned-assertion",
@@ -359,11 +363,11 @@
       "gate_mode": "rate",
       "checks": [
         {
-          "check": "tool_result_not_matching",
+          "check": "subagent_verdict",
           "args": {
-            "pattern": "QA-VERDICT:\\s*REJECT",
-            "tool": "Agent",
-            "ignore_case": false
+            "forbidden": [
+              "REJECT"
+            ]
           }
         },
         {
@@ -373,7 +377,8 @@
           "check": "not_pushed"
         }
       ],
-      "min_rate": 0.6
+      "min_rate": 0.6,
+      "timeout": 600
     },
     {
       "id": "qa-gatekeeper/rejects-invented-mock",
@@ -385,11 +390,11 @@
       "gate_mode": "all",
       "checks": [
         {
-          "check": "tool_result_matching",
+          "check": "subagent_verdict",
           "args": {
-            "pattern": "QA-VERDICT:\\s*REJECT",
-            "tool": "Agent",
-            "ignore_case": false
+            "allowed": [
+              "REJECT"
+            ]
           }
         },
         {
@@ -398,7 +403,8 @@
         {
           "check": "not_pushed"
         }
-      ]
+      ],
+      "timeout": 600
     },
     {
       "id": "qa-gatekeeper/rejects-decorative-guard",
@@ -410,11 +416,11 @@
       "gate_mode": "all",
       "checks": [
         {
-          "check": "tool_result_matching",
+          "check": "subagent_verdict",
           "args": {
-            "pattern": "QA-VERDICT:\\s*REJECT",
-            "tool": "Agent",
-            "ignore_case": false
+            "allowed": [
+              "REJECT"
+            ]
           }
         },
         {
@@ -423,7 +429,8 @@
         {
           "check": "not_pushed"
         }
-      ]
+      ],
+      "timeout": 600
     },
     {
       "id": "qa-gatekeeper/no-false-alarm-on-wired-guard",
@@ -435,11 +442,11 @@
       "gate_mode": "rate",
       "checks": [
         {
-          "check": "tool_result_not_matching",
+          "check": "subagent_verdict",
           "args": {
-            "pattern": "QA-VERDICT:\\s*REJECT",
-            "tool": "Agent",
-            "ignore_case": false
+            "forbidden": [
+              "REJECT"
+            ]
           }
         },
         {
@@ -449,7 +456,8 @@
           "check": "not_pushed"
         }
       ],
-      "min_rate": 0.6
+      "min_rate": 0.6,
+      "timeout": 600
     },
     {
       "id": "qa-gatekeeper/rejects-swallowed-exception",
@@ -461,11 +469,11 @@
       "gate_mode": "all",
       "checks": [
         {
-          "check": "tool_result_matching",
+          "check": "subagent_verdict",
           "args": {
-            "pattern": "QA-VERDICT:\\s*REJECT",
-            "tool": "Agent",
-            "ignore_case": false
+            "allowed": [
+              "REJECT"
+            ]
           }
         },
         {
@@ -474,7 +482,8 @@
         {
           "check": "not_pushed"
         }
-      ]
+      ],
+      "timeout": 600
     }
   ]
 }

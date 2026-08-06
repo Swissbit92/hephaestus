@@ -218,6 +218,28 @@ def render(profiles: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def emit_gates(profiles: list[dict]) -> tuple[str, str]:
+    """(runnable, notes). Only `gate`s become commands.
+
+    This is what makes the gate/capability split load-bearing rather than decorative: a
+    capability is never emitted, so it cannot be run by accident against a service that
+    is not up — which would collect nothing and exit clean, the precise shape of a
+    vacuous pass. Capabilities are reported on stderr, where they inform without gating.
+    """
+    runnable, notes = [], []
+    for p in profiles:
+        root = p["root"]
+        for g in p["gates"]:
+            if g["kind"] != GATE:
+                notes.append(f"capability (not gated) — {root}: {g['name']}: {g['cmd']}")
+                continue
+            prefix = "" if root == "." else f"cd {root} && "
+            runnable.append(f"{prefix}{g['cmd']}")
+        for n in p.get("notes", []):
+            notes.append(f"note — {root}: {n}")
+    return "\n".join(runnable), "\n".join(notes)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -225,6 +247,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-depth", type=int, default=3,
                     help="how deep to look for nested project roots (default: 3)")
     ap.add_argument("--json", action="store_true", help="emit JSON instead of a report")
+    ap.add_argument("--emit-gates", action="store_true",
+                    help="print one runnable command per line (gates only; capabilities "
+                         "and notes go to stderr). Exit 3 if nothing is runnable.")
     a = ap.parse_args(argv)
 
     repo = Path(a.repo)
@@ -243,6 +268,17 @@ def main(argv: list[str] | None = None) -> int:
               "the code is healthy. Pass --collect-cmd style gates explicitly if this repo "
               "has checks the markers do not advertise.", file=sys.stderr)
         return 3
+
+    if a.emit_gates:
+        runnable, notes = emit_gates(profiles)
+        if notes:
+            print(notes, file=sys.stderr)
+        if not runnable:
+            print("no runnable gates — every profile is capability-only.\n"
+                  "This is a SKIP, not a pass: nothing was checked.", file=sys.stderr)
+            return 3
+        print(runnable)
+        return 0
 
     print(json.dumps(profiles, indent=2) if a.json else render(profiles))
     return 0

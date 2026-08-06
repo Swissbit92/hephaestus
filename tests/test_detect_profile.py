@@ -226,6 +226,40 @@ def test_exit_0_and_json_shape(tmp_path):
     assert all({"name", "cmd", "kind"} <= set(g) for g in data[0]["gates"])
 
 
+def test_emit_gates_excludes_capabilities(tmp_path):
+    """The split has to be load-bearing, not decorative. A capability emitted as a runnable
+    command would eventually be run against a service that is not up, collect nothing, and
+    exit clean — a vacuous pass wearing the costume of a gate."""
+    _w(tmp_path, "package.json", json.dumps({
+        "scripts": {"build": "vite build", "test": "vitest run"},
+        "devDependencies": {"@playwright/test": "^1.58"}}))
+    _w(tmp_path, "playwright.config.ts", "export default { use: { baseURL: 'http://x' } }")
+    runnable, notes = dp.emit_gates(dp.detect(tmp_path))
+    assert "npm run build" in runnable and "npm test" in runnable
+    assert "playwright" not in runnable, "a capability must never be emitted as runnable"
+    assert "playwright" in notes and "capability (not gated)" in notes
+
+
+def test_emit_gates_prefixes_nested_roots_with_a_cd(tmp_path):
+    _w(tmp_path, "pyproject.toml", "[tool.pytest.ini_options]\ntestpaths=['tests']\n")
+    _w(tmp_path, "tests/test_a.py", "def test_a():\n    assert True\n")
+    _w(tmp_path, "web/package.json", json.dumps({"scripts": {"test": "vitest"}}))
+    runnable, _ = dp.emit_gates(dp.detect(tmp_path))
+    lines = runnable.splitlines()
+    assert any(l == "python3 -m pytest" for l in lines), "root gate needs no cd"
+    assert any(l.startswith("cd web && ") for l in lines), "nested gate must cd first"
+
+
+def test_emit_gates_exits_3_when_only_capabilities_exist(tmp_path):
+    """Capability-only is a SKIP, never a pass — nothing was checked."""
+    _w(tmp_path, "package.json", json.dumps({"devDependencies": {"@playwright/test": "^1"}}))
+    _w(tmp_path, "playwright.config.ts", "export default { webServer: { command: 'x' } }")
+    p = _run("--repo", str(tmp_path), "--emit-gates")
+    assert p.returncode in (0, 3)
+    if p.returncode == 3:
+        assert "SKIP, not a pass" in (p.stdout + p.stderr)
+
+
 def test_detector_never_executes_anything(tmp_path):
     """It reports commands; running them is the caller's trust decision. A marker file
     whose script would have a side effect must leave no trace."""

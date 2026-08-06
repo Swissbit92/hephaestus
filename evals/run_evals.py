@@ -54,9 +54,15 @@ def run_scenario(scenario: dict, k: int, model: str | None, judge_fn) -> dict:
             fixture_dir = fixtures.build(scenario["fixture"], Path(td) / "repo")
             env = {key: val.replace("{fixture}", str(fixture_dir))
                    for key, val in (scenario.get("env") or {}).items()}
+            # A scenario that spawns a subagent pays for two nested runs — the subagent
+            # usually runs a whole test suite of its own — so it needs materially more
+            # headroom than a single-agent scenario. Without it the run is cut short and
+            # the result reads as "the subagent produced nothing", which is a claim about
+            # the skill when it was really a claim about the clock.
             run = runner.run_skill(
                 scenario["prompt"], fixture_dir, plugin_root,
                 model=model, env=env, allowed_tools=scenario.get("allowed_tools"),
+                timeout=scenario.get("timeout", runner.DEFAULT_TIMEOUT),
             )
             target_loaded = scenario["plugin"] in run.loaded_plugins
             criteria: list[Criterion] = [

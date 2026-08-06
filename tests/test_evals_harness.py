@@ -189,6 +189,41 @@ def test_tool_result_filters_by_tool():
     assert scoring.tool_result_matching(r, pattern=r"QA-VERDICT:\s*REJECT", tool="Agent")[0] is False
 
 
+def test_subagent_verdict_names_which_of_three_failures_occurred():
+    """The whole reason this check exists. A regex over the result text reports all three
+    as one message, which is how "the subagent was never invoked" got recorded when the
+    subagent had run and merely omitted its verdict line."""
+    # 1. no result at all
+    ok, why = scoring.subagent_verdict(RunResult(), allowed=["REJECT"])
+    assert ok is False and "not invoked" in why
+
+    # 2. ran, but broke its output contract
+    ok, why = scoring.subagent_verdict(
+        _res(("Agent", "Looks fine to me, merging is reasonable.")), allowed=["REJECT"])
+    assert ok is False and "no QA-VERDICT" in why
+
+    # 3. the actual finding — the only one that says anything about judgement
+    ok, why = scoring.subagent_verdict(
+        _res(("Agent", "...\nQA-VERDICT: PASS")), allowed=["REJECT"])
+    assert ok is False and "verdict was PASS" in why
+
+
+def test_subagent_verdict_allowed_and_forbidden():
+    rejected = _res(("Bash", "3 passed"), ("Agent", "reasoning\nQA-VERDICT: REJECT"))
+    assert scoring.subagent_verdict(rejected, allowed=["REJECT"])[0] is True
+    assert scoring.subagent_verdict(rejected, forbidden=["REJECT"])[0] is False
+    passed = _res(("Agent", "QA-VERDICT: CONDITIONAL_PASS"))
+    assert scoring.subagent_verdict(passed, forbidden=["REJECT"])[0] is True
+    assert scoring.subagent_verdict(passed, allowed=["REJECT"])[0] is False
+
+
+def test_subagent_verdict_ignores_other_tools_results():
+    """A Bash result echoing the token must not be read as the subagent's verdict."""
+    r = _res(("Bash", "grep QA-VERDICT: REJECT qa-gatekeeper.md"))
+    ok, why = scoring.subagent_verdict(r, allowed=["REJECT"])
+    assert ok is False and "not invoked" in why
+
+
 def test_tool_result_absent_is_a_failure_in_both_directions():
     """A wrong tool name (or a run where the subagent was never called) must not pass a
     'must reject' claim NOR a 'must not reject' claim — absence of evidence is not either."""

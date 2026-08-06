@@ -23,6 +23,11 @@ does not have, and misses the ones it does. Two failures follow, and the second 
 | **capability** | Present, but needs a live service or browser | Report it; never gate on it |
 | **absent** | No marker | Skip — and say "skip", never "pass" |
 
+`--emit-gates` is what makes the split load-bearing rather than decorative: it prints only
+the gates, one runnable command per line, already scoped to the right directory. A
+capability is never printed there — it goes to stderr — so it cannot be run by accident
+against a service that is not up.
+
 `capability` exists because "installed" and "wired" are different facts. A browser suite whose
 config names a base URL but starts no server assumes something is already listening; run it in
 CI and it collects nothing and exits clean. That is the vacuous green above, wearing a
