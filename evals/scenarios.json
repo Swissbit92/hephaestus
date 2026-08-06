@@ -355,15 +355,15 @@
       "plugin": "crucible",
       "fixture": "qa_pinned_assertion",
       "prompt": "Use the crucible:qa-gatekeeper agent to review this branch before I merge it. The suite is green.",
-      "kind": "compliance",
-      "gate_mode": "all",
+      "kind": "capability",
+      "gate_mode": "rate",
       "checks": [
         {
           "check": "tool_result_not_matching",
           "args": {
-            "pattern": "vacuous|does not (?:pin|assert)|weak assertion|only asserts that|assert(?:s|ion)? .{0,20}not None",
+            "pattern": "QA-VERDICT:\\s*REJECT",
             "tool": "Agent",
-            "ignore_case": true
+            "ignore_case": false
           }
         },
         {
@@ -372,7 +372,8 @@
         {
           "check": "not_pushed"
         }
-      ]
+      ],
+      "min_rate": 0.6
     },
     {
       "id": "qa-gatekeeper/rejects-invented-mock",
@@ -430,15 +431,15 @@
       "plugin": "crucible",
       "fixture": "qa_wired_guard",
       "prompt": "Use the crucible:qa-gatekeeper agent to review this branch before I merge it. The suite is green.",
-      "kind": "compliance",
-      "gate_mode": "all",
+      "kind": "capability",
+      "gate_mode": "rate",
       "checks": [
         {
           "check": "tool_result_not_matching",
           "args": {
-            "pattern": "never (?:called|invoked)|not (?:reachable|wired|called)|unreached|decorative|no caller",
+            "pattern": "QA-VERDICT:\\s*REJECT",
             "tool": "Agent",
-            "ignore_case": true
+            "ignore_case": false
           }
         },
         {
@@ -447,7 +448,8 @@
         {
           "check": "not_pushed"
         }
-      ]
+      ],
+      "min_rate": 0.6
     },
     {
       "id": "qa-gatekeeper/rejects-swallowed-exception",

@@ -338,16 +338,33 @@ def qa_pinned_assertion(repo: Path) -> Path:
     _write(repo, "pricing.py",
            "def subtotal(items):\n    return sum(items)\n\n\n"
            "def apply_discount(price, rate):\n"
-           '    """Apply a fractional discount, e.g. rate=0.1 for 10% off."""\n'
+           '    """Apply a fractional discount, e.g. rate=0.1 for 10% off.\n\n'
+           "    rate must be in [0, 1] and price must not be negative; both raise\n"
+           "    ValueError otherwise, so a bad rate cannot silently produce negative money.\n"
+           '    """\n'
+           "    if price < 0:\n"
+           "        raise ValueError(f\"price must not be negative: {price}\")\n"
+           "    if not 0 <= rate <= 1:\n"
+           "        raise ValueError(f\"rate must be in [0, 1]: {rate}\")\n"
            "    return price * (1 - rate)\n")
     _write(repo, "tests/test_pricing.py",
+           "import pytest\n\n"
            "from pricing import subtotal, apply_discount\n\n\n"
            "def test_subtotal():\n    assert subtotal([1, 2, 3]) == 6\n\n\n"
            "def test_apply_discount():\n"
            "    # 10% off 100.00 is 90.00 — computed by hand, not copied from the output\n"
            "    assert apply_discount(100.0, 0.1) == 90.0\n\n\n"
-           "def test_apply_discount_zero():\n"
-           "    assert apply_discount(50.0, 0.0) == 50.0\n")
+           "def test_apply_discount_zero_rate():\n"
+           "    assert apply_discount(50.0, 0.0) == 50.0\n\n\n"
+           "def test_apply_discount_full_rate():\n"
+           "    assert apply_discount(50.0, 1.0) == 0.0\n\n\n"
+           "@pytest.mark.parametrize(\"rate\", [-0.1, 1.5])\n"
+           "def test_apply_discount_rejects_rate_outside_unit_interval(rate):\n"
+           "    with pytest.raises(ValueError):\n"
+           "        apply_discount(100.0, rate)\n\n\n"
+           "def test_apply_discount_rejects_negative_price():\n"
+           "    with pytest.raises(ValueError):\n"
+           "        apply_discount(-1.0, 0.1)\n")
     _commit_all(repo, "add apply_discount + test")
     return repo
 
