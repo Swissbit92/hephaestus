@@ -262,8 +262,26 @@ def render_markdown(md: str) -> str:
         if m:
             lvl, txt = len(m.group(1)), m.group(2)
             if lvl > 1:
-                slug = re.sub(r"[^a-z0-9]+", "-", re.sub(r"[*`]", "", txt.lower())).strip("-")
-                out.append(f'<h{lvl} id="{slug}">{_inline(txt)}</h{lvl}>')
+                # A heading may contain an inline link. The anchor has to come
+                # from what the reader sees, not from the URL behind it —
+                # otherwise a heading like "Track ([ADR-006](decisions/006-….md))"
+                # produces an id with the whole filename inside it, and every
+                # link written against the visible text misses.
+                clean = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1",
+                               re.sub(r"[*`]", "", txt.lower()))
+                slug = re.sub(r"[^a-z0-9]+", "-", clean).strip("-")
+                # A doc's own table of contents was written against GitHub's
+                # slug rules, which drop an emoji but keep the hyphen that the
+                # space beside it produced: "## 🎯 What next" is `#-what-next`
+                # there and `#what-next` here. Emitting both means those links
+                # land instead of silently doing nothing.
+                # Deliberately not stripped: GitHub converts the space an emoji
+                # left behind into a hyphen, which is the whole reason these
+                # anchors start with one.
+                gh = re.sub(r"[^a-z0-9 _-]", "", clean).replace(" ", "-")
+                alias = (f'<span id="{gh}" class="anchor-alias"></span>'
+                         if gh and gh != slug else "")
+                out.append(f'{alias}<h{lvl} id="{slug}">{_inline(txt)}</h{lvl}>')
             i += 1
             continue
 
@@ -1572,10 +1590,26 @@ svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.6;
   a{{color:inherit;text-decoration:underline}}
   a[href^="http"]::after{{content:" (" attr(href) ")";font-size:.8em;color:var(--faint)}}
 }}
+
+/* ── site navigation ───────────────────────────────────────────────────────
+   Only present when the page is built as part of a site. A standalone page
+   renders with this slot empty and is byte-identical to before, which is what
+   keeps a single page publishable on its own. */
+.snav{{border:1px solid var(--edge);border-bottom:0;background:var(--panel2);
+  padding:.5rem .8rem;display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:baseline}}
+.snav .grp{{display:flex;flex-wrap:wrap;gap:.15rem .7rem;align-items:baseline}}
+.snav a{{font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);text-decoration:none;border-bottom:1px solid transparent}}
+.snav a:hover{{color:var(--txt);border-bottom-color:var(--edge2)}}
+.snav a.on{{color:var(--accent);border-bottom-color:var(--accent)}}
+.snav .home{{color:var(--mid);font-weight:600}}
+.snav .lbl{{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--edge2);margin-right:.2rem}}
+@media print{{.snav{{display:none}}}}
 </style>
 
 <div class="rig">
-<header class="bar">
+{sitenav}<header class="bar">
   <span class="led" aria-hidden="true"></span>
   <h1>{repo}</h1>
   {tags}
@@ -1841,7 +1875,8 @@ def _gen_hash() -> str:
     return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
-def build(md_path: Path, repo_root: Path | None = None) -> str:
+def build(md_path: Path, repo_root: Path | None = None,
+          sitenav: str = "") -> str:
     meta, body_md = parse_frontmatter(md_path.read_text(encoding="utf-8"))
     body = render_markdown(body_md)
 
@@ -1866,6 +1901,7 @@ def build(md_path: Path, repo_root: Path | None = None) -> str:
         accent=meta.get("accent", "#F5A623"),
         src_hash=_src_hash(md_path), gen_hash=_gen_hash(),
         tags=tags, nav=nav, body=body, published=published,
+        sitenav=sitenav,
     )
 
 
