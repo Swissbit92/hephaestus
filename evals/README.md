@@ -77,6 +77,35 @@ This table is checked against `scenarios.json` by `test_readme_table_lists_every
 it drifted silently once, and a stale table is a quiet claim that coverage is smaller than it
 is, or larger.
 
+### A scenario without a control is a number without a scale
+
+**Run the fixture and prompt with the skill *not* invoked, and compare.** A green scenario
+attributes the behaviour to the skill; only the difference from an unskilled run supports
+that. Measured 2026-08-09 on the two new `spar-with-me` scenarios:
+
+| Property | With the skill (k=10) | Control, no skill (k=5) | Discriminating power |
+|---|---|---|---|
+| finds the repo's own ADR | 10/10 | **5/5** | **none** |
+| writes no file | 10/10 | **5/5** | **none** |
+
+Both scored a perfect sweep, and both were measuring the fixture and the base model. Two
+causes, and the first was self-inflicted: the fixture's `CLAUDE.md` said *"read them before
+proposing changes"*, handing over the answer the scenario meant to test for. The second is
+just a high base rate — a capable model reads a repo's decisions and doesn't write
+uninvited, skill or no skill.
+
+Read the two kinds of scenario differently when a control ties:
+
+- **`capability`** — a tie is a **failure**. The scenario claims the skill supplies something;
+  the control shows it was already there. Make the fixture harder or drop the scenario.
+- **`safety`** — a tie is **acceptable**. Its job is regression detection: if a later edit
+  makes the skill start writing, it fires. But report it as *"the skill does not break this"*,
+  never as *"the skill causes this"*.
+
+Cheap to run: build the fixture, strip the `/crucible:<skill>` prefix from the prompt, keep
+everything else identical (`scratchpad/control.py` is the shape). k=5 is enough — the question
+is "always vs never", not a close ranking.
+
 ### Designing a gatekeeper scenario
 
 Two traps are easy to fall into, and both were hit while writing the four above:

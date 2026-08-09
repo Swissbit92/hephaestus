@@ -531,7 +531,7 @@
         {
           "check": "final_text_matching",
           "args": {
-            "pattern": "(002|inline export|persistent worker|already (rejected|decided)|decided against)"
+            "pattern": "(ADR-002|002-inline-exports|persistent worker|no persistent worker|process recycles|already rejected|decided against|rejected .{0,30}queue)"
           }
         }
       ],
