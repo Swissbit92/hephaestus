@@ -68,13 +68,20 @@ if [[ "$DRY_RUN" == "1" ]]; then
 fi
 
 # --- Apply -------------------------------------------------------------------
+# ensure_ascii=False and an explicit utf-8 encoding are both load-bearing. The default
+# json.dump escapes every non-ASCII character to \uXXXX, so a single release would rewrite
+# the em-dashes and typographic quotes in a plugin description into escape sequences —
+# unreadable in the file, and a spurious diff on every subsequent release. Encoding is
+# pinned rather than left to the platform default for the same reason the plugin scripts
+# pin it: that default is cp1252 on Windows.
 python3 - "$MANIFEST" "$NEW" <<'PY'
 import json, sys
 p, new = sys.argv[1], sys.argv[2]
-d = json.load(open(p))
+with open(p, encoding="utf-8") as f:
+    d = json.load(f)
 d['version'] = new
-with open(p, 'w') as f:
-    json.dump(d, f, indent=2)
+with open(p, 'w', encoding="utf-8") as f:
+    json.dump(d, f, indent=2, ensure_ascii=False)
     f.write('\n')
 PY
 
@@ -85,7 +92,16 @@ if command -v claude >/dev/null 2>&1; then
 fi
 
 git add "$MANIFEST"
-git commit -q -m "Release $TAG"
+# The manifest is legitimately unchanged when it already carries the target version —
+# a re-run after a hand-edited bump, or tagging a release whose version landed earlier.
+# `git commit` exits non-zero on an empty index, and under `set -e` that aborts the run
+# *before* the tag, so the release half-happens: manifest right, tag missing, and a git
+# error that says nothing about which. Tag the current HEAD instead.
+if git diff --cached --quiet; then
+  echo "note: manifest already at $NEW — nothing to commit; tagging HEAD"
+else
+  git commit -q -m "Release $TAG"
+fi
 git tag -a "$TAG" -m "$PLUGIN $NEW"
 git push -q origin main
 git push -q origin "$TAG"

@@ -8,7 +8,13 @@
   "homepage": "https://github.com/Swissbit92/hephaestus",
   "repository": "https://github.com/Swissbit92/hephaestus",
   "license": "MIT",
-  "keywords": ["mcp", "template", "starter", "scaffold", "claude-code"],
+  "keywords": [
+    "mcp",
+    "template",
+    "starter",
+    "scaffold",
+    "claude-code"
+  ],
   "userConfig": {
     "api_key": {
       "type": "string",
