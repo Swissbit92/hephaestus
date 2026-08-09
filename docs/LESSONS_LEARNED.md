@@ -11,6 +11,27 @@ applies_to: hephaestus
 
 Append-only, dated entries. Newest first. Each entry: what happened, what we learned, how to apply going forward.
 
+## 2026-08-09 — "Placement beats wording" is not "reorder the instructions"
+
+- **What:** `spar-with-me`'s Q&A step reaches a genuine discriminating question **3 times in
+  10**, identical to a run with no skill at all. Citing this repo's own placement-beats-wording
+  result, the step was moved from after the research to before it, the permission to skip was
+  replaced with a forced disclosure, and a contradicting anti-pattern was fixed. Re-measured on
+  the same fixture, same prompt, same k: **3/10. Unchanged.** Reverted.
+- **Learned:** The Phase 4.0 result (agent-told-to-run 2/6 → workflow-runs-it 3/3) came from
+  moving work out of **instruction** and into **execution**. Reordering steps inside a prose
+  document is not that — it is the same document, the same reader, and the same request, just
+  in a different order. Conflating the two produced a change that read like a principled fix
+  and moved nothing. A prose step that fires 30% of the time is unreliable *as prose*, and no
+  arrangement of prose repairs it.
+- **Apply:** Before invoking "placement beats wording", ask whether the change moves the work
+  to something that *executes* — a script, a hook, a tool the workflow itself runs. If the
+  agent is still being asked, it is a wording change; predict accordingly and measure before
+  believing it. Corollary for this case: fixing the Q&A step needs a turn boundary the skill
+  cannot currently create, and the single-shot harness cannot even represent *ask and wait* —
+  it only sees whether a question was emitted. The defect is real, measured, and **currently
+  out of reach**; it is recorded rather than papered over.
+
 ## 2026-06-28 — Repository initialized
 
 - **What:** `/cms init` scaffolded the standard doc set.

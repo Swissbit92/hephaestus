@@ -582,6 +582,40 @@
         "WebFetch",
         "Agent"
       ]
+    },
+    {
+      "id": "spar-with-me/asks-when-the-answer-turns-on-a-fact-it-cannot-have",
+      "skill": "spar-with-me",
+      "plugin": "crucible",
+      "fixture": "spar_cache_ambiguity",
+      "prompt": "I want to add a cache to the export endpoint. What do you think, honest take?",
+      "kind": "capability",
+      "gate_mode": "rate",
+      "min_rate": 0.6,
+      "allowed_tools": [
+        "Bash",
+        "Read",
+        "Edit",
+        "Write",
+        "Glob",
+        "Grep",
+        "TodoWrite",
+        "WebSearch",
+        "WebFetch",
+        "Agent"
+      ],
+      "checks": [
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "(per.user|per.tenant|user.specific|personali|same for (all|every|each)|same export|identical|vary|varies|differ|scoped|multi.tenant|who .{0,25}(calls|supplies|passes|provides))[^?!.]{0,250}\\?"
+          }
+        },
+        {
+          "check": "files_unchanged"
+        }
+      ],
+      "timeout": 900
     }
   ]
 }
