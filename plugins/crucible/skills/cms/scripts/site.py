@@ -401,7 +401,12 @@ def collect_reference(repo: Path, claimed: set[Path]) -> list[dict]:
     for md in sorted(docs.rglob("*.md")):
         if md in claimed or "archive" in md.relative_to(docs).parts:
             continue
-        out.append({"slug": f"ref-{_slugify(md.stem)}", "title": md.stem.replace("_", " "),
+        # The slug carries the path, not just the filename: `docs/README.md`
+        # and `docs/lore/README.md` are different documents, and naming both
+        # `ref-readme` made one silently overwrite the other on disk.
+        rel = md.relative_to(docs).with_suffix("")
+        out.append({"slug": f"ref-{_slugify(rel.as_posix())}",
+                    "title": " / ".join(rel.parts).replace("_", " "),
                     "sources": [], "paths": [md], "reference": True})
     return out
 
@@ -446,6 +451,15 @@ def discover(root: Path, cfg: dict) -> list[dict]:
             pages.extend(refs)
         if not pages:
             raise SiteError(f"{entry['path']} has no renderable documents")
+        seen: dict[str, str] = {}
+        for pg in pages:
+            src = ", ".join(str(q) for q in pg.get("paths", [])) or "(generated)"
+            if pg["slug"] in seen:
+                raise SiteError(
+                    f'{entry["path"]}: two pages both want "{pg["slug"]}.html" — '
+                    f'{seen[pg["slug"]]} and {src}. One would overwrite the other '
+                    f'and the site would look complete without it.')
+            seen[pg["slug"]] = src
         repos.append({"name": entry.get("name", path.name), "slug": slug,
                       "path": path, "pages": pages,
                       "blurb": entry.get("blurb", "")})

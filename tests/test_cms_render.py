@@ -1381,3 +1381,30 @@ def test_the_search_page_carries_its_index_inline(tmp_path):
 
     assert "distinctiveword" in page
     assert "fetch(" not in page and "XMLHttpRequest" not in page
+
+
+def test_two_docs_with_the_same_filename_get_different_pages(tmp_path):
+    """`docs/README.md` and `docs/lore/README.md` both slugified to `ref-readme`,
+    so one silently overwrote the other on disk and the site looked complete
+    without it."""
+    _repo(tmp_path, "acme", {"README.md": "# A\n",
+                             "docs/README.md": "# Docs\n",
+                             "docs/lore/README.md": "# Lore\n"})
+
+    pages = cms_site.discover(tmp_path, {"repos": [{"path": "acme"}]})[0]["pages"]
+    slugs = [p["slug"] for p in pages]
+
+    assert len(slugs) == len(set(slugs)), slugs
+    assert "ref-readme" in slugs and "ref-lore-readme" in slugs
+
+
+def test_a_slug_collision_fails_the_build_rather_than_losing_a_page(tmp_path):
+    """Belt and braces: if any future rule produces a duplicate, the build stops
+    instead of writing one page over another."""
+    _repo(tmp_path, "acme", {"README.md": "# A\n", "docs/NOTES.md": "# N\n"})
+    cfg = {"repos": [{"path": "acme"}],
+           "pages": [{"slug": "dup", "title": "One", "sources": ["README.md"]},
+                     {"slug": "dup", "title": "Two", "sources": ["docs/NOTES.md"]}]}
+
+    with pytest.raises(cms_site.SiteError, match="overwrite"):
+        cms_site.discover(tmp_path, cfg)
