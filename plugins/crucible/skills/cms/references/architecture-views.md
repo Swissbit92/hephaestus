@@ -325,6 +325,93 @@ SVG before this existed, and two of them recurred on the second figure.
 hatch is still there and still passes through untouched — a ladder, a state
 machine, a board. `archplot` is for series against an axis.
 
+## The multi-repo site (`site.py`)
+
+`render.py` turns one document into one page. `site.py` assembles the documents
+already living in several repos into one navigable site.
+
+```bash
+site.py [root] [-c site.toml] [-o _site]
+```
+
+It authors nothing. Every page is a file that already exists next to the code it
+describes, rendered through the same engine the standalone pages use — so
+`archview`, `archflow`, `archstat` and `archplot` all work unchanged, and so does
+the geometry checker.
+
+### The rule that makes it generic
+
+**A page exists if its sources exist.** There is no per-repo configuration and no
+manifest of pages. A repo with no `DEPLOYMENT.md` has no "Running it" page — and,
+more to the point, no nav entry promising one. Adding the file later is the whole
+of the work needed to make the page appear.
+
+That is the property to preserve when changing this. A nav that can advertise a
+page nobody wrote is worse than a smaller nav.
+
+### `site.toml`
+
+```toml
+title  = "Some Ecosystem"
+output = "_site"
+
+[[repos]]
+path  = "."               # relative to the config file
+name  = "Ecosystem"
+slug  = "ecosystem"       # the URL segment; defaults from the directory name
+blurb = "One line, shown on the home page card."
+```
+
+`[[repos]]` says which repositories the site covers and what each one is. It
+deliberately says nothing about their pages.
+
+### Pages
+
+Nine defaults, in nav order: **Overview** (`README` + `VISION`), **Architecture**,
+**Roadmap**, **Decisions** (`docs/decisions/*.md`), **Lessons**, **Security**
+(`SECURITY` + `THREAT_LEVEL`), **Running it** (`DEPLOYMENT`/`OPERATIONS`/`SAFETY`/
+`TESTING`/`DEVELOPMENT`), **Changelog**, and **Reference**. Override with a
+top-level `pages` array; add repo-specific ones with `extra_pages`.
+
+A page may draw on several files — Security is the clearest case, since the
+posture and the rating are reviewed on different cadences but read together. The
+merge supplies each section's heading and drops the document's own `#`, or the
+title appears twice.
+
+**Reference** is generated, not configured: every document under `docs/` that no
+named page claims gets a page plus an index. Without it the site is a curated
+subset that looks complete while dropping most of a research-heavy repo, and
+every link pointing into the dropped part dies.
+
+### Links
+
+In-repo markdown links are rewritten to the pages their targets became. A link
+whose target is not in the site is **unwrapped to plain text** — the words stay,
+the href goes, because a dead link tells the reader something is there when
+nothing is.
+
+A diagram node whose label is another configured repo's name gets an `href`, and
+the readout offers to open it. Set `href` on a node by hand for anything the
+matcher will never guess.
+
+### Search
+
+One page carries the whole index inline rather than fetching it. That keeps every
+other page working from a `file://` URL, which is the property that lets a single
+page still be published on its own. Fenced code is excluded from the index — it
+is not prose.
+
+### Two failure modes worth knowing
+
+**Slug collisions raise.** Two pages that would write the same file stop the
+build. They used to overwrite silently, which meant a document vanished while the
+page count was the only thing that disagreed.
+
+**A stale renderer is invisible.** The scripts live in the plugin, so a scheduled
+build runs whatever copy the plugin manager installed. If that copy is behind,
+newer block types degrade to raw text rather than erroring. Push, update the
+marketplace, and confirm the installed copy matches before trusting a build.
+
 ## Pills
 
 `[[ok:Passing]]`, `[[warn:Partial]]`, `[[bad:Global]]`, `[[mute:N/A]]` — inline,

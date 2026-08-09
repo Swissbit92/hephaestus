@@ -150,6 +150,10 @@ impossible instead of merely policed.
 - `[[ok:…]]` / `[[warn:…]]` / `[[bad:…]]` / `[[mute:…]]` render inline state
   pills, usable in any table cell. Four states and no more; the label carries the
   meaning so they survive greyscale and print.
+- `site.py <root>` builds a **multi-repo site** from the markdown already in the
+  repos, driven by a `site.toml` that lists repositories and nothing else: a page
+  exists if its sources exist. Adds nav, a home page, cross-repo diagram links and
+  inline search. Details in `references/architecture-views.md`.
 - `published_url` in frontmatter binds the page to one address: the footer links
   it, and `--publish` redeploys there. Without it every publish mints a new link
   and the old ones rot in place, indistinguishable from the current one.
