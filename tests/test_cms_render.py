@@ -1331,3 +1331,53 @@ def test_a_repo_that_does_not_exist_fails_loudly(tmp_path):
 def test_no_repos_configured_is_an_error_not_an_empty_site(tmp_path):
     with pytest.raises(cms_site.SiteError, match="no repos"):
         cms_site.discover(tmp_path, {"repos": []})
+
+
+# --- search ------------------------------------------------------------------
+
+def test_the_index_covers_every_page_that_has_sources(tmp_path):
+    _repo(tmp_path, "acme", {"README.md": "# Acme\n\nthe overview\n",
+                             "docs/ARCHITECTURE.md": "# Arch\n\nthe shape\n",
+                             "docs/NOTES.md": "# Notes\n\nloose notes\n"})
+    repos = cms_site.discover(tmp_path, {"repos": [{"path": "acme"}]})
+
+    idx = cms_site.build_search_index(repos)
+    urls = {e["u"] for e in idx}
+
+    assert "acme/index.html" in urls
+    assert "acme/architecture.html" in urls
+    assert "acme/ref-notes.html" in urls        # reference docs are searchable
+    assert not any(e["u"].endswith("reference.html") for e in idx)  # the index page has no text
+
+
+def test_indexed_text_drops_code_fences_and_markup(tmp_path):
+    md = ("---\ntitle: T\n---\n\n# H\n\nreal **words** here\n\n"
+          "```python\nsecret_token = 'not prose'\n```\n\nmore words\n")
+
+    txt = cms_site._plain_text(md)
+
+    assert "real words here" in txt and "more words" in txt
+    assert "secret_token" not in txt      # fenced code is not prose
+    assert "**" not in txt
+
+
+def test_headings_are_indexed_for_ranking(tmp_path):
+    _repo(tmp_path, "acme", {"README.md": "# Acme\n\n## Funding mechanics\n\nbody\n"})
+    repos = cms_site.discover(tmp_path, {"repos": [{"path": "acme"}]})
+
+    entry = next(e for e in cms_site.build_search_index(repos)
+                 if e["u"] == "acme/index.html")
+
+    assert "Funding mechanics" in entry["h"]
+
+
+def test_the_search_page_carries_its_index_inline(tmp_path):
+    """Inlined rather than fetched, so the page works from a file:// URL like
+    every other page on the site."""
+    _repo(tmp_path, "acme", {"README.md": "# Acme\n\ndistinctiveword\n"})
+    repos = cms_site.discover(tmp_path, {"repos": [{"path": "acme"}]})
+
+    page = cms_site.render_search_page(repos, {"title": "T"})
+
+    assert "distinctiveword" in page
+    assert "fetch(" not in page and "XMLHttpRequest" not in page

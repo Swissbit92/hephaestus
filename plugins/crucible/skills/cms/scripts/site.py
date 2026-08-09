@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import re
 import shutil
 import sys
@@ -177,6 +178,141 @@ def build_linkmap(repos: list[dict]) -> dict[Path, str]:
     return m
 
 
+
+# ── search ──────────────────────────────────────────────────────────────────
+# The index is inlined into one page rather than fetched. A fetch would be
+# simpler, but it would also be the only thing on this site that needs a server
+# to behave a particular way, and every other page works from a file:// URL. One
+# page carrying the weight keeps that property for the other 165.
+
+RE_FENCE_BLOCK = re.compile(r"```.*?```", re.S)
+RE_MD_MARKUP = re.compile(r"[*_`#>|\[\]()]")
+
+
+def _plain_text(md: str, limit: int = 4000) -> str:
+    """Markdown reduced to searchable words."""
+    meta_stripped = render.parse_frontmatter(md)[1]
+    body = RE_FENCE_BLOCK.sub(" ", meta_stripped)
+    body = RE_MD_LINK.sub(r"\1", body)
+    body = RE_MD_MARKUP.sub(" ", body)
+    return " ".join(body.split())[:limit]
+
+
+def build_search_index(repos: list[dict]) -> list[dict]:
+    idx = []
+    for r in repos:
+        for pg in r["pages"]:
+            if not pg.get("paths"):
+                continue
+            texts, heads = [], []
+            for q in pg["paths"]:
+                raw = q.read_text(encoding="utf-8", errors="replace")
+                texts.append(_plain_text(raw))
+                heads += [h.strip() for h in
+                          re.findall(r"^#{2,4}\s+(.+)$", raw, re.M)][:40]
+            idx.append({"u": f'{r["slug"]}/{pg["slug"]}.html', "r": r["name"],
+                        "t": pg["title"], "h": heads[:40],
+                        "b": " ".join(texts)[:6000]})
+    return idx
+
+
+SEARCH_JS = r"""
+var IDX = __INDEX__;
+function esc(s){return s.replace(/[&<>]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+/* Highlighting walks the string instead of building a RegExp from the query:
+   a pattern compiled out of whatever the reader typed has to escape every
+   metacharacter correctly, and getting that subtly wrong is how a search box
+   starts throwing on a bracket. */
+function mark(text, terms){
+  var low = text.toLowerCase(), out = '', i = 0;
+  while (i < text.length) {
+    var best = -1, blen = 0;
+    for (var j = 0; j < terms.length; j++) {
+      var at = low.indexOf(terms[j], i);
+      if (at >= 0 && (best < 0 || at < best)) { best = at; blen = terms[j].length; }
+    }
+    if (best < 0) { out += esc(text.slice(i)); break; }
+    out += esc(text.slice(i, best)) + '<mark>' + esc(text.substr(best, blen)) + '</mark>';
+    i = best + blen;
+  }
+  return out;
+}
+function run(q){
+  var box = document.getElementById('sr');
+  q = (q || '').trim().toLowerCase();
+  if (q.length < 2) { box.innerHTML = '<p class="hint">Type at least two characters.</p>'; return; }
+  var terms = q.split(/\s+/), out = [];
+  for (var i = 0; i < IDX.length; i++) {
+    var d = IDX[i];
+    var head = (d.t + ' ' + d.r + ' ' + d.h.join(' ')).toLowerCase();
+    var hay = head + ' ' + d.b.toLowerCase();
+    var score = 0, ok = true;
+    for (var j = 0; j < terms.length; j++) {
+      var n = hay.split(terms[j]).length - 1;
+      if (!n) { ok = false; break; }
+      score += n;
+      if (head.indexOf(terms[j]) >= 0) score += 40;
+    }
+    if (!ok) continue;
+    var at = d.b.toLowerCase().indexOf(terms[0]);
+    var frag = at < 0 ? d.b.slice(0, 200)
+                      : d.b.slice(Math.max(0, at - 90), at + 150);
+    out.push({ d: d, s: score, f: frag });
+  }
+  out.sort(function(a, b){ return b.s - a.s; });
+  if (!out.length) { box.innerHTML = '<p class="hint">Nothing matched.</p>'; return; }
+  var h = '<p class="hint">' + out.length + ' page' + (out.length > 1 ? 's' : '') + '.</p>';
+  for (var k = 0; k < Math.min(out.length, 60); k++) {
+    var o = out[k];
+    h += '<article class="hit"><a href="' + o.d.u + '">' + esc(o.d.t) + '</a>' +
+         ' <span class="in">' + esc(o.d.r) + '</span>' +
+         '<p>' + mark(o.f, terms) + '…</p></article>';
+  }
+  box.innerHTML = h;
+}
+var inp = document.getElementById('sq');
+inp.addEventListener('input', function(){ run(inp.value); });
+var q0 = new URLSearchParams(location.search).get('q');
+if (q0) { inp.value = q0; run(q0); }
+inp.focus();
+"""
+
+SEARCH_CSS = """
+#sq{width:100%;padding:.6rem .7rem;font:inherit;font-size:1rem;
+  background:var(--panel);color:var(--txt);border:1px solid var(--edge2)}
+#sq:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.hit{border-bottom:1px solid var(--edge);padding:.6rem 0}
+.hit a{color:var(--accent);text-decoration:none;font-size:.95rem}
+.hit .in{color:var(--faint);font-size:.68rem;letter-spacing:.06em;
+  text-transform:uppercase;margin-left:.4rem}
+.hit p{margin:.25rem 0 0;color:var(--mid);font-size:.8rem;line-height:1.55}
+.hit mark{background:var(--accent);color:#12201C;padding:0 .1em}
+.hint{color:var(--faint);font-size:.8rem}
+"""
+
+
+def render_search_page(repos: list[dict], cfg: dict) -> str:
+    idx = build_search_index(repos)
+    body = ('<h2 id="search">Search</h2>'
+            '<p>Every document in every repository, including the reference '
+            'material that no named section claims.</p>'
+            '<input id="sq" type="search" autocomplete="off" spellcheck="false" '
+            'placeholder="Search all documents…" aria-label="Search all documents">'
+            '<div id="sr"></div>')
+    page = render.TEMPLATE.format(
+        title=f'{cfg.get("title", "Documentation")} — Search',
+        repo=html.escape(cfg.get("title", "Documentation").upper()),
+        accent=cfg.get("accent", "#F5A623"), src_hash="-",
+        gen_hash=render._gen_hash(), tags="", nav="", body=body,
+        published="", source_label="EVERY DOCUMENT IN THE SITE",
+        sitenav=build_root_nav(repos, "search"))
+    payload = json.dumps(idx, separators=(",", ":"))
+    return (page.replace("</style>", SEARCH_CSS + "</style>", 1)
+                .replace("</body>", "", 1)
+            + "<script>" + SEARCH_JS.replace("__INDEX__", payload) + "</script>")
+
+
 def build_nav(repos: list[dict], repo_slug: str, page_slug: str) -> str:
     """The two rows above every page: which repo, and which page within it."""
     def repo_link(r: dict) -> str:
@@ -201,6 +337,7 @@ def build_nav(repos: list[dict], repo_slug: str, page_slug: str) -> str:
     return (
         '<div class="snav">'
         '<div class="grp"><a class="home" href="../index.html">&#9670; ALL</a>'
+        '<a class="find" href="../search.html">&#9906; SEARCH</a>'
         + "".join(repo_link(r) for r in repos) + "</div>"
         f'<div class="grp"><span class="lbl">in {html.escape(current["name"])}</span>{pages}</div>'
         "</div>"
@@ -231,6 +368,23 @@ def collect_reference(repo: Path, claimed: set[Path]) -> list[dict]:
         out.append({"slug": f"ref-{_slugify(md.stem)}", "title": md.stem.replace("_", " "),
                     "sources": [], "paths": [md], "reference": True})
     return out
+
+
+def build_root_nav(repos: list[dict], here: str) -> str:
+    """The nav for the two pages that live at the site root.
+
+    Same bar as everywhere else, minus the `../` — the home and search pages sit
+    a directory above the repos rather than inside one.
+    """
+    links = "".join(
+        f'<a href="{r["slug"]}/index.html">{html.escape(r["name"])}</a>'
+        for r in repos)
+    find = ('<a class="find on" href="search.html">&#9906; SEARCH</a>'
+            if here == "search"
+            else '<a class="find" href="search.html">&#9906; SEARCH</a>')
+    home = ('<a class="home on" href="index.html">&#9670; ALL</a>' if here == "home"
+            else '<a class="home" href="index.html">&#9670; ALL</a>')
+    return f'<div class="snav"><div class="grp">{home}{find}{links}</div></div>'
 
 
 def discover(root: Path, cfg: dict) -> list[dict]:
@@ -295,7 +449,7 @@ def render_home(repos: list[dict], cfg: dict) -> str:
         src_hash="-", gen_hash=render._gen_hash(),
         tags="", nav=nav, body=body, published="",
         source_label="SITE.TOML",
-        sitenav="",
+        sitenav=build_root_nav(repos, "home"),
     )
     return page.replace("</style>", HOME_CSS + "</style>", 1)
 
@@ -309,6 +463,9 @@ HOME_CSS = """
 .card .links{margin:0;font-size:.7rem;line-height:1.9;color:var(--faint)}
 .card .links a{color:var(--faint);text-decoration:none;border-bottom:1px solid var(--edge)}
 .card .links a:hover{color:var(--txt)}
+.findbar{margin:0 0 1rem}
+.findbar a{color:var(--accent);text-decoration:none;font-size:.8rem;
+  letter-spacing:.04em;border-bottom:1px solid var(--edge2)}
 """
 
 
@@ -379,7 +536,8 @@ def build_site(root: Path, cfg: dict, out: Path) -> tuple[int, int]:
             pages_written += 1
 
     (out / "index.html").write_text(render_home(repos, cfg), encoding="utf-8")
-    return len(repos), pages_written + 1
+    (out / "search.html").write_text(render_search_page(repos, cfg), encoding="utf-8")
+    return len(repos), pages_written + 2
 
 
 def main() -> int:
