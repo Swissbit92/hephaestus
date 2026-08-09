@@ -313,6 +313,42 @@ def render_search_page(repos: list[dict], cfg: dict) -> str:
             + "<script>" + SEARCH_JS.replace("__INDEX__", payload) + "</script>")
 
 
+RE_ARCHVIEW = re.compile(r"^```archview\n(.*?)^```", re.S | re.M)
+
+
+def link_repo_nodes(md: str, repos: list[dict], self_slug: str, here: str) -> str:
+    """Give a diagram node that names another repo somewhere to go.
+
+    Topology diagrams name their neighbours — the executor that reads these
+    signals, the pipeline that writes this data — and in a single-page render
+    those nodes were necessarily dead ends. In a site they do not have to be.
+
+    Matching is on the node's exact label against a configured repo name, which
+    is deliberately strict: a node whose label *is* a sibling repo's name is that
+    repo, and anything looser would start inventing links.
+    """
+    by_name = {r["name"].lower(): r["slug"] for r in repos if r["slug"] != self_slug}
+    if not by_name:
+        return md
+
+    def sub(m):
+        try:
+            spec = json.loads(m.group(1))
+        except ValueError:
+            return m.group(0)
+        touched = False
+        for nd in spec.get("nodes", []):
+            slug = by_name.get(str(nd.get("label", "")).strip().lower())
+            if slug and "href" not in nd:
+                nd["href"] = _relpath(here, f"{slug}/index.html")
+                touched = True
+        if not touched:
+            return m.group(0)
+        return "```archview\n" + json.dumps(spec, indent=2, ensure_ascii=False) + "\n```"
+
+    return RE_ARCHVIEW.sub(sub, md)
+
+
 def build_nav(repos: list[dict], repo_slug: str, page_slug: str) -> str:
     """The two rows above every page: which repo, and which page within it."""
     def repo_link(r: dict) -> str:
@@ -510,7 +546,9 @@ def build_site(root: Path, cfg: dict, out: Path) -> tuple[int, int]:
 
             # Rewrite per source file: a link is relative to the document that
             # contains it, and a merged page has more than one of those.
-            parts = [rewrite_links(merge_sources([q], r["path"]), q, linkmap, here)
+            parts = [link_repo_nodes(
+                        rewrite_links(merge_sources([q], r["path"]), q, linkmap, here),
+                        repos, r["slug"], here)
                      for q in p["paths"]]
             if len(p["paths"]) == 1:
                 merged = parts[0]

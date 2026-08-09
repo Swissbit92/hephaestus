@@ -733,6 +733,7 @@ def render_diagram(spec: dict, fig: int = 1) -> str:
                  f'data-sub="{html.escape(nd.get("sub", "") or "", quote=True)}" '
                  f'data-tech="{html.escape(nd.get("tech", "") or "", quote=True)}" '
                  f'data-note="{html.escape(_node_note(nd), quote=True)}" '
+                 f'data-goto="{html.escape(nd.get("href", ""), quote=True)}" '
                  f'data-links="{html.escape(_node_links(nd, spec), quote=True)}" '
                  f'data-kind="{html.escape(KIND_MEANING.get(nd.get("kind", "module"), "component"), quote=True)}" '
                  f'tabindex="0" '
@@ -770,7 +771,7 @@ def render_diagram(spec: dict, fig: int = 1) -> str:
              f'<span class="ins-body" hidden aria-live="polite">'
              f'<span class="ins-head"><b class="ins-t"></b>'
              f'<span class="ins-k"></span><span class="ins-tech"></span></span>'
-             f'<span class="ins-s"></span><span class="ins-links"></span></span></div>')
+             f'<span class="ins-s"></span><span class="ins-links"></span><a class="ins-goto" hidden></a></span></div>')
     # A walker on every diagram. Where an archflow declares a path it walks that
     # path and says so; otherwise it tours the boxes in layout order and says
     # THAT. Labelling the difference is the point: a derived order presented as
@@ -1486,6 +1487,9 @@ button.pz[disabled]{{opacity:.4;cursor:default;border-color:var(--edge)}}
   color:var(--faint);border:1px solid var(--edge2);padding:.08rem .38rem;border-radius:2px}}
 .ins-tech{{font-size:.6rem;color:var(--accent);letter-spacing:.04em}}
 .ins-s{{display:block;color:var(--mid);max-width:68ch;text-wrap:pretty}}
+.ins-goto{{display:inline-block;margin-top:.45rem;font-size:.7rem;
+  color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent)}}
+.ins-goto[hidden]{{display:none}}
 .ins-links{{display:block;margin-top:.3rem;font-size:.63rem;color:var(--faint);
   font-family:var(--mono)}}
 .ins-none{{color:var(--faint);font-style:italic}}
@@ -1688,6 +1692,7 @@ svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.6;
         t=box.querySelector('.ins-t'), k=box.querySelector('.ins-k'),
         tech=box.querySelector('.ins-tech'), s=box.querySelector('.ins-s'),
         links=box.querySelector('.ins-links'),
+        gotoEl=box.querySelector('.ins-goto'),
         tour=document.querySelector('.tour[data-tour="'+svg.id+'"]'),
         order=tour?tour.getAttribute('data-order').split(','):[],
         at=-1;
@@ -1706,6 +1711,13 @@ svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.6;
       else {{ s.textContent='No description written for this one yet.';
               s.className='ins-s ins-none'; }}
       links.textContent=g.getAttribute('data-links')||'';
+      /* A node that stands for another repo is a dead end without this: the
+         diagram names the neighbour and then offers no way to reach it. */
+      var goto_=g.getAttribute('data-goto')||'';
+      if(goto_){{gotoEl.href=goto_;
+        gotoEl.textContent='\u2192 open '+(g.getAttribute('data-label')||'');
+        gotoEl.hidden=false;}}
+      else{{gotoEl.hidden=true;}}
       hint.hidden=true; body.hidden=false;
       if(!quiet){{
         var idx=order.indexOf(g.getAttribute('data-node'));
