@@ -77,6 +77,77 @@ This table is checked against `scenarios.json` by `test_readme_table_lists_every
 it drifted silently once, and a stale table is a quiet claim that coverage is smaller than it
 is, or larger.
 
+### A scenario without a control is a number without a scale
+
+**Run the fixture and prompt with the skill *not* invoked, and compare.** A green scenario
+attributes the behaviour to the skill; only the difference from an unskilled run supports
+that. Measured 2026-08-09 on the two `spar-with-me` scenarios:
+
+| Property | With the skill | Control, no skill | Discriminating power |
+|---|---|---|---|
+| finds the repo's own ADR — signposted fixture | 10/10 | 5/5 | **none** |
+| finds the repo's own ADR — hardened fixture | 10/10 | 3/5, then **10/10** (13/15 pooled) | **none established** |
+| writes no file | 10/10 | 10/10 | **none** |
+
+Both scored a perfect sweep, and neither was measuring the skill. Two causes, and the first
+was self-inflicted: the fixture's `CLAUDE.md` said *"read them before proposing changes"* and
+`app.py`'s docstring named the ADR path, handing over the answer the scenario meant to test
+for. Both were removed. The second cause is not fixable by fixture design — a capable model
+reads a repo's decisions and doesn't write uninvited, skill or no skill.
+
+> **The control needs k=10 too.** The first control on the hardened fixture read **3/5** and
+> looked like a real effect (60% vs 100%). Ten runs on the *same* fixture read **10/10**. Same
+> code, same prompt, opposite conclusion — and the small sample happened to point the flattering
+> way. Five runs is enough for "always vs never" only when the true rate is near an extreme; it
+> cannot distinguish 60% from 90%, and a control is exactly where that distinction decides
+> whether a feature gets credit. Apply the k≥10 rule to the control, not just the treatment.
+
+**You cannot demonstrate value on a property the base model already has.** That is the real
+constraint on scenario design, and it points at testing properties with a *low* base rate.
+
+### A fixture must not contain the answer — and it will, three times running
+
+The clarifying-question claim was attempted and **abandoned**, because every fixture built for
+it leaked. Recorded because the failure repeated after being fixed twice:
+
+| Attempt | The leak | Control |
+|---|---|---|
+| 1 | `CLAUDE.md`: *"read them before proposing changes"* | 5/5 |
+| 2 | `app.py` docstring named the ADR's path | (same fixture) |
+| 3 | the ADR named the discriminating fact: *"revisit if and only if the deploy target gains a persistent process"* | **10/10** |
+
+Attempt 3 scored **treatment 10/10, control 10/10 — the same question, often word for word**.
+Both arms just read that sentence back. Removing a pointer *to* the answer and leaving the
+answer *in* the document is not a fix; it moves the signpost one level down.
+
+The general shape: **a fixture leaks when the property under test can be satisfied by quoting
+the fixture.** Before running anything, ask what a run would have to *do* rather than *read*
+to pass, and delete the sentence that makes reading sufficient. A control catches the leak
+after the fact; this question catches it before.
+
+For a *clarifying-question* scenario specifically, that bar is brutal: the missing fact has to
+be about the world outside the repository, **and the repository must not mention that it is
+missing.** The model has to notice the gap unprompted. No fixture here has cleared that yet,
+and the claim it was built to test — that spar-with-me's Q&A step is structurally
+suppressed — therefore remains **untested, neither confirmed nor refuted**.
+
+One thing the attempt did establish: the ~2–5% clarification base rate from the literature is
+measured on ambiguous *factual QA*. In this setting — advice-seeking with a decision record
+present — the base model asked a good discriminating question **10/10 without any skill**.
+Whether that figure transfers is now an open question, not an assumption.
+
+Read the two kinds of scenario differently when a control ties:
+
+- **`capability`** — a tie is a **failure**. The scenario claims the skill supplies something;
+  the control shows it was already there. Make the fixture harder or drop the scenario.
+- **`safety`** — a tie is **acceptable**. Its job is regression detection: if a later edit
+  makes the skill start writing, it fires. But report it as *"the skill does not break this"*,
+  never as *"the skill causes this"*.
+
+Cheap to run: build the fixture, strip the `/crucible:<skill>` prefix from the prompt, keep
+everything else identical (`scratchpad/control.py` is the shape). k=5 is enough — the question
+is "always vs never", not a close ranking.
+
 ### Designing a gatekeeper scenario
 
 Two traps are easy to fall into, and both were hit while writing the four above:
