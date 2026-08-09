@@ -578,7 +578,63 @@ def develop_trivial(repo: Path) -> Path:
     return repo
 
 
+_SPAR_ADR = """\
+# ADR-002 — Process exports inline, not on a job queue
+
+Status: Accepted
+Date: 2025-11-14
+
+## Context
+
+Export jobs take 20-40s. A background worker queue was the obvious fix and we prototyped
+one.
+
+## Decision
+
+**Rejected.** We process exports inline behind a progress endpoint instead.
+
+The deploy target runs the app as a single short-lived process with no persistent worker
+and no supervisor: anything enqueued is lost the moment the process recycles, which it
+does on every deploy and under idle scale-down. A queue would need a worker host we do
+not have and do not want to operate.
+
+Revisit only if the deploy target gains a persistent process.
+"""
+
+
+def spar_idea(repo: Path) -> Path:
+    """An idea whose answer is already in the repo — and whose *web* answer is the opposite.
+
+    The user proposes a background job queue. Generic external best practice enthusiastically
+    endorses that: it is the textbook fix for slow requests. The repo's own ADR-002 rejected
+    it for a reason that still holds (no persistent worker process on the deploy target).
+
+    That asymmetry is the whole point. A run that only searches the web produces a confident,
+    well-cited recommendation the project already considered and killed — spar's stated
+    failure mode for skipping the internal half. Surfacing ADR-002 is only possible by
+    reading the repo, so the check cannot be satisfied by plausible-sounding prose.
+
+    Also the read-only fixture: nothing here should be modified, and no branch created.
+    """
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md",
+           "# exporter\n\nA small export service. Architectural decisions live in "
+           "`docs/decisions/` — read them before proposing changes.\n")
+    _write(repo, "docs/decisions/002-inline-exports.md", _SPAR_ADR)
+    _write(repo, "app.py",
+           "import time\n\n\n"
+           "def build_export(rows):\n"
+           '    """Inline export. Slow by design — see docs/decisions/002-inline-exports.md."""\n'
+           "    time.sleep(0.01)\n"
+           "    return [dict(r) for r in rows]\n")
+    _commit_all(repo, "init exporter")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    return repo
+
+
 FIXTURES = {
+    "spar_idea": spar_idea,
     "finish_red": finish_red,
     "finish_green": finish_green,
     "finish_on_target": finish_on_target,
