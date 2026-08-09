@@ -9,9 +9,9 @@
     {
       "name": "crucible",
       "source": "./plugins/crucible",
-      "description": "Doc-discipline (cms), a sparring partner for ideas still being formed (spar-with-me), adversarial stress-testing once they harden (grill-me), a structured development workflow (develop), a safe branch lifecycle (start-branch / finish-branch), eval-first development (freeze a baseline, gate on match-or-beat-or-revert), flag-gate (default-OFF rollout with instant revert), bounded read-only agent loops (loop-harness), irreversible-action discipline (act-for-real), and recurring whole-repo health audits (repo-audit).",
+      "description": "Doc-discipline (cms — linting and ADRs, plus a rendered HTML view of any document and a multi-repo documentation site built from the markdown already in the repos), a sparring partner for ideas still being formed (spar-with-me), adversarial stress-testing once they harden (grill-me), a structured development workflow (develop), a safe branch lifecycle (start-branch / finish-branch), eval-first development (freeze a baseline, gate on match-or-beat-or-revert), flag-gate (default-OFF rollout with instant revert), bounded read-only agent loops (loop-harness), irreversible-action discipline (act-for-real), and recurring whole-repo health audits (repo-audit).",
       "category": "productivity",
-      "tags": ["documentation", "workflow", "review"]
+      "tags": ["documentation", "workflow", "review", "static-site"]
     },
     {
       "name": "sqlite-readonly",
