@@ -602,6 +602,70 @@ Revisit only if the deploy target gains a persistent process.
 """
 
 
+_SPAR_UNDERSPEC_ADR = """\
+# ADR-002 — Process exports inline, not on a job queue
+
+Status: Accepted
+Date: 2025-11-14
+
+## Decision
+
+**Rejected.** Exports run inline behind a progress endpoint.
+
+The deploy target runs the app as a single short-lived process with no persistent worker:
+anything enqueued is lost when the process recycles, which it does on every deploy and
+under idle scale-down.
+
+**This decision turns entirely on that one fact.** Revisit it if — and only if — the
+deploy target gains a persistent process. Nothing else about the trade-off has changed
+or is likely to.
+"""
+
+
+def spar_underspecified(repo: Path) -> Path:
+    """RETIRED — leaks the answer. Kept as a documented negative example; do not build a
+    scenario on it without fixing the leak first.
+
+    Measured treatment 10/10 / control 10/10 — the same question in both arms, usually word
+    for word, because the ADR below says "revisit if and only if the deploy target gains a
+    persistent process". Both arms read that sentence back. Zero discriminating power. See
+    the fixture-leak section of evals/README.md.
+
+    The intent was: an idea whose correct answer hinges on a fact the repository cannot
+    contain.
+
+    The user asks to revisit the job-queue decision. ADR-002 says the decision turns
+    *entirely* on one thing: whether the deploy target now has a persistent process. The
+    repo cannot know that — there is no deploy config, no Dockerfile, no CI. Only the user
+    knows, and the two answers give opposite recommendations:
+
+        deploy target changed     -> the ADR's own revisit condition is met, build the queue
+        deploy target unchanged   -> the ADR stands, don't
+
+    That is the definition of a discriminating question under spar-with-me's discipline #4
+    ("ask only if different answers would lead to a materially different recommendation"),
+    so a run that delivers a recommendation without asking has skipped a step it was
+    supposed to take — not exercised judgement in skipping it.
+
+    Deliberately kept free of anything that would leak the answer: no deploy manifest, no
+    hosting hints, and no CLAUDE.md instruction to read the ADRs (the signpost that made
+    `spar_idea` untestable — see the control-condition section of evals/README.md).
+    """
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", "# exporter\n\nA small export service.\n")
+    _write(repo, "docs/decisions/002-inline-exports.md", _SPAR_UNDERSPEC_ADR)
+    _write(repo, "app.py",
+           "import time\n\n\n"
+           "def build_export(rows):\n"
+           '    """Build an export. Slow for large row counts."""\n'
+           "    time.sleep(0.01)\n"
+           "    return [dict(r) for r in rows]\n")
+    _commit_all(repo, "init exporter")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    return repo
+
+
 def spar_idea(repo: Path) -> Path:
     """An idea whose answer is already in the repo — and whose *web* answer is the opposite.
 
@@ -617,14 +681,17 @@ def spar_idea(repo: Path) -> Path:
     Also the read-only fixture: nothing here should be modified, and no branch created.
     """
     _init(repo, default_branch="main")
-    _write(repo, "CLAUDE.md",
-           "# exporter\n\nA small export service. Architectural decisions live in "
-           "`docs/decisions/` — read them before proposing changes.\n")
+    # No signposts. Both the CLAUDE.md ("architectural decisions live in docs/decisions/ —
+    # read them before proposing changes") and the docstring's explicit ADR path were
+    # removed after a control run scored 5/5 WITHOUT the skill invoked: the scenario was
+    # measuring whether the model follows a pointer it was handed, not whether the skill
+    # researches internally by discipline. A fixture must never tell the model how to pass.
+    _write(repo, "CLAUDE.md", "# exporter\n\nA small export service.\n")
     _write(repo, "docs/decisions/002-inline-exports.md", _SPAR_ADR)
     _write(repo, "app.py",
            "import time\n\n\n"
            "def build_export(rows):\n"
-           '    """Inline export. Slow by design — see docs/decisions/002-inline-exports.md."""\n'
+           '    """Build an export. Slow for large row counts."""\n'
            "    time.sleep(0.01)\n"
            "    return [dict(r) for r in rows]\n")
     _commit_all(repo, "init exporter")
@@ -635,6 +702,7 @@ def spar_idea(repo: Path) -> Path:
 
 FIXTURES = {
     "spar_idea": spar_idea,
+    "spar_underspecified": spar_underspecified,
     "finish_red": finish_red,
     "finish_green": finish_green,
     "finish_on_target": finish_on_target,

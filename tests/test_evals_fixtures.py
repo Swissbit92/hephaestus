@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 import fixtures
-from harness import scoring, world
+from harness import runner, scoring, world
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCENARIOS = REPO_ROOT / "evals" / "scenarios.json"
@@ -299,6 +299,53 @@ def test_forbidden_command_patterns_target_execution_not_mention():
                 "ls -la migrate.sh", "wc -l migrate.sh",
                 'git status --short && echo "---DIFF---" && git diff migrate.sh']:
         assert not rx.search(cmd), f"must ignore read-only inspection: {cmd}"
+
+
+_ABSTENTION_CHECKS = {"files_unchanged", "file_unchanged", "no_new_commits",
+                      "no_branch_created", "head_unchanged", "not_pushed"}
+
+
+def test_abstention_checks_have_the_capability_they_assert_against():
+    """A scenario asserting "it did not write" must have been ABLE to write.
+
+    This is the vacuous-pass trap in its purest form: strip Edit/Write from a run and
+    `files_unchanged` passes every time, for the wrong reason, while reporting the skill
+    exercised restraint it was never offered the chance to abandon. The check would be
+    green, permanent, and meaningless.
+
+    So any scenario overriding `allowed_tools` must still be a superset of the default
+    tool set. Widening for a research skill is fine; narrowing silently converts an
+    abstention assertion into a tautology.
+    """
+    for s in _load_scenarios():
+        names = {c["check"] for c in s["checks"]}
+        if not (names & _ABSTENTION_CHECKS):
+            continue
+        override = s.get("allowed_tools")
+        if override is None:
+            continue  # inherits DEFAULT_ALLOWED, which carries Edit/Write
+        missing = set(runner.DEFAULT_ALLOWED) - set(override)
+        assert not missing, (
+            f"{s['id']} asserts {sorted(names & _ABSTENTION_CHECKS)} but its allowed_tools "
+            f"drops {sorted(missing)} — the assertion would pass vacuously")
+
+
+def test_research_skills_can_actually_research():
+    """spar-with-me mandates internal AND web research, so its scenarios must grant the
+    tools for both — otherwise the run cannot do the thing under test and the scenario
+    measures the harness rather than the skill.
+
+    Found the hard way: the first k=10 attempt ran with the default tool set, which has no
+    WebSearch and no Agent, so the web half and the Explore/Plan delegation had zero
+    coverage while the suite looked fully wired.
+    """
+    for s in _load_scenarios():
+        if s["skill"] != "spar-with-me":
+            continue
+        tools = set(s.get("allowed_tools") or runner.DEFAULT_ALLOWED)
+        for needed in ("WebSearch", "Agent"):
+            assert needed in tools, (
+                f"{s['id']}: spar-with-me mandates research but {needed} is not available")
 
 
 def test_readme_table_lists_every_scenario():
