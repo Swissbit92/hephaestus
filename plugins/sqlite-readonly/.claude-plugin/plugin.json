@@ -8,7 +8,13 @@
   "homepage": "https://github.com/Swissbit92/hephaestus",
   "repository": "https://github.com/Swissbit92/hephaestus",
   "license": "MIT",
-  "keywords": ["sqlite", "mcp", "read-only", "sql", "database"],
+  "keywords": [
+    "sqlite",
+    "mcp",
+    "read-only",
+    "sql",
+    "database"
+  ],
   "userConfig": {
     "db_path": {
       "type": "string",

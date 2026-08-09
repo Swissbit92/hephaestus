@@ -8,5 +8,11 @@
   "homepage": "https://github.com/Swissbit92/hephaestus",
   "repository": "https://github.com/Swissbit92/hephaestus",
   "license": "MIT",
-  "keywords": ["obsidian", "notes", "pkm", "second-brain", "claude-code"]
+  "keywords": [
+    "obsidian",
+    "notes",
+    "pkm",
+    "second-brain",
+    "claude-code"
+  ]
 }
