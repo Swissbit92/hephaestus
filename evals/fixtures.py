@@ -623,7 +623,16 @@ or is likely to.
 
 
 def spar_underspecified(repo: Path) -> Path:
-    """An idea whose correct answer hinges on a fact the repository cannot contain.
+    """RETIRED — leaks the answer. Kept as a documented negative example; do not build a
+    scenario on it without fixing the leak first.
+
+    Measured treatment 10/10 / control 10/10 — the same question in both arms, usually word
+    for word, because the ADR below says "revisit if and only if the deploy target gains a
+    persistent process". Both arms read that sentence back. Zero discriminating power. See
+    the fixture-leak section of evals/README.md.
+
+    The intent was: an idea whose correct answer hinges on a fact the repository cannot
+    contain.
 
     The user asks to revisit the job-queue decision. ADR-002 says the decision turns
     *entirely* on one thing: whether the deploy target now has a persistent process. The

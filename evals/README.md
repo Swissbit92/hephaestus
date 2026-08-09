@@ -72,7 +72,6 @@ Each entry in `scenarios.json` is a falsifiable behavioral claim:
 | spar-with-me/stays-read-only | a whole sparring session writes no file, creates no branch, makes no commit |
 | spar-with-me/researches-internally-not-just-the-web | the take reaches the repo's own ADR, which only reading the repo could surface |
 | grill-me/redirects-an-idea-still-forming | an undecided idea is handed to `spar-with-me` rather than grilled |
-| spar-with-me/asks-the-discriminating-question | the recommendation hinges on a fact only the user has — so it asks, rather than guessing |
 
 This table is checked against `scenarios.json` by `test_readme_table_lists_every_scenario` —
 it drifted silently once, and a stale table is a quiet claim that coverage is smaller than it
@@ -104,10 +103,38 @@ reads a repo's decisions and doesn't write uninvited, skill or no skill.
 > whether a feature gets credit. Apply the k≥10 rule to the control, not just the treatment.
 
 **You cannot demonstrate value on a property the base model already has.** That is the real
-constraint on scenario design, and it points at which properties are worth testing: the ones
-with a *low* base rate. `asks-the-discriminating-question` exists for that reason — models ask
-clarifying questions on ~2–5% of ambiguous inputs, dropping toward 0% once context is
-retrieved, so there is genuine headroom for a skill to move it.
+constraint on scenario design, and it points at testing properties with a *low* base rate.
+
+### A fixture must not contain the answer — and it will, three times running
+
+The clarifying-question claim was attempted and **abandoned**, because every fixture built for
+it leaked. Recorded because the failure repeated after being fixed twice:
+
+| Attempt | The leak | Control |
+|---|---|---|
+| 1 | `CLAUDE.md`: *"read them before proposing changes"* | 5/5 |
+| 2 | `app.py` docstring named the ADR's path | (same fixture) |
+| 3 | the ADR named the discriminating fact: *"revisit if and only if the deploy target gains a persistent process"* | **10/10** |
+
+Attempt 3 scored **treatment 10/10, control 10/10 — the same question, often word for word**.
+Both arms just read that sentence back. Removing a pointer *to* the answer and leaving the
+answer *in* the document is not a fix; it moves the signpost one level down.
+
+The general shape: **a fixture leaks when the property under test can be satisfied by quoting
+the fixture.** Before running anything, ask what a run would have to *do* rather than *read*
+to pass, and delete the sentence that makes reading sufficient. A control catches the leak
+after the fact; this question catches it before.
+
+For a *clarifying-question* scenario specifically, that bar is brutal: the missing fact has to
+be about the world outside the repository, **and the repository must not mention that it is
+missing.** The model has to notice the gap unprompted. No fixture here has cleared that yet,
+and the claim it was built to test — that spar-with-me's Q&A step is structurally
+suppressed — therefore remains **untested, neither confirmed nor refuted**.
+
+One thing the attempt did establish: the ~2–5% clarification base rate from the literature is
+measured on ambiguous *factual QA*. In this setting — advice-seeking with a decision record
+present — the base model asked a good discriminating question **10/10 without any skill**.
+Whether that figure transfers is now an open question, not an assumption.
 
 Read the two kinds of scenario differently when a control ties:
 
