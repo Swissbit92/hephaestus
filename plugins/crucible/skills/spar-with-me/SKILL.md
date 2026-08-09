@@ -83,6 +83,12 @@ formed, not a committee pretending to think.
    your recommended answer for each, and then get on with it. A session that opens with ten
    generic intake questions has outsourced the thinking back to the user.
 
+   **Known weak point, measured:** this step reaches a genuine discriminating question about
+   **3 times in 10** — the same rate as a run with no skill at all. Moving it earlier in this
+   file and removing its permission to skip changed nothing (still 3/10). Treat it as the least
+   reliable instruction here and check yourself against it deliberately. It is not fixable by
+   rewording; see [docs/LESSONS_LEARNED.md](../../../../docs/LESSONS_LEARNED.md).
+
 5. **Scale depth to the ask.** A quick gut check gets a quick answer with a short research
    pass — not five phases. Reserve the full treatment for ideas with real cost behind them.
    Getting this wrong in the heavy direction is how a tool stops being used.
