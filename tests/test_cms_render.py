@@ -1153,3 +1153,62 @@ def test_the_right_gutter_is_wide_enough_for_its_longest_label():
 def test_an_empty_plot_is_refused():
     with pytest.raises(render_arch.ArchPlotError):
         render_arch.render_plot({"series": []})
+
+
+# --- any document, not just ARCHITECTURE -------------------------------------
+# The renderer grew a second job: the site build feeds it README, SECURITY,
+# ROADMAP and the rest. Everything below is about it naming those correctly,
+# because a page titled "Architecture" that is actually the threat model is
+# worse than no page.
+
+def test_frontmatter_title_wins():
+    meta = {"title": "Threat Level"}
+    assert render_arch._doc_title(Path("docs/THREAT_LEVEL.md"), meta) == "Threat Level"
+
+
+def test_conventional_filenames_get_readable_titles():
+    """Root docs are exempt from frontmatter, so the filename is all there is."""
+    t = render_arch._doc_title
+    assert t(Path("README.md"), {}) == "Overview"
+    assert t(Path("LESSONS_LEARNED.md"), {}) == "Lessons learned"
+    assert t(Path("SECURITY.md"), {}) == "Security"
+
+
+def test_an_unrecognised_filename_still_reads_as_words():
+    """Falling back to a raw stem would put MIGRATION_NOTES in a browser tab."""
+    assert render_arch._doc_title(Path("MIGRATION_NOTES.md"), {}) == "Migration Notes"
+
+
+def test_repo_name_comes_from_the_repo_not_the_path_depth(tmp_path):
+    """Regression: `md_path.parents[1].name` assumed every doc lives under
+    docs/. For a doc at the repo root that resolved to the *parent directory of
+    the repo*, so eeva-exec/SECURITY.md rendered as belonging to `nephilim`."""
+    repo = tmp_path / "acme-exec"
+    (repo / "docs").mkdir(parents=True)
+    root_doc, nested_doc = repo / "SECURITY.md", repo / "docs" / "ROADMAP.md"
+
+    assert render_arch._repo_name(root_doc, repo) == "acme-exec"
+    assert render_arch._repo_name(nested_doc, repo) == "acme-exec"
+
+
+def test_source_label_is_repo_relative(tmp_path):
+    repo = tmp_path / "acme"
+    (repo / "docs").mkdir(parents=True)
+
+    assert render_arch._source_label(repo / "SECURITY.md", repo) == "SECURITY.md"
+    assert render_arch._source_label(repo / "docs" / "ROADMAP.md", repo) == "docs/ROADMAP.md"
+
+
+def test_a_non_architecture_doc_renders_with_its_own_identity(tmp_path):
+    repo = tmp_path / "acme"
+    (repo / "docs").mkdir(parents=True)
+    (repo / "docs" / "THREAT_LEVEL.md").write_text(
+        "---\ntitle: Threat Level\nstatus: active\ncreated: 2026-01-01\n"
+        "last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: acme\n---\n\n"
+        "## Rating\n\nHigh.\n", encoding="utf-8")
+
+    page = render_arch.build(repo / "docs" / "THREAT_LEVEL.md", repo)
+
+    assert "<title>acme — Threat Level</title>" in page
+    assert "DOCS/THREAT_LEVEL.MD" in page
+    assert "ARCHITECTURE" not in page.split("<footer>")[1]
