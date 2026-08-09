@@ -1153,3 +1153,231 @@ def test_the_right_gutter_is_wide_enough_for_its_longest_label():
 def test_an_empty_plot_is_refused():
     with pytest.raises(render_arch.ArchPlotError):
         render_arch.render_plot({"series": []})
+
+
+# --- any document, not just ARCHITECTURE -------------------------------------
+# The renderer grew a second job: the site build feeds it README, SECURITY,
+# ROADMAP and the rest. Everything below is about it naming those correctly,
+# because a page titled "Architecture" that is actually the threat model is
+# worse than no page.
+
+def test_frontmatter_title_wins():
+    meta = {"title": "Threat Level"}
+    assert render_arch._doc_title(Path("docs/THREAT_LEVEL.md"), meta) == "Threat Level"
+
+
+def test_conventional_filenames_get_readable_titles():
+    """Root docs are exempt from frontmatter, so the filename is all there is."""
+    t = render_arch._doc_title
+    assert t(Path("README.md"), {}) == "Overview"
+    assert t(Path("LESSONS_LEARNED.md"), {}) == "Lessons learned"
+    assert t(Path("SECURITY.md"), {}) == "Security"
+
+
+def test_an_unrecognised_filename_still_reads_as_words():
+    """Falling back to a raw stem would put MIGRATION_NOTES in a browser tab."""
+    assert render_arch._doc_title(Path("MIGRATION_NOTES.md"), {}) == "Migration Notes"
+
+
+def test_repo_name_comes_from_the_repo_not_the_path_depth(tmp_path):
+    """Regression: `md_path.parents[1].name` assumed every doc lives under
+    docs/. For a doc at the repo root that resolved to the *parent directory of
+    the repo*, so eeva-exec/SECURITY.md rendered as belonging to `nephilim`."""
+    repo = tmp_path / "acme-exec"
+    (repo / "docs").mkdir(parents=True)
+    root_doc, nested_doc = repo / "SECURITY.md", repo / "docs" / "ROADMAP.md"
+
+    assert render_arch._repo_name(root_doc, repo) == "acme-exec"
+    assert render_arch._repo_name(nested_doc, repo) == "acme-exec"
+
+
+def test_source_label_is_repo_relative(tmp_path):
+    repo = tmp_path / "acme"
+    (repo / "docs").mkdir(parents=True)
+
+    assert render_arch._source_label(repo / "SECURITY.md", repo) == "SECURITY.md"
+    assert render_arch._source_label(repo / "docs" / "ROADMAP.md", repo) == "docs/ROADMAP.md"
+
+
+def test_a_non_architecture_doc_renders_with_its_own_identity(tmp_path):
+    repo = tmp_path / "acme"
+    (repo / "docs").mkdir(parents=True)
+    (repo / "docs" / "THREAT_LEVEL.md").write_text(
+        "---\ntitle: Threat Level\nstatus: active\ncreated: 2026-01-01\n"
+        "last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: acme\n---\n\n"
+        "## Rating\n\nHigh.\n", encoding="utf-8")
+
+    page = render_arch.build(repo / "docs" / "THREAT_LEVEL.md", repo)
+
+    assert "<title>acme — Threat Level</title>" in page
+    assert "DOCS/THREAT_LEVEL.MD" in page
+    assert "ARCHITECTURE" not in page.split("<footer>")[1]
+
+
+# --- the multi-repo site build -----------------------------------------------
+# Loaded by path, not by name: `site` is a stdlib module, and the local helper
+# `_spec` in this file is a diagram spec — both collide with the obvious names.
+def _load_site_module():
+    import importlib.util
+    s = importlib.util.spec_from_file_location("cms_site", TOOLS / "site.py")
+    mod = importlib.util.module_from_spec(s)
+    s.loader.exec_module(mod)
+    return mod
+
+
+cms_site = _load_site_module()
+
+
+def _repo(tmp_path, name, files):
+    r = tmp_path / name
+    (r / "docs").mkdir(parents=True)
+    for rel, text in files.items():
+        p = r / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+    return r
+
+
+def test_a_page_exists_only_when_its_sources_do(tmp_path):
+    """The rule the whole design rests on: no per-repo configuration, and no nav
+    entry promising a page that was never written."""
+    repo = _repo(tmp_path, "acme", {"README.md": "# Acme\n\nHi.\n"})
+
+    cfg = {"repos": [{"path": "acme"}]}
+    repos = cms_site.discover(tmp_path, cfg)
+    slugs = {p["slug"] for p in repos[0]["pages"]}
+
+    assert "index" in slugs
+    assert "running" not in slugs      # no DEPLOYMENT/OPERATIONS/... exists
+    assert "architecture" not in slugs
+
+
+def test_adding_a_document_adds_its_page(tmp_path):
+    repo = _repo(tmp_path, "acme", {"README.md": "# Acme\n"})
+    cfg = {"repos": [{"path": "acme"}]}
+    assert "running" not in {p["slug"] for p in cms_site.discover(tmp_path, cfg)[0]["pages"]}
+
+    (repo / "docs" / "DEPLOYMENT.md").write_text("# Deploy\n", encoding="utf-8")
+
+    assert "running" in {p["slug"] for p in cms_site.discover(tmp_path, cfg)[0]["pages"]}
+
+
+def test_unclaimed_docs_become_reference_pages(tmp_path):
+    """Otherwise the site silently drops most of a research-heavy repo, and every
+    link pointing into it dies."""
+    _repo(tmp_path, "acme", {"README.md": "# Acme\n",
+                             "docs/FINDINGS_2026.md": "# Findings\n",
+                             "docs/SPEC.md": "# Spec\n"})
+
+    pages = cms_site.discover(tmp_path, {"repos": [{"path": "acme"}]})[0]["pages"]
+    refs = [p for p in pages if p.get("reference")]
+
+    assert {p["title"] for p in refs} == {"FINDINGS 2026", "SPEC"}
+    assert any(p["slug"] == "reference" for p in pages)
+
+
+def test_a_link_to_a_document_in_the_site_is_rewritten(tmp_path):
+    src = tmp_path / "acme" / "docs" / "A.md"
+    src.parent.mkdir(parents=True)
+    target = tmp_path / "acme" / "docs" / "B.md"
+    target.write_text("# B\n", encoding="utf-8")
+    linkmap = {target.resolve(): "acme/b.html"}
+
+    out = cms_site.rewrite_links("see [B](B.md) now", src, linkmap, "acme/a.html")
+
+    assert out == "see [B](b.html) now"
+
+
+def test_a_link_to_nothing_is_unwrapped_rather_than_left_dead(tmp_path):
+    """A dead link tells the reader something is there when nothing is. The words
+    survive; only the false promise goes."""
+    src = tmp_path / "acme" / "docs" / "A.md"
+    src.parent.mkdir(parents=True)
+
+    out = cms_site.rewrite_links("see [the config](../config/x.json) now",
+                                 src, {}, "acme/a.html")
+
+    assert out == "see the config now"
+
+
+def test_external_and_anchor_links_are_untouched(tmp_path):
+    src = tmp_path / "acme" / "docs" / "A.md"
+    src.parent.mkdir(parents=True)
+    md = "[x](https://example.com) and [y](#section)"
+
+    assert cms_site.rewrite_links(md, src, {}, "acme/a.html") == md
+
+
+def test_a_merged_page_does_not_repeat_the_documents_own_title(tmp_path):
+    """The merge supplies the section heading; keeping the source's `# Security`
+    printed it twice and listed both in the in-page nav."""
+    repo = _repo(tmp_path, "acme", {
+        "SECURITY.md": "# Security\n\nposture text\n",
+        "docs/THREAT_LEVEL.md": "# Threat Level: High\n\nrating text\n"})
+
+    md = cms_site.merge_sources([repo / "SECURITY.md",
+                                 repo / "docs" / "THREAT_LEVEL.md"], repo)
+
+    assert md.count("## Security") == 1
+    assert "# Security\n\nposture" not in md
+    assert "posture text" in md and "rating text" in md
+
+
+def test_a_repo_that_does_not_exist_fails_loudly(tmp_path):
+    with pytest.raises(cms_site.SiteError, match="does not exist"):
+        cms_site.discover(tmp_path, {"repos": [{"path": "nope"}]})
+
+
+def test_no_repos_configured_is_an_error_not_an_empty_site(tmp_path):
+    with pytest.raises(cms_site.SiteError, match="no repos"):
+        cms_site.discover(tmp_path, {"repos": []})
+
+
+# --- search ------------------------------------------------------------------
+
+def test_the_index_covers_every_page_that_has_sources(tmp_path):
+    _repo(tmp_path, "acme", {"README.md": "# Acme\n\nthe overview\n",
+                             "docs/ARCHITECTURE.md": "# Arch\n\nthe shape\n",
+                             "docs/NOTES.md": "# Notes\n\nloose notes\n"})
+    repos = cms_site.discover(tmp_path, {"repos": [{"path": "acme"}]})
+
+    idx = cms_site.build_search_index(repos)
+    urls = {e["u"] for e in idx}
+
+    assert "acme/index.html" in urls
+    assert "acme/architecture.html" in urls
+    assert "acme/ref-notes.html" in urls        # reference docs are searchable
+    assert not any(e["u"].endswith("reference.html") for e in idx)  # the index page has no text
+
+
+def test_indexed_text_drops_code_fences_and_markup(tmp_path):
+    md = ("---\ntitle: T\n---\n\n# H\n\nreal **words** here\n\n"
+          "```python\nsecret_token = 'not prose'\n```\n\nmore words\n")
+
+    txt = cms_site._plain_text(md)
+
+    assert "real words here" in txt and "more words" in txt
+    assert "secret_token" not in txt      # fenced code is not prose
+    assert "**" not in txt
+
+
+def test_headings_are_indexed_for_ranking(tmp_path):
+    _repo(tmp_path, "acme", {"README.md": "# Acme\n\n## Funding mechanics\n\nbody\n"})
+    repos = cms_site.discover(tmp_path, {"repos": [{"path": "acme"}]})
+
+    entry = next(e for e in cms_site.build_search_index(repos)
+                 if e["u"] == "acme/index.html")
+
+    assert "Funding mechanics" in entry["h"]
+
+
+def test_the_search_page_carries_its_index_inline(tmp_path):
+    """Inlined rather than fetched, so the page works from a file:// URL like
+    every other page on the site."""
+    _repo(tmp_path, "acme", {"README.md": "# Acme\n\ndistinctiveword\n"})
+    repos = cms_site.discover(tmp_path, {"repos": [{"path": "acme"}]})
+
+    page = cms_site.render_search_page(repos, {"title": "T"})
+
+    assert "distinctiveword" in page
+    assert "fetch(" not in page and "XMLHttpRequest" not in page

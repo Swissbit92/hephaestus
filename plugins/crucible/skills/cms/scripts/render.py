@@ -39,6 +39,69 @@ from pathlib import Path
 def _default_paths(repo: Path) -> tuple[Path, Path]:
     return repo / "docs" / "ARCHITECTURE.md", repo / "docs" / "ARCHITECTURE.html"
 
+
+# Conventional documentation filenames, spelled the way a reader expects rather
+# than the way the filesystem does. These are cross-industry conventions, not
+# anyone's project vocabulary, so keeping the map here costs no neutrality.
+DOC_TITLES = {
+    "README": "Overview",
+    "CHANGELOG": "Changelog",
+    "SECURITY": "Security",
+    "VISION": "Vision",
+    "ARCHITECTURE": "Architecture",
+    "ROADMAP": "Roadmap",
+    "LESSONS_LEARNED": "Lessons learned",
+    "THREAT_LEVEL": "Threat level",
+    "DEPLOYMENT": "Deployment",
+    "OPERATIONS": "Operations",
+    "DEVELOPMENT": "Development",
+    "TESTING": "Testing",
+    "SAFETY": "Safety",
+}
+
+
+def _source_label(md_path: Path, repo: Path | None = None) -> str:
+    """How the page names the file it was generated from.
+
+    Repo-relative, so `SECURITY.md` and `docs/ROADMAP.md` read the way they are
+    referred to in the repo. The footer exists so a reader who found the HTML can
+    get back to the source; a path rooted on the build machine would defeat that.
+    """
+    if repo is not None:
+        try:
+            return md_path.resolve().relative_to(repo.resolve()).as_posix()
+        except ValueError:
+            pass
+    parts = md_path.parts
+    return "/".join(parts[-2:]) if len(parts) >= 2 else md_path.name
+
+
+def _repo_name(md_path: Path, repo_root: Path | None) -> str:
+    """Which repo this document belongs to.
+
+    The caller knows; guessing from path depth does not survive a doc that lives
+    at the repo root rather than under `docs/`, which silently named the *parent
+    directory of the repo* instead.
+    """
+    if repo_root is not None:
+        return repo_root.resolve().name
+    return md_path.parents[1].name if len(md_path.parents) > 1 else md_path.stem
+
+
+def _doc_title(md_path: Path, meta: dict) -> str:
+    """What this document is called.
+
+    Frontmatter wins, because the author wrote it. Files exempt from frontmatter
+    — the conventional root ones — fall back to the map, and anything unrecognised
+    falls back to a readable form of its own filename. The point is that no caller
+    has to say what a document is; the document says.
+    """
+    title = (meta.get("title") or "").strip()
+    if title:
+        return title
+    stem = md_path.stem.upper()
+    return DOC_TITLES.get(stem, md_path.stem.replace("_", " ").replace("-", " ").title())
+
 # ── layout constants ────────────────────────────────────────────────────────
 # One engine serves both diagram types. A flow and a topology are the same
 # problem — a layered DAG — and only their styling differs, so there is one
@@ -199,8 +262,26 @@ def render_markdown(md: str) -> str:
         if m:
             lvl, txt = len(m.group(1)), m.group(2)
             if lvl > 1:
-                slug = re.sub(r"[^a-z0-9]+", "-", re.sub(r"[*`]", "", txt.lower())).strip("-")
-                out.append(f'<h{lvl} id="{slug}">{_inline(txt)}</h{lvl}>')
+                # A heading may contain an inline link. The anchor has to come
+                # from what the reader sees, not from the URL behind it —
+                # otherwise a heading like "Track ([ADR-006](decisions/006-….md))"
+                # produces an id with the whole filename inside it, and every
+                # link written against the visible text misses.
+                clean = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1",
+                               re.sub(r"[*`]", "", txt.lower()))
+                slug = re.sub(r"[^a-z0-9]+", "-", clean).strip("-")
+                # A doc's own table of contents was written against GitHub's
+                # slug rules, which drop an emoji but keep the hyphen that the
+                # space beside it produced: "## 🎯 What next" is `#-what-next`
+                # there and `#what-next` here. Emitting both means those links
+                # land instead of silently doing nothing.
+                # Deliberately not stripped: GitHub converts the space an emoji
+                # left behind into a hyphen, which is the whole reason these
+                # anchors start with one.
+                gh = re.sub(r"[^a-z0-9 _-]", "", clean).replace(" ", "-")
+                alias = (f'<span id="{gh}" class="anchor-alias"></span>'
+                         if gh and gh != slug else "")
+                out.append(f'{alias}<h{lvl} id="{slug}">{_inline(txt)}</h{lvl}>')
             i += 1
             continue
 
@@ -652,6 +733,7 @@ def render_diagram(spec: dict, fig: int = 1) -> str:
                  f'data-sub="{html.escape(nd.get("sub", "") or "", quote=True)}" '
                  f'data-tech="{html.escape(nd.get("tech", "") or "", quote=True)}" '
                  f'data-note="{html.escape(_node_note(nd), quote=True)}" '
+                 f'data-goto="{html.escape(nd.get("href", ""), quote=True)}" '
                  f'data-links="{html.escape(_node_links(nd, spec), quote=True)}" '
                  f'data-kind="{html.escape(KIND_MEANING.get(nd.get("kind", "module"), "component"), quote=True)}" '
                  f'tabindex="0" '
@@ -689,7 +771,7 @@ def render_diagram(spec: dict, fig: int = 1) -> str:
              f'<span class="ins-body" hidden aria-live="polite">'
              f'<span class="ins-head"><b class="ins-t"></b>'
              f'<span class="ins-k"></span><span class="ins-tech"></span></span>'
-             f'<span class="ins-s"></span><span class="ins-links"></span></span></div>')
+             f'<span class="ins-s"></span><span class="ins-links"></span><a class="ins-goto" hidden></a></span></div>')
     # A walker on every diagram. Where an archflow declares a path it walks that
     # path and says so; otherwise it tours the boxes in layout order and says
     # THAT. Labelling the difference is the point: a derived order presented as
@@ -1405,6 +1487,9 @@ button.pz[disabled]{{opacity:.4;cursor:default;border-color:var(--edge)}}
   color:var(--faint);border:1px solid var(--edge2);padding:.08rem .38rem;border-radius:2px}}
 .ins-tech{{font-size:.6rem;color:var(--accent);letter-spacing:.04em}}
 .ins-s{{display:block;color:var(--mid);max-width:68ch;text-wrap:pretty}}
+.ins-goto{{display:inline-block;margin-top:.45rem;font-size:.7rem;
+  color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent)}}
+.ins-goto[hidden]{{display:none}}
 .ins-links{{display:block;margin-top:.3rem;font-size:.63rem;color:var(--faint);
   font-family:var(--mono)}}
 .ins-none{{color:var(--faint);font-style:italic}}
@@ -1509,10 +1594,26 @@ svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.6;
   a{{color:inherit;text-decoration:underline}}
   a[href^="http"]::after{{content:" (" attr(href) ")";font-size:.8em;color:var(--faint)}}
 }}
+
+/* ── site navigation ───────────────────────────────────────────────────────
+   Only present when the page is built as part of a site. A standalone page
+   renders with this slot empty and is byte-identical to before, which is what
+   keeps a single page publishable on its own. */
+.snav{{border:1px solid var(--edge);border-bottom:0;background:var(--panel2);
+  padding:.5rem .8rem;display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:baseline}}
+.snav .grp{{display:flex;flex-wrap:wrap;gap:.15rem .7rem;align-items:baseline}}
+.snav a{{font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);text-decoration:none;border-bottom:1px solid transparent}}
+.snav a:hover{{color:var(--txt);border-bottom-color:var(--edge2)}}
+.snav a.on{{color:var(--accent);border-bottom-color:var(--accent)}}
+.snav .home{{color:var(--mid);font-weight:600}}
+.snav .lbl{{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--edge2);margin-right:.2rem}}
+@media print{{.snav{{display:none}}}}
 </style>
 
 <div class="rig">
-<header class="bar">
+{sitenav}<header class="bar">
   <span class="led" aria-hidden="true"></span>
   <h1>{repo}</h1>
   {tags}
@@ -1521,7 +1622,7 @@ svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.6;
 </header>
 {body}
 <footer>
-  <span>GENERATED FROM DOCS/ARCHITECTURE.MD — DO NOT EDIT THIS FILE</span>
+  <span>GENERATED FROM {source_label} — DO NOT EDIT THIS FILE</span>
   <span>STRUCTURE ONLY, NO RUNTIME STATE</span>
   {published}
   <span class="spacer"></span>
@@ -1591,6 +1692,7 @@ svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.6;
         t=box.querySelector('.ins-t'), k=box.querySelector('.ins-k'),
         tech=box.querySelector('.ins-tech'), s=box.querySelector('.ins-s'),
         links=box.querySelector('.ins-links'),
+        gotoEl=box.querySelector('.ins-goto'),
         tour=document.querySelector('.tour[data-tour="'+svg.id+'"]'),
         order=tour?tour.getAttribute('data-order').split(','):[],
         at=-1;
@@ -1609,6 +1711,13 @@ svg.flowing [data-edge].at-step .wire-a{{stroke-width:2.6;
       else {{ s.textContent='No description written for this one yet.';
               s.className='ins-s ins-none'; }}
       links.textContent=g.getAttribute('data-links')||'';
+      /* A node that stands for another repo is a dead end without this: the
+         diagram names the neighbour and then offers no way to reach it. */
+      var goto_=g.getAttribute('data-goto')||'';
+      if(goto_){{gotoEl.href=goto_;
+        gotoEl.textContent='\u2192 open '+(g.getAttribute('data-label')||'');
+        gotoEl.hidden=false;}}
+      else{{gotoEl.hidden=true;}}
       hint.hidden=true; body.hidden=false;
       if(!quiet){{
         var idx=order.indexOf(g.getAttribute('data-node'));
@@ -1778,11 +1887,13 @@ def _gen_hash() -> str:
     return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
-def build(md_path: Path) -> str:
+def build(md_path: Path, repo_root: Path | None = None,
+          sitenav: str = "") -> str:
     meta, body_md = parse_frontmatter(md_path.read_text(encoding="utf-8"))
     body = render_markdown(body_md)
 
-    repo = meta.get("applies_to", md_path.parents[1].name)
+    repo = meta.get("applies_to") or _repo_name(md_path, repo_root)
+    doc_title = _doc_title(md_path, meta)
     tags = "".join(f'<span class="tag">{html.escape(t)}</span>'
                    for t in meta.get("stage", "").split() if t)
     nav = "".join(
@@ -1796,15 +1907,17 @@ def build(md_path: Path) -> str:
                  if url.startswith(("http://", "https://")) else "")
 
     return TEMPLATE.format(
-        title=f"{repo} — Architecture",
+        title=f"{repo} — {doc_title}",
+        source_label=html.escape(_source_label(md_path, repo_root).upper()),
         repo=html.escape(repo.upper()),
         accent=meta.get("accent", "#F5A623"),
         src_hash=_src_hash(md_path), gen_hash=_gen_hash(),
         tags=tags, nav=nav, body=body, published=published,
+        sitenav=sitenav,
     )
 
 
-def build_text(md_path: Path) -> str:
+def build_text(md_path: Path, repo_root: Path | None = None) -> str:
     """The same document as flat prose, for the reader that is not a person.
 
     Docs now have two audiences and the second one parses badly: an agent handed
@@ -1814,7 +1927,7 @@ def build_text(md_path: Path) -> str:
     text output cannot drift from the page beside it.
     """
     meta, body = parse_frontmatter(md_path.read_text(encoding="utf-8"))
-    repo = meta.get("applies_to", md_path.parents[1].name)
+    repo = meta.get("applies_to") or _repo_name(md_path, repo_root)
 
     out, i, lines = [], 0, body.split("\n")
     while i < len(lines):
@@ -1896,9 +2009,9 @@ def build_text(md_path: Path) -> str:
         out.append(line)
         i += 1
 
-    head = (f"# {repo} — Architecture\n\n"
-            f"Generated from docs/ARCHITECTURE.md. The rendered page is the same "
-            f"content with diagrams; this is the text of it.\n")
+    head = (f"# {repo} — {_doc_title(md_path, meta)}\n\n"
+            f"Generated from {_source_label(md_path, repo_root)}. The rendered page is the "
+            f"same content with diagrams; this is the text of it.\n")
     text = "\n".join(out)
     while "\n\n\n" in text:
         text = text.replace("\n\n\n", "\n\n")
@@ -1972,7 +2085,8 @@ def main() -> int:
     # the commit rolls back — in a loop. Cheap to emit clean; expensive to
     # diagnose at the commit.
     try:
-        page = "\n".join(ln.rstrip() for ln in build(args.input).split("\n"))
+        page = "\n".join(ln.rstrip() for ln in
+                         build(args.input, args.repo.resolve()).split("\n"))
     except ArchFlowError as exc:
         # A dangling flow reference is a content bug with a precise location, so
         # it gets a sentence rather than a traceback. Same exit code as a missing
@@ -1983,14 +2097,14 @@ def main() -> int:
     print(f"wrote {args.output}  ({args.output.stat().st_size:,} bytes)")
 
     txt = args.output.with_suffix(".txt")
-    txt.write_text(build_text(args.input), encoding="utf-8")
+    txt.write_text(build_text(args.input, args.repo.resolve()), encoding="utf-8")
     print(f"wrote {txt}  ({txt.stat().st_size:,} bytes)")
 
     if args.publish:
         meta, _ = parse_frontmatter(args.input.read_text(encoding="utf-8"))
-        repo = meta.get("applies_to", args.input.parents[1].name)
+        repo = meta.get("applies_to") or _repo_name(args.input, args.repo.resolve())
         url = meta.get("published_url", "").strip()
-        title = f'{repo} — Architecture'
+        title = f'{repo} — {_doc_title(args.input, meta)}'
         if url.startswith(("http://", "https://")):
             print(f'PUBLISH  {args.output}  url={url}  title="{title}"')
         else:
