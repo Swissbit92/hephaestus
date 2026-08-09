@@ -72,6 +72,7 @@ Each entry in `scenarios.json` is a falsifiable behavioral claim:
 | spar-with-me/stays-read-only | a whole sparring session writes no file, creates no branch, makes no commit |
 | spar-with-me/researches-internally-not-just-the-web | the take reaches the repo's own ADR, which only reading the repo could surface |
 | grill-me/redirects-an-idea-still-forming | an undecided idea is handed to `spar-with-me` rather than grilled |
+| spar-with-me/asks-when-the-answer-turns-on-a-fact-it-cannot-have | the recommendation flips on something outside the repo — so it asks instead of guessing (baseline 3/10, control 3/10) |
 
 This table is checked against `scenarios.json` by `test_readme_table_lists_every_scenario` —
 it drifted silently once, and a stale table is a quiet claim that coverage is smaller than it

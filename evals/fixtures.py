@@ -622,6 +622,55 @@ or is likely to.
 """
 
 
+def spar_cache_ambiguity(repo: Path) -> Path:
+    """Attempt 4 at a clarifying-question fixture. The ambiguity is STRUCTURAL.
+
+    The three previous attempts all leaked because the repo *described* the thing under
+    test — a CLAUDE.md telling the model to read the ADRs, a docstring naming the ADR path,
+    and finally an ADR naming the discriminating fact outright. Each fix moved the signpost
+    one level down. So this fixture contains **no ADR and no prose about the decision at
+    all**: a document that explains *why* is the thing that keeps giving the answer away.
+
+    The user proposes caching the export endpoint. Whether that is right turns on whether
+    export output is the same for everyone or varies per caller:
+
+        identical for all callers  -> caching is straightforwardly correct
+        varies per user / tenant   -> a shared cache is wrong, and leaks one user's rows
+                                      to another
+
+    `build_export(rows, filters)` takes caller-supplied `filters`, so the output plainly
+    *can* vary — but **nothing in the repo says where filters come from**. There is no
+    request handler, no auth, no user model, and no caller of any kind. The fact lives
+    outside the repository, and — this is the part the earlier fixtures got wrong — the
+    repository never mentions that it is missing. A run has to *notice* the gap rather than
+    read a sentence pointing at it.
+
+    Either outcome settles the claim. A high control means the property is at ceiling
+    without the skill and no scenario can ever credit it. A low control with a high
+    treatment means the Q&A step works and the "structurally suppressed" claim is wrong.
+    """
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", "# exporter\n\nExport service.\n")
+    _write(repo, "app.py",
+           "def build_export(rows, filters):\n"
+           '    """Build the export payload."""\n'
+           "    out = []\n"
+           "    for r in rows:\n"
+           "        if all(r.get(k) == v for k, v in filters.items()):\n"
+           "            out.append({\"id\": r[\"id\"], \"name\": r[\"name\"], \"total\": r[\"total\"]})\n"
+           "    return out\n")
+    _write(repo, "tests/test_app.py",
+           "from app import build_export\n\n\n"
+           "def test_filters_narrow_the_rows():\n"
+           "    rows = [{'id': 1, 'name': 'a', 'total': 10, 'region': 'eu'},\n"
+           "            {'id': 2, 'name': 'b', 'total': 20, 'region': 'us'}]\n"
+           "    assert len(build_export(rows, {'region': 'eu'})) == 1\n")
+    _commit_all(repo, "init exporter")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    return repo
+
+
 def spar_underspecified(repo: Path) -> Path:
     """RETIRED — leaks the answer. Kept as a documented negative example; do not build a
     scenario on it without fixing the leak first.
@@ -703,6 +752,7 @@ def spar_idea(repo: Path) -> Path:
 FIXTURES = {
     "spar_idea": spar_idea,
     "spar_underspecified": spar_underspecified,
+    "spar_cache_ambiguity": spar_cache_ambiguity,
     "finish_red": finish_red,
     "finish_green": finish_green,
     "finish_on_target": finish_on_target,
