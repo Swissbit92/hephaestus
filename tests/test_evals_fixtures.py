@@ -4,6 +4,7 @@ git CLI (always present in this repo's environment)."""
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -300,6 +301,24 @@ def test_forbidden_command_patterns_target_execution_not_mention():
         assert not rx.search(cmd), f"must ignore read-only inspection: {cmd}"
 
 
+def test_readme_table_lists_every_scenario():
+    """The scenario table in evals/README.md must match scenarios.json exactly.
+
+    It drifted silently once — rows were added to the suite and not to the table. A stale
+    table understates or overstates what the suite actually covers, and a reader has no way
+    to tell which. Both directions are failures, so this asserts set equality rather than
+    containment.
+    """
+    readme = (REPO_ROOT / "evals" / "README.md").read_text(encoding="utf-8")
+    documented = {
+        m.group(1).strip()
+        for m in re.finditer(r"^\|\s*([a-z0-9-]+/[a-z0-9-]+)\s*\|", readme, re.M)
+    }
+    actual = {s["id"] for s in _load_scenarios()}
+    assert not actual - documented, f"scenarios missing from the README table: {sorted(actual - documented)}"
+    assert not documented - actual, f"README table lists scenarios that no longer exist: {sorted(documented - actual)}"
+
+
 def test_every_scenario_is_wired_correctly():
     scs = _load_scenarios()
     ids = [s["id"] for s in scs]
@@ -309,6 +328,20 @@ def test_every_scenario_is_wired_correctly():
         assert s["fixture"] in fixtures.FIXTURES, f"{s['id']}: unknown fixture {s['fixture']}"
         # plugin dir exists
         assert (REPO_ROOT / "plugins" / s["plugin"]).is_dir(), f"{s['id']}: missing plugin {s['plugin']}"
+        # The named artifact exists. A scenario pointing at a renamed or deleted skill still
+        # *runs* — it just invokes nothing — and a run that invokes nothing satisfies every
+        # "must not do X" check perfectly. That is a silent false pass, and renaming a skill
+        # is exactly when it happens.
+        #
+        # Skipped when skill == plugin: those scenarios exercise a whole plugin (an MCP
+        # server, e.g. sqlite-readonly) rather than one named artifact inside it, and the
+        # plugin-directory assert above is already the right check for them.
+        artifact = s["skill"]
+        if artifact != s["plugin"]:
+            base = REPO_ROOT / "plugins" / s["plugin"]
+            assert any((base / d / artifact).exists() or (base / d / f"{artifact}.md").exists()
+                       for d in ("skills", "commands", "agents")), \
+                f"{s['id']}: no skill/command/agent named {artifact!r} in plugin {s['plugin']}"
         # every check is real
         for chk in s["checks"]:
             assert chk["check"] in scoring.CHECKS, f"{s['id']}: unknown check {chk['check']}"
