@@ -328,6 +328,20 @@ def test_every_scenario_is_wired_correctly():
         assert s["fixture"] in fixtures.FIXTURES, f"{s['id']}: unknown fixture {s['fixture']}"
         # plugin dir exists
         assert (REPO_ROOT / "plugins" / s["plugin"]).is_dir(), f"{s['id']}: missing plugin {s['plugin']}"
+        # The named artifact exists. A scenario pointing at a renamed or deleted skill still
+        # *runs* — it just invokes nothing — and a run that invokes nothing satisfies every
+        # "must not do X" check perfectly. That is a silent false pass, and renaming a skill
+        # is exactly when it happens.
+        #
+        # Skipped when skill == plugin: those scenarios exercise a whole plugin (an MCP
+        # server, e.g. sqlite-readonly) rather than one named artifact inside it, and the
+        # plugin-directory assert above is already the right check for them.
+        artifact = s["skill"]
+        if artifact != s["plugin"]:
+            base = REPO_ROOT / "plugins" / s["plugin"]
+            assert any((base / d / artifact).exists() or (base / d / f"{artifact}.md").exists()
+                       for d in ("skills", "commands", "agents")), \
+                f"{s['id']}: no skill/command/agent named {artifact!r} in plugin {s['plugin']}"
         # every check is real
         for chk in s["checks"]:
             assert chk["check"] in scoring.CHECKS, f"{s['id']}: unknown check {chk['check']}"

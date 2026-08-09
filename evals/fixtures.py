@@ -610,7 +610,7 @@ def spar_idea(repo: Path) -> Path:
     it for a reason that still holds (no persistent worker process on the deploy target).
 
     That asymmetry is the whole point. A run that only searches the web produces a confident,
-    well-cited recommendation the project already considered and killed — spar's stated
+    well-cited recommendation the project already considered and killed — spar-with-me's stated
     failure mode for skipping the internal half. Surfacing ADR-002 is only possible by
     reading the repo, so the check cannot be satisfied by plausible-sounding prose.
 

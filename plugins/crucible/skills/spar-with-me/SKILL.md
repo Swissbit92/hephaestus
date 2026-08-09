@@ -1,5 +1,5 @@
 ---
-name: spar
+name: spar-with-me
 description: Sparring partner for an idea you are still forming — an honest assessment backed by mandatory internal *and* web research, clarifying Q&A only where the answers would change the advice, and a strictly read-only session. Use when the user says "what do you think", "honest take", "am I right or wrong", asks for research on best practices or cutting-edge approaches for an idea, says "no changes yet, pure research", wants a sounding board, or is weighing something before it becomes a plan. For stress-testing a decision already made, use grill-me instead.
 ---
 
@@ -20,7 +20,7 @@ still forming and it punishes them for not having a thesis yet, which is precise
 that brought them here. Say the handoff out loud: *"This has stopped being an idea and
 started being a decision — want me to grill it?"*
 
-The seam in one line: **spar helps you decide what to do; grill-me tries to talk you out of
+The seam in one line: **spar-with-me helps you decide what to do; grill-me tries to talk you out of
 what you've decided.**
 
 ## Why this isn't role-play
@@ -47,7 +47,7 @@ formed, not a committee pretending to think.
    Be precise about how far that reaches: it makes the *research* incapable of writing, which
    is where the bulk of the session's tool use happens. **The main thread is not sandboxed**,
    so its restraint is still discipline, not architecture. What backs that half is external —
-   the `spar/stays-read-only` eval asserts an entire session leaves the tree, branches, and
+   the `spar-with-me/stays-read-only` eval asserts an entire session leaves the tree, branches, and
    commits untouched, and it is gated `pass^k`, so one write in one run fails it. Treat the
    guarantee as: *enforced for the fan-out, measured for the rest.*
 

@@ -1,6 +1,6 @@
 # Why "be honest" is not enough
 
-Loaded only when tuning or defending `spar`'s position-holding rule. `SKILL.md` carries the
+Loaded only when tuning or defending `spar-with-me`'s position-holding rule. `SKILL.md` carries the
 rule itself; this is the evidence behind it and the reasoning about what to do instead.
 
 ## The failure mode has a measured shape

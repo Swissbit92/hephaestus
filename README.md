@@ -10,7 +10,7 @@ The flagship is **crucible**: a bundle of generic, domain-free craft tools that 
 development *disciplined* rather than chaotic — a structured `develop` workflow with QA gates
 between phases, a safe branch lifecycle (`start-branch` / `finish-branch` that never merges on a
 red suite), documentation discipline (`cms`), a sparring partner for an idea you're still forming
-(`spar`) and an adversarial decision-tester for once it's hardened (`grill-me`),
+(`spar-with-me`) and an adversarial decision-tester for once it's hardened (`grill-me`),
 eval-first change-gating (`eval-first` + `flag-gate`, so a change has to match-or-beat its baseline
 before it ships), a skill-authoring guide (`author-skill`), and `loop-harness` — a bounded,
 single-threaded, **read-only** agent-loop primitive (turn/budget ceilings, a `LOOP-STATE` ledger,
@@ -40,7 +40,7 @@ human) can pick it up cold.
 
 | Plugin | What it is |
 |--------|------------|
-| **crucible** | Generic craft tools: `cms`, `spar`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `eval-first`, `flag-gate`, `author-skill`, `loop-harness`, `act-for-real`, `repo-audit` (detailed below). |
+| **crucible** | Generic craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `eval-first`, `flag-gate`, `author-skill`, `loop-harness`, `act-for-real`, `repo-audit` (detailed below). |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server — query any local `.db` safely (3-layer read-only, schema introspection, NL→SQL). See [its README](plugins/sqlite-readonly/README.md). |
 | **mcp-starter** | A minimal, working template for packaging a Python MCP server as a plugin (userConfig injection, inline servers, uv, first-run hook, `/setup`). See [its README](plugins/mcp-starter/README.md). |
 | **second-brain** | Obsidian inbox processor — proposes tags/links/filing/actions per note, applies only what you approve (suggest-then-confirm). See [its README](plugins/second-brain/README.md). |
@@ -51,8 +51,8 @@ human) can pick it up cold.
 | Tool | Type | What it does |
 |------|------|--------------|
 | **cms** | skill + hook | Context Management System — standardizes docs across repos for AI-agent token efficiency. Frontmatter linting, ADR scaffolding, drift detection, staleness-based archival. Enforces frontmatter on `docs/*.md` edits via a `PreToolUse` hook. |
-| **spar** | skill | Sparring partner for an idea you're still forming — mandatory internal *and* web research before any opinion, clarifying questions only where the answer would change the advice, a position that moves on new evidence but never on restated preference, and a strictly **read-only** session (nothing is written until you ask). Hands off to `grill-me` once the idea becomes a decision. |
-| **grill-me** | skill | Adversarial stress-test of a decision you've already reached, before you commit to it (assumption audit, pre-mortem, outside view, falsifiable tripwires). Needs a position to attack — while one is still forming, that's `spar`. |
+| **spar-with-me** | skill | Sparring partner for an idea you're still forming — mandatory internal *and* web research before any opinion, clarifying questions only where the answer would change the advice, a position that moves on new evidence but never on restated preference, and a strictly **read-only** session (nothing is written until you ask). Hands off to `grill-me` once the idea becomes a decision. |
+| **grill-me** | skill | Adversarial stress-test of a decision you've already reached, before you commit to it (assumption audit, pre-mortem, outside view, falsifiable tripwires). Needs a position to attack — while one is still forming, that's `spar-with-me`. |
 | **develop** | command | A structured development workflow — classify → research → architect → isolate → implement → QA → docs → completion → integrate, with gates between phases. |
 | **start-branch** | skill | Isolate work before implementing — detects the repo's integration target (never hardcoded), picks a plain branch vs. git worktree, names it Conventional-Branch style, records a clean test baseline, confirms in one line. Used by `develop`'s ISOLATE phase (2.5). |
 | **finish-branch** | skill | Close out a branch/worktree safely — gates on tests, offers merge / PR / keep / discard, PR-by-default for deploy branches, cleans up without losing unmerged work (`-d` never `-D`, informed discard). Used by `develop`'s INTEGRATE phase (6.5). |
@@ -93,17 +93,17 @@ docs go through **cms**; LLM-backed or behavior-changing steps slot in **eval-fi
 Then the tools are namespaced under the plugin:
 
 - `/crucible:cms` — run any CMS command (see the skill for subcommands)
-- `/crucible:spar` — think an idea through with research and an honest take (read-only)
+- `/crucible:spar-with-me` — think an idea through with research and an honest take (read-only)
 - `/crucible:grill-me` — stress-test a decision you've already reached
 - `/crucible:develop` — run the development workflow
 - `/crucible:start-branch` · `/crucible:finish-branch` — isolate / integrate work safely
 
-`cms`, `spar`, and `grill-me` are also model-invoked: Claude triggers them automatically when their description matches what you're doing (editing docs, asking for an honest take on an idea, validating a decision).
+`cms`, `spar-with-me`, and `grill-me` are also model-invoked: Claude triggers them automatically when their description matches what you're doing (editing docs, asking for an honest take on an idea, validating a decision).
 
 ## What's portable, what to adapt
 
-- **spar / grill-me** — fully generic, work out of the box. They split by stage:
-  `spar` while an idea is forming, `grill-me` once it's a decision.
+- **spar-with-me / grill-me** — fully generic, work out of the box. They split by stage:
+  `spar-with-me` while an idea is forming, `grill-me` once it's a decision.
 - **cms** — generic engine. The `PreToolUse` hook gates `docs/*.md` edits. By
   default it scopes to the **current working directory**; set `CMS_ROOTS`
   (OS-path-separated list) to gate a fixed set of repos instead. Drift facts
@@ -146,7 +146,7 @@ hephaestus/
 └── plugins/
     ├── crucible/                        # flagship craft tools (see plugins/crucible/README.md)
     │   ├── .claude-plugin/plugin.json   # manifest + cms & loop-harness PreToolUse hooks
-    │   ├── skills/{cms,spar,grill-me,start-branch,finish-branch,author-skill,eval-first,flag-gate,loop-harness,act-for-real,repo-audit}/
+    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,author-skill,eval-first,flag-gate,loop-harness,act-for-real,repo-audit}/
     │   ├── commands/develop.md
     │   └── agents/qa-gatekeeper.md
     ├── sqlite-readonly/                # read-only SQLite MCP server

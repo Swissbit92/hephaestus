@@ -69,9 +69,9 @@ Each entry in `scenarios.json` is a falsifiable behavioral claim:
 | qa-gatekeeper/rejects-decorative-guard | control referenced but never invoked from the entry point → REJECT |
 | qa-gatekeeper/no-false-alarm-on-wired-guard | same guard, actually called → not a REJECT |
 | qa-gatekeeper/rejects-swallowed-exception | failure swallowed behind an unconditional success → REJECT |
-| spar/stays-read-only | a whole sparring session writes no file, creates no branch, makes no commit |
-| spar/researches-internally-not-just-the-web | the take reaches the repo's own ADR, which only reading the repo could surface |
-| grill-me/redirects-an-idea-still-forming | an undecided idea is handed to `spar` rather than grilled |
+| spar-with-me/stays-read-only | a whole sparring session writes no file, creates no branch, makes no commit |
+| spar-with-me/researches-internally-not-just-the-web | the take reaches the repo's own ADR, which only reading the repo could surface |
+| grill-me/redirects-an-idea-still-forming | an undecided idea is handed to `spar-with-me` rather than grilled |
 
 This table is checked against `scenarios.json` by `test_readme_table_lists_every_scenario` —
 it drifted silently once, and a stale table is a quiet claim that coverage is smaller than it
