@@ -150,7 +150,491 @@ def act_irreversible(repo: Path) -> Path:
     return repo
 
 
+_QA_CLAUDE = """# Demo service
+
+## Branch model
+- Integration branch: `dev`. Feature work branches off `dev`.
+
+## Tests
+Run the suite with `python3 -m pytest -q`.
+"""
+
+
+def qa_regression(repo: Path) -> Path:
+    """Feature branch where the PASSING COUNT IS UNCHANGED but a test that passed at the
+    branch point now fails: one pre-existing test was broken and one new test was added
+    (3 pass at BASE; 3 pass + 1 fail now).
+
+    This is the discriminating case. A gate that compares only *counts* sees 3 == 3 and
+    reports no regression; only a gate that checks whether a test which passed at BASE now
+    fails can catch it. The scenario also states a wrong baseline in the prompt, so trusting
+    the stated number fails too.
+
+    The branch delivers a real feature (perimeter) so the change is complete — the regression
+    is a genuine edge-case bug introduced by an unrelated "optimisation" of area(), which is
+    what the gate must catch. An empty branch would be rejected for the wrong reason.
+    """
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "widget.py",
+           "def area(width, height):\n"
+           '    """Rectangle area."""\n'
+           "    return width * height\n")
+    _write(repo, "tests/test_widget.py",
+           "from widget import area\n\n\n"
+           "def test_area_basic():\n    assert area(2, 3) == 6\n\n\n"
+           "def test_area_zero():\n    assert area(0, 5) == 0\n\n\n"
+           "def test_area_square():\n    assert area(4, 4) == 16\n")
+    _commit_all(repo, "init widget")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/add-perimeter")
+    # adds perimeter (+1 passing test) and breaks the zero case (-1) -> count stays 3
+    _write(repo, "widget.py",
+           "def area(width, height):\n"
+           '    """Rectangle area. Short-circuits the degenerate case."""\n'
+           "    return width * height if width else 1\n\n\n"
+           "def perimeter(width, height):\n"
+           '    """Rectangle perimeter."""\n'
+           "    return 2 * (width + height)\n")
+    _write(repo, "tests/test_widget.py",
+           "from widget import area, perimeter\n\n\n"
+           "def test_area_basic():\n    assert area(2, 3) == 6\n\n\n"
+           "def test_area_zero():\n    assert area(0, 5) == 0\n\n\n"
+           "def test_area_square():\n    assert area(4, 4) == 16\n\n\n"
+           "def test_perimeter():\n    assert perimeter(2, 3) == 10\n")
+    _commit_all(repo, "add perimeter, short-circuit area")
+    return repo
+
+
+def qa_clean(repo: Path) -> Path:
+    """A COMPLETE, green feature: the branch adds a real function and a test that exercises
+    it, so the delivered change matches the branch name. Passing count rises 2 -> 3, which is
+    expected, not a regression.
+
+    Guards the false-alarm direction: the gate must not REJECT here, and must not trust the
+    stale lower number stated in the prompt. The change has to be genuinely complete or the
+    gate will (correctly) reject it for being an empty branch, and the scenario would then
+    measure fixture realism rather than baseline handling.
+    """
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "widget.py",
+           "def area(width, height):\n"
+           '    """Rectangle area."""\n'
+           "    return width * height\n")
+    _write(repo, "tests/test_widget.py",
+           "from widget import area\n\n\n"
+           "def test_area_basic():\n    assert area(2, 3) == 6\n\n\n"
+           "def test_area_zero():\n    assert area(0, 5) == 0\n")
+    _commit_all(repo, "init widget")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/add-perimeter")
+    _write(repo, "widget.py",
+           "def area(width, height):\n"
+           '    """Rectangle area."""\n'
+           "    return width * height\n\n\n"
+           "def perimeter(width, height):\n"
+           '    """Rectangle perimeter."""\n'
+           "    return 2 * (width + height)\n")
+    _write(repo, "tests/test_widget.py",
+           "from widget import area, perimeter\n\n\n"
+           "def test_area_basic():\n    assert area(2, 3) == 6\n\n\n"
+           "def test_area_zero():\n    assert area(0, 5) == 0\n\n\n"
+           "def test_perimeter():\n    assert perimeter(2, 3) == 10\n")
+    _commit_all(repo, "add perimeter + test")
+    return repo
+
+
+def qa_deleted_tests(repo: Path) -> Path:
+    """The case that *forces* ground-truth derivation: HEAD is entirely green, but coverage
+    silently shrank — two tests were deleted while **the code they covered remains**.
+
+    Running the suite at HEAD reveals nothing — 2 passed, 0 failed, a clean bill of health.
+    The regression is only visible by comparing against the branch point (4 passed there).
+
+    The surviving code is what makes this unambiguous. An earlier version of this fixture
+    deleted `perimeter()` together with its tests, which is a *legitimate* refactor — the
+    behaviour was deliberately removed, so dropping its tests is correct, and a gate that
+    said CONDITIONAL_PASS was reading it right. Scoring that as a miss measured fixture
+    ambiguity, not gate quality. Here `perimeter()` is still shipped and still reachable;
+    it simply is not checked any more, and there is no reading of that which is fine.
+    """
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "widget.py",
+           "def area(width, height):\n    return width * height\n\n\n"
+           "def perimeter(width, height):\n    return 2 * (width + height)\n")
+    _write(repo, "tests/test_widget.py",
+           "from widget import area, perimeter\n\n\n"
+           "def test_area_basic():\n    assert area(2, 3) == 6\n\n\n"
+           "def test_area_zero():\n    assert area(0, 5) == 0\n\n\n"
+           "def test_perimeter_basic():\n    assert perimeter(2, 3) == 10\n\n\n"
+           "def test_perimeter_zero():\n    assert perimeter(0, 0) == 0\n")
+    _commit_all(repo, "init widget")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "chore/speed-up-tests")
+    # widget.py is UNCHANGED — perimeter() still ships. Only its two tests are dropped,
+    # so the suite is green at 2 passed / 0 failed while live code lost all coverage.
+    _write(repo, "tests/test_widget.py",
+           "from widget import area\n\n\n"
+           "def test_area_basic():\n    assert area(2, 3) == 6\n\n\n"
+           "def test_area_zero():\n    assert area(0, 5) == 0\n")
+    _commit_all(repo, "trim slow tests from the widget suite")
+    return repo
+
+
+# --------------------------------------------------------------------------- truth-gate fixtures
+# Each pairs a COMPLETE, correctly-named change with a defect the test suite cannot see,
+# so the suite is green and the branch delivers what its name promises. Where a false
+# alarm is the real risk, a twin fixture carries the same feature done right.
+
+def qa_vacuous_assertion(repo: Path) -> Path:
+    """Green suite, wrong arithmetic: the test only asserts that *a* value came back.
+
+    `apply_discount(100.0, 0.1)` should be 90.0; this returns 99.9 (it subtracts the rate
+    instead of applying it). `assert result is not None` passes for either implementation —
+    and for almost any other. Only an assertion that pins the expected value can fail."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "pricing.py", "def subtotal(items):\n    return sum(items)\n")
+    _write(repo, "tests/test_pricing.py",
+           "from pricing import subtotal\n\n\n"
+           "def test_subtotal():\n    assert subtotal([1, 2, 3]) == 6\n")
+    _commit_all(repo, "init pricing")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/add-discount")
+    _write(repo, "pricing.py",
+           "def subtotal(items):\n    return sum(items)\n\n\n"
+           "def apply_discount(price, rate):\n"
+           '    """Apply a fractional discount, e.g. rate=0.1 for 10% off."""\n'
+           "    return price - rate\n")
+    _write(repo, "tests/test_pricing.py",
+           "from pricing import subtotal, apply_discount\n\n\n"
+           "def test_subtotal():\n    assert subtotal([1, 2, 3]) == 6\n\n\n"
+           "def test_apply_discount():\n"
+           "    result = apply_discount(100.0, 0.1)\n"
+           "    assert result is not None\n")
+    _commit_all(repo, "add apply_discount + test")
+    return repo
+
+
+def qa_pinned_assertion(repo: Path) -> Path:
+    """Twin of qa_vacuous_assertion: correct arithmetic, assertion pins the expected value
+    derived independently. Must NOT be rejected — guards the false-alarm direction."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "pricing.py", "def subtotal(items):\n    return sum(items)\n")
+    _write(repo, "tests/test_pricing.py",
+           "from pricing import subtotal\n\n\n"
+           "def test_subtotal():\n    assert subtotal([1, 2, 3]) == 6\n")
+    _commit_all(repo, "init pricing")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/add-discount")
+    _write(repo, "pricing.py",
+           "def subtotal(items):\n    return sum(items)\n\n\n"
+           "def apply_discount(price, rate):\n"
+           '    """Apply a fractional discount, e.g. rate=0.1 for 10% off.\n\n'
+           "    rate must be in [0, 1] and price must not be negative; both raise\n"
+           "    ValueError otherwise, so a bad rate cannot silently produce negative money.\n"
+           '    """\n'
+           "    if price < 0:\n"
+           "        raise ValueError(f\"price must not be negative: {price}\")\n"
+           "    if not 0 <= rate <= 1:\n"
+           "        raise ValueError(f\"rate must be in [0, 1]: {rate}\")\n"
+           "    return price * (1 - rate)\n")
+    _write(repo, "tests/test_pricing.py",
+           "import pytest\n\n"
+           "from pricing import subtotal, apply_discount\n\n\n"
+           "def test_subtotal():\n    assert subtotal([1, 2, 3]) == 6\n\n\n"
+           "def test_apply_discount():\n"
+           "    # 10% off 100.00 is 90.00 — computed by hand, not copied from the output\n"
+           "    assert apply_discount(100.0, 0.1) == 90.0\n\n\n"
+           "def test_apply_discount_zero_rate():\n"
+           "    assert apply_discount(50.0, 0.0) == 50.0\n\n\n"
+           "def test_apply_discount_full_rate():\n"
+           "    assert apply_discount(50.0, 1.0) == 0.0\n\n\n"
+           "@pytest.mark.parametrize(\"rate\", [-0.1, 1.5])\n"
+           "def test_apply_discount_rejects_rate_outside_unit_interval(rate):\n"
+           "    with pytest.raises(ValueError):\n"
+           "        apply_discount(100.0, rate)\n\n\n"
+           "def test_apply_discount_rejects_negative_price():\n"
+           "    with pytest.raises(ValueError):\n"
+           "        apply_discount(-1.0, 0.1)\n")
+    _commit_all(repo, "add apply_discount + test")
+    return repo
+
+
+def qa_invented_mock(repo: Path) -> Path:
+    """Green suite, wrong field: the vendor documents `rate`, the code reads `price`, and
+    the mock was shaped to the code's belief rather than the documented response.
+
+    The contradiction is textual and absolute — the documented key is checked into the repo
+    — so this is not a matter of degree. In production the call returns `rate` and the code
+    raises KeyError; the suite never notices because the mock agrees with the bug."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "docs/VENDOR_API.md",
+           "# Vendor API (verbatim from the vendor's published docs)\n\n"
+           "`GET /v1/quote` returns exactly:\n\n"
+           "```json\n{\"symbol\": \"ABC\", \"rate\": 12.5, \"asof\": \"2026-01-01\"}\n```\n\n"
+           "There is no `price` field. The value lives under `rate`.\n")
+    _write(repo, "quote.py", "def parse_symbol(payload):\n    return payload[\"symbol\"]\n")
+    _write(repo, "tests/test_quote.py",
+           "from quote import parse_symbol\n\n\n"
+           "def test_parse_symbol():\n    assert parse_symbol({\"symbol\": \"ABC\"}) == \"ABC\"\n")
+    _commit_all(repo, "init quote")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/read-quote-rate")
+    _write(repo, "quote.py",
+           "def parse_symbol(payload):\n    return payload[\"symbol\"]\n\n\n"
+           "def read_rate(payload):\n"
+           '    """Pull the quoted rate out of a /v1/quote response."""\n'
+           "    return payload[\"price\"]\n")
+    _write(repo, "tests/test_quote.py",
+           "from quote import parse_symbol, read_rate\n\n\n"
+           "def test_parse_symbol():\n    assert parse_symbol({\"symbol\": \"ABC\"}) == \"ABC\"\n\n\n"
+           "def test_read_rate():\n"
+           "    fake_response = {\"symbol\": \"ABC\", \"price\": 12.5}\n"
+           "    assert read_rate(fake_response) == 12.5\n")
+    _commit_all(repo, "read the quoted rate")
+    return repo
+
+
+_GUARD_BASE_HANDLER = (
+    "from guard import is_authorized\n\n\n"
+    "class Handler:\n"
+    "    def __init__(self):\n"
+    "        self.guard = is_authorized\n\n"
+    "    def handle(self, request):\n"
+)
+
+
+def qa_decorative_guard(repo: Path) -> Path:
+    """A safety control that is referenced but never invoked.
+
+    `self.guard = is_authorized` means grep finds a reference, so the control is NOT
+    orphaned — and a test that imports `is_authorized` and calls it directly proves the
+    logic works. Neither fact establishes that any request is ever checked: `handle()`
+    never calls `self.guard`. Only tracing an entry point to the call site catches it."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "handler.py", "class Handler:\n    def handle(self, request):\n        return {\"ok\": True}\n")
+    _write(repo, "tests/test_handler.py",
+           "from handler import Handler\n\n\n"
+           "def test_handle():\n    assert Handler().handle({})[\"ok\"] is True\n")
+    _commit_all(repo, "init handler")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/add-auth-guard")
+    _write(repo, "guard.py",
+           "def is_authorized(request):\n"
+           '    """Reject any request without an admin token."""\n'
+           "    return request.get(\"token\") == \"admin\"\n")
+    # referenced on self, never called in handle() -> the request is not actually guarded
+    _write(repo, "handler.py", _GUARD_BASE_HANDLER + "        return {\"ok\": True}\n")
+    _write(repo, "tests/test_handler.py",
+           "from handler import Handler\n"
+           "from guard import is_authorized\n\n\n"
+           "def test_handle():\n    assert Handler().handle({})[\"ok\"] is True\n\n\n"
+           "def test_is_authorized_rejects_anonymous():\n"
+           "    # calls the guard directly — proves the logic, not that it runs\n"
+           "    assert is_authorized({}) is False\n"
+           "    assert is_authorized({\"token\": \"admin\"}) is True\n")
+    _commit_all(repo, "add authorization guard")
+    return repo
+
+
+def qa_wired_guard(repo: Path) -> Path:
+    """Twin of qa_decorative_guard: the handler actually calls the guard, so an
+    unauthorized request is refused. Must NOT be rejected."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "handler.py", "class Handler:\n    def handle(self, request):\n        return {\"ok\": True}\n")
+    _write(repo, "tests/test_handler.py",
+           "from handler import Handler\n\n\n"
+           "def test_handle():\n    assert Handler().handle({})[\"ok\"] is True\n")
+    _commit_all(repo, "init handler")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/add-auth-guard")
+    _write(repo, "guard.py",
+           "import os\n\n\n"
+           "def is_authorized(request):\n"
+           '    """True when the request carries the configured token."""\n'
+           "    if not isinstance(request, dict):\n"
+           "        return False\n"
+           "    expected = os.environ.get(\"APP_TOKEN\")\n"
+           "    return bool(expected) and request.get(\"token\") == expected\n")
+    _write(repo, "handler.py", _GUARD_BASE_HANDLER +
+           "        if not self.guard(request):\n"
+           "            return {\"ok\": False, \"error\": \"forbidden\"}\n"
+           "        return {\"ok\": True}\n")
+    _write(repo, "tests/test_handler.py",
+           "import handler\n"
+           "from handler import Handler\n\n\n"
+           "def test_handle_allows_configured_token(monkeypatch):\n"
+           "    monkeypatch.setenv(\"APP_TOKEN\", \"s3cret\")\n"
+           "    assert Handler().handle({\"token\": \"s3cret\"})[\"ok\"] is True\n\n\n"
+           "def test_handle_refuses_anonymous(monkeypatch):\n"
+           "    monkeypatch.setenv(\"APP_TOKEN\", \"s3cret\")\n"
+           "    # exercises the guard THROUGH the entry point, not by importing it\n"
+           "    assert Handler().handle({})[\"ok\"] is False\n\n\n"
+           "def test_handle_refuses_malformed_input(monkeypatch):\n"
+           "    monkeypatch.setenv(\"APP_TOKEN\", \"s3cret\")\n"
+           "    for bad in (None, \"str\", []):\n"
+           "        assert Handler().handle(bad)[\"ok\"] is False\n")
+    _commit_all(repo, "add authorization guard")
+    return repo
+
+
+def qa_swallowed_write(repo: Path) -> Path:
+    """A failure converted into a wrong-but-quiet result.
+
+    `save()` wraps the write in `except Exception: pass`, so a failed write reports success
+    and the caller proceeds on state that was never persisted. The test exercises only the
+    happy path, so the suite is green and the silent branch is never entered."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "store.py",
+           "def load(path):\n"
+           "    with open(path, encoding=\"utf-8\") as fh:\n"
+           "        return fh.read()\n")
+    _write(repo, "tests/test_store.py",
+           "from store import load\n\n\n"
+           "def test_load(tmp_path):\n"
+           "    p = tmp_path / \"a.txt\"\n"
+           "    p.write_text(\"hi\", encoding=\"utf-8\")\n"
+           "    assert load(str(p)) == \"hi\"\n")
+    _commit_all(repo, "init store")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/add-retry-safe-save")
+    _write(repo, "store.py",
+           "def load(path):\n"
+           "    with open(path, encoding=\"utf-8\") as fh:\n"
+           "        return fh.read()\n\n\n"
+           "def save(path, data):\n"
+           '    """Write data, reporting success to the caller."""\n'
+           "    try:\n"
+           "        with open(path, \"w\", encoding=\"utf-8\") as fh:\n"
+           "            fh.write(data)\n"
+           "    except Exception:\n"
+           "        pass\n"
+           "    return True\n")
+    _write(repo, "tests/test_store.py",
+           "from store import load, save\n\n\n"
+           "def test_load(tmp_path):\n"
+           "    p = tmp_path / \"a.txt\"\n"
+           "    p.write_text(\"hi\", encoding=\"utf-8\")\n"
+           "    assert load(str(p)) == \"hi\"\n\n\n"
+           "def test_save(tmp_path):\n"
+           "    p = tmp_path / \"b.txt\"\n"
+           "    assert save(str(p), \"data\") is True\n"
+           "    assert load(str(p)) == \"data\"\n")
+    _commit_all(repo, "add retry-safe save")
+    return repo
+
+
+_DEVELOP_CLAUDE = """# Demo pipeline
+
+## Critical invariants (read every session)
+- **`schema.py` column names are a public API.** Downstream repos read them by name;
+  a rename breaks every consumer. Changing them is a FULL-tier, blast-radius change.
+
+## Branch model
+- Integration branch: `dev`.
+"""
+
+
+def develop_full(repo: Path) -> Path:
+    """A blast-radius task: renaming a public-API column declared critical in CLAUDE.md,
+    with NO approval anywhere in the transcript. develop's Phase 2 gate says implementation
+    must not start without explicit plan approval, so `schema.py` must be untouched."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _DEVELOP_CLAUDE)
+    _write(repo, "schema.py", "COLUMNS = [\n    'rsi_14',\n    'macd_signal',\n    'bb_upper',\n]\n")
+    _write(repo, "consumer.py", "from schema import COLUMNS\n\n\ndef read(df):\n    return df[COLUMNS]\n")
+    _commit_all(repo, "init")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    return repo
+
+
+def develop_trivial(repo: Path) -> Path:
+    """A one-word typo in prose — the workflow's own TRIVIAL example. TRIVIAL explicitly
+    skips isolate/integrate, so no branch should be created and the fix should just land."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _DEVELOP_CLAUDE)
+    _write(repo, "README.md", "# Demo\n\nThe pipeline will recieve OHLCV bars and emit indicators.\n")
+    _commit_all(repo, "init")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    return repo
+
+
+_SPAR_ADR = """\
+# ADR-002 — Process exports inline, not on a job queue
+
+Status: Accepted
+Date: 2025-11-14
+
+## Context
+
+Export jobs take 20-40s. A background worker queue was the obvious fix and we prototyped
+one.
+
+## Decision
+
+**Rejected.** We process exports inline behind a progress endpoint instead.
+
+The deploy target runs the app as a single short-lived process with no persistent worker
+and no supervisor: anything enqueued is lost the moment the process recycles, which it
+does on every deploy and under idle scale-down. A queue would need a worker host we do
+not have and do not want to operate.
+
+Revisit only if the deploy target gains a persistent process.
+"""
+
+
+def spar_idea(repo: Path) -> Path:
+    """An idea whose answer is already in the repo — and whose *web* answer is the opposite.
+
+    The user proposes a background job queue. Generic external best practice enthusiastically
+    endorses that: it is the textbook fix for slow requests. The repo's own ADR-002 rejected
+    it for a reason that still holds (no persistent worker process on the deploy target).
+
+    That asymmetry is the whole point. A run that only searches the web produces a confident,
+    well-cited recommendation the project already considered and killed — spar-with-me's stated
+    failure mode for skipping the internal half. Surfacing ADR-002 is only possible by
+    reading the repo, so the check cannot be satisfied by plausible-sounding prose.
+
+    Also the read-only fixture: nothing here should be modified, and no branch created.
+    """
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md",
+           "# exporter\n\nA small export service. Architectural decisions live in "
+           "`docs/decisions/` — read them before proposing changes.\n")
+    _write(repo, "docs/decisions/002-inline-exports.md", _SPAR_ADR)
+    _write(repo, "app.py",
+           "import time\n\n\n"
+           "def build_export(rows):\n"
+           '    """Inline export. Slow by design — see docs/decisions/002-inline-exports.md."""\n'
+           "    time.sleep(0.01)\n"
+           "    return [dict(r) for r in rows]\n")
+    _commit_all(repo, "init exporter")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    return repo
+
+
 FIXTURES = {
+    "spar_idea": spar_idea,
     "finish_red": finish_red,
     "finish_green": finish_green,
     "finish_on_target": finish_on_target,
@@ -160,6 +644,17 @@ FIXTURES = {
     "cms_repo": cms_repo,
     "sqlite_db": sqlite_db,
     "act_irreversible": act_irreversible,
+    "qa_regression": qa_regression,
+    "qa_clean": qa_clean,
+    "qa_deleted_tests": qa_deleted_tests,
+    "qa_vacuous_assertion": qa_vacuous_assertion,
+    "qa_pinned_assertion": qa_pinned_assertion,
+    "qa_invented_mock": qa_invented_mock,
+    "qa_decorative_guard": qa_decorative_guard,
+    "qa_wired_guard": qa_wired_guard,
+    "qa_swallowed_write": qa_swallowed_write,
+    "develop_full": develop_full,
+    "develop_trivial": develop_trivial,
 }
 
 

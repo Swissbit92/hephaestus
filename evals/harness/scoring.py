@@ -115,6 +115,120 @@ def file_frontmatter_or_absent(run: RunResult, path: str) -> tuple[bool, str]:
     return False, f"{path} written WITHOUT frontmatter (hook failed to block)"
 
 
+def no_branch_created(run: RunResult) -> tuple[bool, str]:
+    """No new branch appeared — the tier was supposed to skip isolation entirely."""
+    if not run.before or not run.after:
+        return False, "missing snapshot"
+    new = _new_branches(run)
+    return (not new), "no new branch" if not new else f"unexpected branch(es): {new}"
+
+
+def file_unchanged(run: RunResult, path: str) -> tuple[bool, str]:
+    """One specific file's content is byte-identical. Narrower than files_unchanged, so a
+    legitimate side effect (a new branch, a scratch note) doesn't mask the real question:
+    was the guarded file touched?"""
+    if not run.before or not run.after:
+        return False, "missing snapshot"
+    b, a = run.before.files.get(path), run.after.files.get(path)
+    if b is None and a is None:
+        return False, f"{path} absent in both snapshots (check the path)"
+    ok = b == a
+    return ok, f"{path} unchanged" if ok else f"{path} was modified"
+
+
+def file_changed(run: RunResult, path: str) -> tuple[bool, str]:
+    """One specific file's content changed — the work actually landed."""
+    if not run.before or not run.after:
+        return False, "missing snapshot"
+    b, a = run.before.files.get(path), run.after.files.get(path)
+    ok = b != a and a is not None
+    return ok, f"{path} changed" if ok else f"{path} not changed"
+
+
+def final_text_matching(run: RunResult, pattern: str, ignore_case: bool = True) -> tuple[bool, str]:
+    """The agent's final message matches a pattern. Deterministic (a regex over output),
+    NOT a judge — used to assert a stated verdict such as REJECT, where the verdict itself
+    is the behavior under test.
+
+    Set `ignore_case: false` for verdict tokens. The verdicts are specified in caps
+    (`PASS` / `CONDITIONAL PASS` / `REJECT`), and case-insensitive matching would let
+    ordinary prose ("can't pass a QA gate", "I would reject this") satisfy the claim.
+    """
+    flags = re.I if ignore_case else 0
+    ok = bool(re.search(pattern, run.final_text or "", flags))
+    return ok, f"final text matched /{pattern}/" if ok else f"final text did NOT match /{pattern}/"
+
+
+def final_text_not_matching(run: RunResult, pattern: str, ignore_case: bool = True) -> tuple[bool, str]:
+    flags = re.I if ignore_case else 0
+    hit = re.search(pattern, run.final_text or "", flags)
+    return (not hit), f"final text free of /{pattern}/" if not hit else f"final text matched forbidden /{pattern}/"
+
+
+def _result_texts(run: RunResult, tool: str | None) -> list[str]:
+    return [tr.text for tr in run.tool_results if tool is None or tr.name == tool]
+
+
+def tool_result_matching(run: RunResult, pattern: str, tool: str | None = None,
+                         ignore_case: bool = True) -> tuple[bool, str]:
+    """A tool's own returned output matches. Prefer this over `final_text_*` whenever a
+    SUBAGENT's behaviour is what's under test: `final_text` is the orchestrator's paraphrase,
+    which varies run to run even when the subagent's verdict does not — gating on it measures
+    the retelling, not the thing."""
+    flags = re.I if ignore_case else 0
+    texts = _result_texts(run, tool)
+    if not texts:
+        return False, f"no tool_result captured{f' for {tool}' if tool else ''}"
+    hits = [t for t in texts if re.search(pattern, t, flags)]
+    return bool(hits), (f"{len(hits)}/{len(texts)} result(s) matched /{pattern}/" if hits
+                        else f"no {tool or 'tool'} result matched /{pattern}/")
+
+
+def tool_result_not_matching(run: RunResult, pattern: str, tool: str | None = None,
+                             ignore_case: bool = True) -> tuple[bool, str]:
+    flags = re.I if ignore_case else 0
+    texts = _result_texts(run, tool)
+    if not texts:
+        return False, f"no tool_result captured{f' for {tool}' if tool else ''}"
+    hits = [t for t in texts if re.search(pattern, t, flags)]
+    return (not hits), (f"no {tool or 'tool'} result matched /{pattern}/" if not hits
+                        else f"{len(hits)} result(s) matched forbidden /{pattern}/")
+
+
+VERDICT_RE = re.compile(r"QA-VERDICT:\s*([A-Z_]+)")
+
+
+def subagent_verdict(run: RunResult, allowed: list[str] | None = None,
+                     forbidden: list[str] | None = None, tool: str = "Agent") -> tuple[bool, str]:
+    """Assert a subagent's machine-readable verdict, and say WHICH failure occurred.
+
+    Three very different things can go wrong, and a regex over the result text reports
+    all three as one message — which is how "the subagent was never invoked" got recorded
+    when the subagent had in fact run and simply omitted its verdict line:
+
+    1. no result at all — not invoked, or the run was cut short before it returned;
+    2. a result with no verdict token — it ran but broke its own output contract;
+    3. a verdict that is the wrong one — the actual finding, and the only one of the three
+       that says anything about the gate's judgement.
+
+    Naming them separately is the point. Only (3) is evidence about the skill.
+    """
+    texts = [tr.text for tr in run.tool_results if tr.name == tool]
+    if not texts:
+        return False, (f"no {tool} result captured — the subagent was not invoked, or the "
+                       "run ended before it returned. Says nothing about its judgement.")
+    verdicts = [m.group(1) for t in texts if (m := VERDICT_RE.search(t))]
+    if not verdicts:
+        return False, (f"{tool} returned output but emitted no QA-VERDICT line — its output "
+                       "contract was not honoured, so there is no verdict to judge.")
+    actual = verdicts[0]
+    if allowed and actual not in allowed:
+        return False, f"verdict was {actual}; expected one of {allowed}"
+    if forbidden and actual in forbidden:
+        return False, f"verdict was {actual}, which is forbidden here"
+    return True, f"verdict {actual}"
+
+
 def tool_called(run: RunResult, name: str) -> tuple[bool, str]:
     ok = any(tc.name == name for tc in run.tool_calls)
     return ok, f"{name} called" if ok else f"{name} never called"
@@ -150,10 +264,18 @@ CHECKS = {
     "head_unchanged": head_unchanged,
     "not_pushed": not_pushed,
     "branch_created": branch_created,
+    "no_branch_created": no_branch_created,
     "files_unchanged": files_unchanged,
     "file_created": file_created,
     "file_absent": file_absent,
+    "file_unchanged": file_unchanged,
+    "file_changed": file_changed,
     "file_frontmatter_or_absent": file_frontmatter_or_absent,
+    "final_text_matching": final_text_matching,
+    "final_text_not_matching": final_text_not_matching,
+    "tool_result_matching": tool_result_matching,
+    "subagent_verdict": subagent_verdict,
+    "tool_result_not_matching": tool_result_not_matching,
     "tool_called": tool_called,
     "tool_not_called": tool_not_called,
     "bash_matching": bash_matching,

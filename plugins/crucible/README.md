@@ -3,8 +3,9 @@
 Generic, vendor-neutral **craft tools** for AI-assisted development — the flagship plugin of the
 [hephaestus](../../README.md) marketplace. crucible makes day-to-day work with Claude Code
 *disciplined* rather than chaotic: a structured workflow with real gates, a safe branch lifecycle,
-documentation hygiene, change-gating that won't let quality regress, and a bounded, read-only
-agent-loop harness. Everything is pure-stdlib Python and plain markdown — no external dependencies,
+documentation hygiene, change-gating that won't let quality regress, a bounded read-only
+agent-loop harness, and a research-backed sparring partner for the thinking that happens before
+any of it. Everything is pure-stdlib Python and plain markdown — no external dependencies,
 nothing domain-specific, so it drops cleanly into any repo.
 
 ## Install
@@ -22,7 +23,8 @@ instructions enter context only when invoked.
 | Tool | Type | What it does |
 |------|------|--------------|
 | **cms** | skill + hook | Context Management System — standardizes docs across repos for AI-agent token efficiency: frontmatter linting, ADR scaffolding, drift detection, staleness-based archival. A `PreToolUse` hook enforces frontmatter on `docs/*.md` edits. |
-| **grill-me** | skill | Adversarial sparring partner — stress-tests a decision or plan before you commit (assumption audit, pre-mortem, outside view, falsifiable tripwires). |
+| **spar-with-me** | skill | Sparring partner for the stage *before* a decision — when you have an instinct, not yet a thesis. Mandatory **internal *and* web** research before any opinion (neither substitutes for the other), clarifying questions only where a different answer would change the advice, and a take that moves on new evidence but never on restated preference. **Read-only**: research fans out to `Explore`/`Plan` agents that carry no write tools *by construction*, and nothing lands on disk until you ask — enforced for the fan-out, and measured for the main thread by a `pass^k` eval that fails on a single write. Hands off to `grill-me` once the idea hardens. |
+| **grill-me** | skill | Adversarial stress-test of a decision you've already reached, before you commit to it (assumption audit, pre-mortem, outside view, falsifiable tripwires). Requires a position to attack — while one is still forming, that's `spar-with-me`. |
 | **develop** | command | The structured workflow — classify → research → architect → isolate → implement → QA → docs → completion → integrate, with gates between phases. |
 | **start-branch** | skill | Isolate work before implementing — detects the repo's integration target (never hardcoded), picks a plain branch vs. git worktree, names it Conventional-Branch style, records a clean test baseline. (`develop` ISOLATE phase.) |
 | **finish-branch** | skill | Close out a branch/worktree safely — gates on tests (no green, no merge), offers merge / PR / keep / discard, PR-by-default for deploy branches, cleans up without losing unmerged work. (`develop` INTEGRATE phase.) |

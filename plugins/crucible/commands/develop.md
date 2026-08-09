@@ -128,15 +128,79 @@ Don't write serial loops over independent, expensive units of work when the lang
 
 Catch issues before they compound.
 
-Use a `qa-gatekeeper` agent if your project provides one; otherwise do QA directly. Checks (all projects):
+### 4.0 Run the deterministic checks FIRST — yourself, before delegating
+
+Anything a script can decide, a script decides. Run these in the main loop and carry the
+**results** into the review; do not ask a subagent to remember to run them.
+
+**First, find out what this project supports** — the right gates differ per project, and a
+repo may hold several independent ones:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/detect_profile.py" --emit-gates   # + --repo/--max-depth
+```
+
+`0` = one runnable command per line on stdout, already scoped to the right directory ·
+`2` = **could not determine** · `3` = **nothing runnable — a SKIP, not a pass.**
+
+**Run every line it prints**, and treat a non-zero exit from any of them as a QA failure.
+Drop `--emit-gates` for the human-readable report, or add `--json` for the full structure.
+
+Anything the detector calls a *capability* — a browser suite whose config starts no server,
+say — is deliberately **not** printed as runnable; it goes to stderr instead. Running one
+against nothing collects zero tests and exits clean, and zero tests passing is not a pass.
+That is why the split exists in the tool rather than in your judgement.
+
+Then run the coverage check for each Python root it reported:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/coverage_delta.py"   # + --repo/--target/--base/--collect-cmd as needed
+```
+
+`0` = no test disappeared · `1` = **coverage regression** — tests present at the branch point
+are gone; this is a REJECT unless each removal has a stated reason (behaviour deliberately
+deleted, or the test moved and appears under ADDED) · `2` = **could not determine, which is
+not a pass** — fix the invocation (usually `--collect-cmd`) and re-run.
+
+Then run the repo's standing constraints, if it has any:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/invariants_run.py"   # + --repo/--file
+```
+
+`0` = every wired check passed · `1` = **an invariant was violated** — a constraint agreed to
+hold for all work here no longer does · `2` = could not determine · `3` = **nothing
+enforceable** (no file, or no entry has a check yet) — a SKIP, not a pass.
+
+This exists because a constraint stated once is least salient exactly when it is about to be
+broken, and restating it does not help: the thing doing the forgetting is the thing being
+asked to remember. A script does not care how long ago the rule was written.
+
+Profile catalogue and the deliberate non-goals:
+[references/evidence-profiles.md](references/evidence-profiles.md).
+
+Why this sits here and not in the gatekeeper's instructions: it was measured. Asking the
+agent to compare test sets by eye caught a green-but-shrunken suite 3 times in 6; giving it
+this script and asking it to run the script caught it 2 times in 6. The check was never the
+weak part — the *request* was. A step the workflow executes runs every time; a step an agent
+is told to perform runs sometimes. Put deterministic checks on this side of that line.
+
+State the exit code in the QA record, and hand it to the gatekeeper as an input rather than
+an assignment.
+
+### 4.1 Then review
+
+Use a `qa-gatekeeper` agent if your project provides one; otherwise do QA directly. Give it
+the Phase 4.0 results. Checks (all projects):
 
 1. All tests pass.
 2. No passing-test regression vs. the branch-point baseline (derived live, not a stated number) — fewer passing tests or a newly failing test is a regression; *more* tests (the milestone added them) is not.
-3. No orphaned code (stale references to renamed/deleted symbols).
-4. Lint clean (your linter).
-5. No security issues (no hardcoded secrets, no injection).
-6. Conventions followed (see the repo's CLAUDE.md).
-7. Performance check — no new serial loop over independent expensive work where parallelism is feasible.
+3. No coverage regression — from the Phase 4.0 exit code, not from judgement. Counts cannot see this: delete one test and add another and the count is unchanged, and the suite stays green precisely because what would have failed is no longer asked.
+4. No orphaned code (stale references to renamed/deleted symbols) — and no *unreached* code: a control that is constructed but never called is not orphaned, it just does nothing.
+5. Lint clean (your linter).
+6. No security issues (no hardcoded secrets, no injection).
+7. Conventions followed (see the repo's CLAUDE.md).
+8. Performance check — no new serial loop over independent expensive work where parallelism is feasible.
 
 **Verdicts:** PASS → proceed to docs, then next milestone. CONDITIONAL PASS → fix minor issues, proceed. REJECT → fix critical issues, re-run QA; do not proceed until PASS.
 
@@ -201,7 +265,8 @@ When a task spans multiple repos/packages:
 | 2 — Architecture | Plan (1) | After Phase 1 | FULL only |
 | 2.5 — Isolate | `start-branch` skill | Before Implement | FULL + LIGHT (TRIVIAL skips) |
 | 3 — Implement | Direct or concurrent teams | When independent | All |
-| 4 — QA | qa-gatekeeper or direct | After each milestone | All |
+| 4.0 — Deterministic checks | none (you run them) | Before delegating | All |
+| 4.1 — QA | qa-gatekeeper or direct | After each milestone | All |
 | 5 — Docs | Direct (via `cms`) | After QA pass | All |
 | 6 — Completion | Direct | After all milestones | All |
 | 6.5 — Integrate | `finish-branch` skill | After Completion | FULL + LIGHT (TRIVIAL skips) |
@@ -209,5 +274,5 @@ When a task spans multiple repos/packages:
 ## CHECKLIST (every task)
 
 Before: target identified · classified · alignment stated · task list visible · starting test count recorded · work isolated via `start-branch` (FULL/LIGHT; target auto-detected + confirmed) — or isolation explicitly declined.
-During: QA after each milestone · docs updated after each QA pass · task list current.
+During: deterministic checks run by you (coverage delta) before each review · QA after each milestone · docs updated after each QA pass · task list current.
 After: final test count verified · version bumped (per tier) · lessons captured · tasks complete · branch integrated via `finish-branch` (merge/PR/keep/discard + safe cleanup, FULL/LIGHT) · debrief delivered (FULL only).

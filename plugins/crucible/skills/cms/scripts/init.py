@@ -27,6 +27,9 @@ TEMPLATE_MAP = [
     ("docs/ROADMAP.md", "ROADMAP.md"),
     ("docs/LESSONS_LEARNED.md", "LESSONS_LEARNED.md"),
     ("docs/THREAT_LEVEL.md", "THREAT_LEVEL.md"),
+    # Scaffolded, but deliberately NOT added to REQUIRED_FILES: a repo with no standing
+    # constraints is not a repo doing something wrong, so its absence must never error.
+    ("docs/INVARIANTS.md", "INVARIANTS.md"),
 ]
 
 

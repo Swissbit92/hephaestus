@@ -11,7 +11,7 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 
 | Plugin | Scope |
 |--------|-------|
-| **crucible** | Generic, vendor-neutral craft tools: `cms`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill`, `eval-first`, `flag-gate`, `loop-harness`, `act-for-real`, `repo-audit` |
+| **crucible** | Generic, vendor-neutral craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill`, `eval-first`, `flag-gate`, `loop-harness`, `act-for-real`, `repo-audit` |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server (3-layer read-only, NL→SQL) |
 | **mcp-starter** | Template for packaging a Python MCP server as a plugin |
 | **second-brain** | Obsidian inbox processor (suggest-then-confirm; skills-only) |
@@ -19,11 +19,18 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 
 ## Branch model (read before starting work)
 
-- **Integration branch:** `main`. It is always releasable.
+- **Integration branch:** `dev`. Feature work branches off it and merges back into it.
+- **Release branch:** `main`. It is always releasable, and it is what the installed
+  marketplace clone tracks — so anything merged here changes the tooling every session on
+  this machine loads. That is the reason for the extra hop: `dev` is where work lands,
+  `main` is where it is published.
 - **Work happens on short-lived feature branches** named Conventional-Branch style:
   `<type>/<short-description>` in kebab-case — `feature/…`, `bugfix/…`, `hotfix/…`, `chore/…`.
-- **Integrate via merge or PR back into `main`.** Never commit feature work directly to `main`.
-- Tags are per-plugin: `<plugin>-v<x.y.z>` (e.g. `crucible-v0.2.0`).
+- **Integrate via merge or PR into `dev`.** Never commit feature work directly to `dev` or
+  `main`. Promote `dev` → `main` as a separate, deliberate step once the work is verified
+  **on the merged tree** — a branch that passes alone and a merge that passes are different
+  claims, and `main` moving underneath a long-lived branch is not hypothetical here.
+- Tags are per-plugin: `<plugin>-v<x.y.z>` (e.g. `crucible-v0.2.0`), cut from `main`.
 
 > The `start-branch` / `finish-branch` skills detect this model from this file — keep the
 > section above accurate.
@@ -97,7 +104,7 @@ hephaestus/
 └── plugins/
     ├── crucible/
     │   ├── .claude-plugin/plugin.json
-    │   ├── skills/{cms,grill-me,start-branch,finish-branch,author-skill,eval-first,flag-gate,loop-harness,act-for-real,repo-audit}/
+    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,author-skill,eval-first,flag-gate,loop-harness,act-for-real,repo-audit}/
     │   ├── commands/develop.md
     │   └── agents/qa-gatekeeper.md
     ├── sqlite-readonly/         # read-only SQLite MCP server (uv project under servers/)

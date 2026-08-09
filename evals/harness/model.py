@@ -11,6 +11,16 @@ class ToolCall:
 
 
 @dataclass
+class ToolResult:
+    """What a tool returned. For an Agent/Task call this is the subagent's OWN output — the
+    thing to assert on when a subagent's verdict is the behaviour under test. The
+    orchestrator's `final_text` is only a paraphrase of it, and paraphrases vary run to run,
+    so gating on them measures the retelling rather than the verdict."""
+    name: str
+    text: str = ""
+
+
+@dataclass
 class WorldSnapshot:
     """A capture of the fixture's git + file state. The live runner builds these
     (world.py); scorers compare them. Kept plain so tests construct them by hand."""
@@ -31,6 +41,7 @@ class RunResult:
     skills: list[str] = field(default_factory=list)
     plugin_errors: list = field(default_factory=list)
     tool_calls: list[ToolCall] = field(default_factory=list)
+    tool_results: list[ToolResult] = field(default_factory=list)
     final_text: str = ""
     exit_ok: bool = True
     fixture_path: str = ""   # the run's working dir, for checks that read file content
