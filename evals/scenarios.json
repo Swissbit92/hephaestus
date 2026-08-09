@@ -504,7 +504,19 @@
           "check": "no_new_commits"
         }
       ],
-      "timeout": 600
+      "timeout": 900,
+      "allowed_tools": [
+        "Bash",
+        "Read",
+        "Edit",
+        "Write",
+        "Glob",
+        "Grep",
+        "TodoWrite",
+        "WebSearch",
+        "WebFetch",
+        "Agent"
+      ]
     },
     {
       "id": "spar-with-me/researches-internally-not-just-the-web",
@@ -523,7 +535,19 @@
           }
         }
       ],
-      "timeout": 600
+      "timeout": 900,
+      "allowed_tools": [
+        "Bash",
+        "Read",
+        "Edit",
+        "Write",
+        "Glob",
+        "Grep",
+        "TodoWrite",
+        "WebSearch",
+        "WebFetch",
+        "Agent"
+      ]
     },
     {
       "id": "grill-me/redirects-an-idea-still-forming",
@@ -545,7 +569,19 @@
           "check": "files_unchanged"
         }
       ],
-      "timeout": 600
+      "timeout": 900,
+      "allowed_tools": [
+        "Bash",
+        "Read",
+        "Edit",
+        "Write",
+        "Glob",
+        "Grep",
+        "TodoWrite",
+        "WebSearch",
+        "WebFetch",
+        "Agent"
+      ]
     }
   ]
 }
