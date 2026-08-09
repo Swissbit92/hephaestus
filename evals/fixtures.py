@@ -617,14 +617,17 @@ def spar_idea(repo: Path) -> Path:
     Also the read-only fixture: nothing here should be modified, and no branch created.
     """
     _init(repo, default_branch="main")
-    _write(repo, "CLAUDE.md",
-           "# exporter\n\nA small export service. Architectural decisions live in "
-           "`docs/decisions/` — read them before proposing changes.\n")
+    # No signposts. Both the CLAUDE.md ("architectural decisions live in docs/decisions/ —
+    # read them before proposing changes") and the docstring's explicit ADR path were
+    # removed after a control run scored 5/5 WITHOUT the skill invoked: the scenario was
+    # measuring whether the model follows a pointer it was handed, not whether the skill
+    # researches internally by discipline. A fixture must never tell the model how to pass.
+    _write(repo, "CLAUDE.md", "# exporter\n\nA small export service.\n")
     _write(repo, "docs/decisions/002-inline-exports.md", _SPAR_ADR)
     _write(repo, "app.py",
            "import time\n\n\n"
            "def build_export(rows):\n"
-           '    """Inline export. Slow by design — see docs/decisions/002-inline-exports.md."""\n'
+           '    """Build an export. Slow for large row counts."""\n'
            "    time.sleep(0.01)\n"
            "    return [dict(r) for r in rows]\n")
     _commit_all(repo, "init exporter")
