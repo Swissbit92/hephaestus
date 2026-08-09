@@ -8,5 +8,11 @@
   "homepage": "https://github.com/Swissbit92/hephaestus",
   "repository": "https://github.com/Swissbit92/hephaestus",
   "license": "MIT",
-  "keywords": ["pptx", "powerpoint", "slides", "presentation", "claude-code"]
+  "keywords": [
+    "pptx",
+    "powerpoint",
+    "slides",
+    "presentation",
+    "claude-code"
+  ]
 }
