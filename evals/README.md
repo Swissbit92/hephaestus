@@ -72,6 +72,7 @@ Each entry in `scenarios.json` is a falsifiable behavioral claim:
 | spar-with-me/stays-read-only | a whole sparring session writes no file, creates no branch, makes no commit |
 | spar-with-me/researches-internally-not-just-the-web | the take reaches the repo's own ADR, which only reading the repo could surface |
 | grill-me/redirects-an-idea-still-forming | an undecided idea is handed to `spar-with-me` rather than grilled |
+| spar-with-me/asks-the-discriminating-question | the recommendation hinges on a fact only the user has — so it asks, rather than guessing |
 
 This table is checked against `scenarios.json` by `test_readme_table_lists_every_scenario` —
 it drifted silently once, and a stale table is a quiet claim that coverage is smaller than it
@@ -81,18 +82,32 @@ is, or larger.
 
 **Run the fixture and prompt with the skill *not* invoked, and compare.** A green scenario
 attributes the behaviour to the skill; only the difference from an unskilled run supports
-that. Measured 2026-08-09 on the two new `spar-with-me` scenarios:
+that. Measured 2026-08-09 on the two `spar-with-me` scenarios:
 
-| Property | With the skill (k=10) | Control, no skill (k=5) | Discriminating power |
+| Property | With the skill | Control, no skill | Discriminating power |
 |---|---|---|---|
-| finds the repo's own ADR | 10/10 | **5/5** | **none** |
-| writes no file | 10/10 | **5/5** | **none** |
+| finds the repo's own ADR — signposted fixture | 10/10 | 5/5 | **none** |
+| finds the repo's own ADR — hardened fixture | 10/10 | 3/5, then **10/10** (13/15 pooled) | **none established** |
+| writes no file | 10/10 | 10/10 | **none** |
 
-Both scored a perfect sweep, and both were measuring the fixture and the base model. Two
-causes, and the first was self-inflicted: the fixture's `CLAUDE.md` said *"read them before
-proposing changes"*, handing over the answer the scenario meant to test for. The second is
-just a high base rate — a capable model reads a repo's decisions and doesn't write
-uninvited, skill or no skill.
+Both scored a perfect sweep, and neither was measuring the skill. Two causes, and the first
+was self-inflicted: the fixture's `CLAUDE.md` said *"read them before proposing changes"* and
+`app.py`'s docstring named the ADR path, handing over the answer the scenario meant to test
+for. Both were removed. The second cause is not fixable by fixture design — a capable model
+reads a repo's decisions and doesn't write uninvited, skill or no skill.
+
+> **The control needs k=10 too.** The first control on the hardened fixture read **3/5** and
+> looked like a real effect (60% vs 100%). Ten runs on the *same* fixture read **10/10**. Same
+> code, same prompt, opposite conclusion — and the small sample happened to point the flattering
+> way. Five runs is enough for "always vs never" only when the true rate is near an extreme; it
+> cannot distinguish 60% from 90%, and a control is exactly where that distinction decides
+> whether a feature gets credit. Apply the k≥10 rule to the control, not just the treatment.
+
+**You cannot demonstrate value on a property the base model already has.** That is the real
+constraint on scenario design, and it points at which properties are worth testing: the ones
+with a *low* base rate. `asks-the-discriminating-question` exists for that reason — models ask
+clarifying questions on ~2–5% of ambiguous inputs, dropping toward 0% once context is
+retrieved, so there is genuine headroom for a skill to move it.
 
 Read the two kinds of scenario differently when a control ties:
 

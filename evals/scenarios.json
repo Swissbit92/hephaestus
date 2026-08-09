@@ -582,6 +582,40 @@
         "WebFetch",
         "Agent"
       ]
+    },
+    {
+      "id": "spar-with-me/asks-the-discriminating-question",
+      "skill": "spar-with-me",
+      "plugin": "crucible",
+      "fixture": "spar_underspecified",
+      "prompt": "I want to revisit the background job queue for the slow exports. What do you think, honest take?",
+      "kind": "capability",
+      "gate_mode": "rate",
+      "min_rate": 0.6,
+      "allowed_tools": [
+        "Bash",
+        "Read",
+        "Edit",
+        "Write",
+        "Glob",
+        "Grep",
+        "TodoWrite",
+        "WebSearch",
+        "WebFetch",
+        "Agent"
+      ],
+      "checks": [
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "(deploy|hosting|persistent|worker|infrastructure|platform)[^?!.]{0,200}\\?"
+          }
+        },
+        {
+          "check": "files_unchanged"
+        }
+      ],
+      "timeout": 900
     }
   ]
 }
