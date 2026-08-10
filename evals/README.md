@@ -106,6 +106,51 @@ reads a repo's decisions and doesn't write uninvited, skill or no skill.
 **You cannot demonstrate value on a property the base model already has.** That is the real
 constraint on scenario design, and it points at testing properties with a *low* base rate.
 
+### `qa-gatekeeper` has no measured discriminating power (2026-08-10)
+
+The rule above was then applied to the oldest and most load-bearing scenarios in this suite,
+because `qa-gatekeeper` is the verification step every `/crucible:develop` run passes through.
+Four defect fixtures, both arms at k=10 — **80 runs**:
+
+| Fixture | Treatment (agent named) | Control (bare review) | Control invoked `Agent` |
+|---|---|---|---|
+| `qa_vacuous_assertion` | 10/10 | **10/10** | 0/10 |
+| `qa_invented_mock` | 10/10 | **10/10** | 0/10 |
+| `qa_decorative_guard` | 10/10 | **10/10** | 0/10 |
+| `qa_swallowed_write` | 10/10 | **10/10** | 0/10 |
+
+Both arms were scored by the same question — *did the output identify the seeded defect?* —
+because the shipped check (`subagent_verdict == REJECT`) is unavailable to a control that
+spawns no subagent, and comparing a verdict against no-verdict measures the instrument. The
+patterns are defect-specific and were validated before the run: 13/13 real defect descriptions
+matched, 0/16 generic criticisms did. Both `final_text` and every tool result were searched,
+since a gatekeeper's finding lives in its `Agent` result and the parent may only paraphrase.
+
+**The confound was measured, not assumed away.** The crucible plugin is loaded in both arms, so
+a bare "review this branch" could have auto-routed to `qa-gatekeeper` by description match and
+won that way. It did not: `Agent` was invoked **0/10 in every control arm**. The control is
+genuinely agent-free.
+
+So the agent is *reliable* — 40/40 across treatment — and so is simply asking for a review.
+The prompt `Review this branch before I merge it. The suite is green.` found wrong arithmetic
+behind a vacuous assertion, a mock contradicting a checked-in vendor doc, a guard assigned but
+never called from its entry point, and a swallowed write, **ten times out of ten each, with no
+agent at all**. On this evidence the agent adds ceremony, not detection.
+
+Two limits on how far that generalises, both real:
+
+- **The fixtures are small and single-defect.** Each is a handful of files where the seeded
+  defect is the only thing wrong. A production diff is larger, noisier, and offers more places
+  to hide; a reviewer's attention budget is not tested here at all. The honest claim is "no
+  measured effect on four isolated defect classes", not "the agent is useless".
+- **Phase 4.0 is untouched by this.** `coverage_delta`, `detect_profile` and `invariants_run`
+  were separately measured and *do* beat the prose alternative (eyeball 3/6 → agent-runs-script
+  2/6 → workflow-runs-script 3/3). The verification that carries `develop` is deterministic and
+  still earns its place. It is the *review* half that is unproven.
+
+What follows from it: do not cite the gatekeeper scenarios as evidence the agent works. They
+show it does not regress, which is worth keeping as a guard, and nothing more.
+
 ### A fixture must not contain the answer — and it will, three times running
 
 The clarifying-question claim was attempted and **abandoned**, because every fixture built for
