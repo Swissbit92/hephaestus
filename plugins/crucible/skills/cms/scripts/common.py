@@ -67,6 +67,12 @@ _BASE_ALLOWLIST = {
     # A standing constraint outlives every task by definition — archiving one because it
     # is old would delete precisely the thing that was supposed to survive the work.
     "INVARIANTS.md",
+    # The `*_PLAN.md` archive pattern is aimed at transient plans — MIGRATION_PLAN,
+    # PHASE2_PLAN — that stop mattering once executed. A BUSINESS_PLAN is the opposite
+    # kind of document: a standing statement of what the product is, which gets *more*
+    # load-bearing with age, not less. Matching it on filename alone flagged a repo's
+    # primary founder document as archive-fodder purely for ending in "_PLAN".
+    "BUSINESS_PLAN.md",
 }
 
 # Files that legitimately carry NO frontmatter — the root special files. This is a
