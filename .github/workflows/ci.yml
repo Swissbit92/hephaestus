@@ -28,8 +28,48 @@ jobs:
       - name: Validate plugin + marketplace manifests
         run: python3 scripts/validate_manifests.py
 
+      - name: Skill quality (budget + cross-skill duplication)
+        # --strict fails on warnings. If this goes red, fix the skill — not the
+        # threshold; the thresholds are pinned by tests for exactly that reason.
+        run: python3 scripts/skill_lint.py --strict
+
       - name: Public-safety guard (no private/employer tokens)
         run: bash scripts/check-public-safe.sh
+
+  # Tier 1b — the same hermetic suite on the other two platforms this marketplace is
+  # used from. A separate job, deliberately NOT a matrix on `checks`: branch protection
+  # requires a status check named exactly `checks`, and matrixing that job would rename
+  # it to `checks (ubuntu-latest)` and detach the rule without anything appearing to
+  # break. ubuntu is already covered above, so this runs the other two.
+  #
+  # It exists because every portability defect this repo has had was invisible from a
+  # POSIX machine: `python3` resolving to a Store stub that runs nothing, a passing gate
+  # exiting 1 because it printed a check-mark to a cp1252 console, backslashes in an
+  # emitted shell command. None of those can fail on ubuntu.
+  cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test deps
+        run: pip install pytest
+
+      - name: Unit + eval-core suite (pytest)
+        run: pytest -q
+
+      - name: Phase 4.0 gates must run here too
+        run: |
+          python scripts/validate_manifests.py
+          python scripts/skill_lint.py --strict
+          python plugins/crucible/scripts/detect_profile.py --emit-gates
 
   # Tier 2 (DISABLED by default) — the live skill-eval suite. It drives the real `claude`
   # CLI against the plugins, so it needs the CLI installed and an API key, and it spends

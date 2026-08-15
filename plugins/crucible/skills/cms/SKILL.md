@@ -123,50 +123,29 @@ add a second architecture document — a second hand-maintained file would doubl
 the staleness surface rather than solve it, so drift is made structurally
 impossible instead of merely policed.
 
-- Diagrams live in fenced ` ```archview ` blocks inside the markdown, the way
-  mermaid already does. One file to edit, one linter to satisfy.
-- A fenced ` ```archflow ` block walks an `archview` instead of redrawing it —
-  select a flow, everything off its path dims, prev/next steps through it. Same
-  boxes, so "what is here" and "what happens" cannot drift apart. It must sit
-  below the view it references, and every step id is checked at build time.
-- Repo-specific visuals go in a fenced ` ```html ` block and pass through
-  untouched — "the one thing this repo does" differs everywhere and cannot be
-  schema'd, so the format offers a socket rather than a type.
-- A view that is one unbranched chain of 4+ steps is laid out **serpentine**
-  (left to right, wrapping) rather than one row per step. Automatic. A pipeline
-  through the layered engine is a column ~800px tall — worse than the list it
-  replaced.
-- `check` warns when a doc describes a sequence of 4+ steps in prose and has no
-  `archflow`. That exact omission went unnoticed for weeks: the capability had
-  shipped and the content had not, which nothing that checks *whether the page
-  builds* can see.
-- A fenced ` ```archstat ` block renders a gauge row: the few facts worth having
-  before the prose. Values are written, never computed — a gauge row is where
-  "STRUCTURE ONLY, NO RUNTIME STATE" usually dies.
-- A fenced ` ```archplot ` block draws a mechanism as a plot: series, thresholds,
-  bands, vertical marks, and gated spans derived from a named series. Generated
-  data must declare `"schematic": true` or the render refuses. Use ` ```html ` when
-  the figure is not a plot.
-- `[[ok:…]]` / `[[warn:…]]` / `[[bad:…]]` / `[[mute:…]]` render inline state
-  pills, usable in any table cell. Four states and no more; the label carries the
-  meaning so they survive greyscale and print.
-- `site.py <root>` builds a **multi-repo site** from the markdown already in the
-  repos, driven by a `site.toml` that lists repositories and nothing else: a page
-  exists if its sources exist. Adds nav, a home page, cross-repo diagram links and
-  inline search. Details in `references/architecture-views.md`.
-- `published_url` in frontmatter binds the page to one address: the footer links
-  it, and `--publish` redeploys there. Without it every publish mints a new link
-  and the old ones rot in place, indistinguishable from the current one.
-- The palette accent comes from frontmatter (`accent: "#RRGGBB"`), so visual
-  identity belongs to the repo, not to this skill.
-- Staleness is gated on **content hashes of both the source and the renderer**,
-  never mtimes — git does not preserve mtimes, so a checkout reports a
-  byte-identical page as stale. `check` surfaces it as a Warning, never an Error:
-  a gate that blocks on a regenerable artifact is one people learn to bypass.
-- **`check_arch.py` is the authority on layout, not the eye.** Layout engines do
-  not fail loudly; they emit a connector through a box and it looks plausible.
+Diagrams and figures live in fenced blocks inside that one markdown file, the way
+mermaid already does — ` ```archview ` (structure), ` ```archflow ` (a walk over an
+existing view, so "what is here" and "what happens" cannot drift apart),
+` ```archstat ` (a gauge row), ` ```archplot ` (a mechanism as a plot), and ` ```html `
+as the escape hatch for the one visual a schema cannot anticipate. `site.py <root>`
+builds a multi-repo site from the markdown already in the repos.
 
-Full schema, view catalogue and authoring rules: [references/architecture-views.md](references/architecture-views.md).
+Four rules bind whenever you touch these; everything else is schema:
+
+- **`check_arch.py` is the authority on layout, not the eye.** Layout engines do not
+  fail loudly — they route a connector through a box and it looks plausible.
+- **Staleness is gated on content hashes of the source and the renderer, never
+  mtimes** — git does not preserve mtimes, so a fresh checkout would report a
+  byte-identical page as stale. `check` raises it as a Warning, never an Error: a
+  gate that blocks on a regenerable artifact is one people learn to bypass.
+- **`check` warns when prose describes a sequence of 4+ steps and no `archflow`
+  renders it.** That omission went unnoticed for weeks — the capability had shipped
+  and the content had not, which nothing checking *whether the page builds* can see.
+- **Generated plot data must declare `"schematic": true`** or the render refuses; a
+  gauge row is where "STRUCTURE ONLY, NO RUNTIME STATE" usually dies.
+
+Block schemas, the view catalogue, `site.toml`, state pills, `published_url`, `accent`
+and the authoring rules: [references/architecture-views.md](references/architecture-views.md).
 
 ## Hook scope
 

@@ -47,6 +47,24 @@ pytest --collect-only -q  # count tests (baseline check)
 Tests live in `tests/`. The `cms` scripts, the eval-harness core, and the `loop-harness`
 scripts (budget/ledger/safety-hook/logscan/sweep) are the main code under test.
 
+### Running on Windows and macOS
+
+The suite and every script are expected to pass on Linux, macOS **and** Windows, and CI
+enforces that in the `cross-platform` job. Three rules keep it that way, each written
+after a defect that was invisible from a POSIX machine:
+
+- **Never spell an interpreter `python3` in code.** Use `sys.executable`. On Windows that
+  name resolves to a Microsoft Store stub which prints an ad, runs nothing and exits 49 —
+  and `shutil.which()` cannot tell it apart from a real interpreter. Shell scripts source
+  `scripts/checks/_python.sh`, which probes candidates by executing them and honours a
+  `$PYTHON` override.
+- **Pin encodings at both ends.** `subprocess(..., text=True)` decodes with the locale
+  (cp1252 on many Windows installs), and `print()` encodes with the console codepage — the
+  latter once made a *passing* gate exit 1 for printing a check-mark. Pass
+  `encoding="utf-8", errors="replace"` to subprocess, and call `_utf8_stdio()` in `main()`.
+- **Emit paths with `as_posix()`.** A path that lands in JSON, in a gate command or in a
+  test comparison must use forward slashes; a backslash is also a shell escape.
+
 ## Skill-eval harness
 
 `evals/` measures whether the plugins actually behave as their `SKILL.md` specifies —
@@ -63,9 +81,11 @@ new falsifiable claim.
 
 ## Secret-guard rule (non-negotiable)
 
-This repo is **private**, but it must still contain **zero** references to any
-employer/secret system (the generic plugins were extracted clean-room from a private
-fork). Before every commit and as a release precondition, run:
+This repo is **public** ([ADR-002](docs/decisions/002-publish-hephaestus-publicly-retiring-the-private-distribution-non-goal.md)),
+which makes this rule stricter rather than looser: it must contain **zero** references to
+any employer/secret system (the generic plugins were extracted clean-room from a private
+fork), and publication means a leak cannot be walked back. Before every commit and as a
+release precondition, run:
 
 ```bash
 scripts/check-public-safe.sh
@@ -96,7 +116,11 @@ hephaestus/
 │   ├── release.sh                    # per-plugin version bump + tag + GitHub release
 │   ├── bump_version.py               # semver math (used by release.sh; unit-tested)
 │   ├── new_skill.py                  # scaffold a new skill (used by author-skill)
-│   └── check-public-safe.sh          # private-token guard
+│   ├── validate_manifests.py         # marketplace + plugin manifest agreement (CI gate)
+│   ├── skill_lint.py                 # skill budget + cross-skill duplication (CI gate)
+│   ├── check-public-safe.sh          # private-token guard
+│   └── checks/                       # the executable half of docs/INVARIANTS.md
+│       └── _python.sh                # sourced: resolves a Python that actually runs
 ├── evals/                            # skill-eval harness (behavioral scenarios; see its README)
 ├── tests/                            # pytest suite (cms + eval core + loop-harness under test)
 ├── CLAUDE.md                         # this file
