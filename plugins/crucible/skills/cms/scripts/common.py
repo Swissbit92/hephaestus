@@ -116,6 +116,21 @@ ARCHIVE_ALLOWLIST = _BASE_ALLOWLIST | {Path(f).name for f in REQUIRED_FILES}
 
 # Frontmatter required fields for files under docs/.
 FRONTMATTER_REQUIRED = {"title", "status", "created", "last_reviewed_on", "review_in", "applies_to"}
+
+# `ai_summary` is OPTIONAL and deliberately stays that way — making it required would
+# invalidate every document in every repo already using this schema, and a summary that
+# was written to satisfy a linter is worse than none.
+#
+# What it is for: retrieval. Finding the right document by opening candidates costs the
+# full body of everything you opened and were wrong about, so the cost of a lookup scales
+# with the size of the corpus rather than with the size of the answer. A summary lets a
+# reader route on titles and summaries first and open exactly one body.
+#
+# Which only works if the summary is bounded. An unbounded one is re-read on every triage
+# pass, so it stops being an index and becomes a second copy of the document — the exact
+# cost it was added to avoid. 1500 bytes is roughly a short paragraph: enough to say what
+# the document is and when to open it, not enough to say what is in it.
+AI_SUMMARY_MAX_BYTES = 1500
 FRONTMATTER_STATUSES = {"active", "completed", "deprecated", "Proposed", "Accepted", "Deprecated", "Superseded"}
 # Controlled vocabulary for the optional `threat_level` frontmatter field (CVSS-aligned).
 # Validated only when present, so docs that omit it are unaffected; used by docs/THREAT_LEVEL.md.

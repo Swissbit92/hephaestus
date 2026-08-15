@@ -699,3 +699,72 @@ def test_a_codey_fence_without_drawn_connectors_is_still_skipped(tmp_path):
 
     assert [f for f in check.check_flow_shaped_sections(r)
             if "arrow cascade" in f.message] == []
+
+
+# --------------------------------------------------------------------------- ai_summary + triage
+# Retrieval is the other half of the token bill cms exists to control: the @path rule
+# governs what loads unconditionally, ai_summary + triage govern what loads while you are
+# still looking for the right document. Both checks below exist because the field is only
+# useful if it stays bounded and honest about what it does not cover.
+import triage as _triage
+
+
+def test_ai_summary_is_optional_and_its_absence_is_not_a_finding(tmp_path):
+    """Making it required would invalidate every document already using this schema, and a
+    summary written to satisfy a linter is worse than none."""
+    write(tmp_path / "docs" / "A.md",
+          "---\ntitle: A\nstatus: active\ncreated: 2026-01-01\n"
+          "last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: r\n---\n\nbody\n")
+    findings = check.check_frontmatter(tmp_path / "docs" / "A.md", required=True)
+    assert not [f for f in findings if "ai_summary" in f.message]
+
+
+def test_oversized_ai_summary_warns_but_does_not_error(tmp_path):
+    """It is re-read on every triage pass, so past the cap it costs more than the body it
+    was meant to save you from opening. The document is still valid, though."""
+    long = "x" * (common.AI_SUMMARY_MAX_BYTES + 1)
+    write(tmp_path / "docs" / "A.md",
+          f"---\ntitle: A\nstatus: active\ncreated: 2026-01-01\n"
+          f"last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: r\n"
+          f"ai_summary: {long}\n---\n\nbody\n")
+    findings = check.check_frontmatter(tmp_path / "docs" / "A.md", required=True)
+    hits = [f for f in findings if "ai_summary" in f.message]
+    assert hits and all(f.level == "warning" for f in hits)
+
+
+def test_empty_ai_summary_is_flagged_rather_than_silently_accepted(tmp_path):
+    write(tmp_path / "docs" / "A.md",
+          "---\ntitle: A\nstatus: active\ncreated: 2026-01-01\n"
+          "last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: r\n"
+          "ai_summary:   \n---\n\nbody\n")
+    findings = check.check_frontmatter(tmp_path / "docs" / "A.md", required=True)
+    assert any("ai_summary" in f.message and "empty" in f.message for f in findings)
+
+
+def test_triage_lists_unsummarised_docs_instead_of_hiding_them(tmp_path):
+    """An index that silently omitted them would route confidently around the part of the
+    corpus it cannot see — the one failure mode worse than having no index."""
+    docs = tmp_path / "docs"
+    write(docs / "with.md",
+          "---\ntitle: With\nstatus: active\ncreated: 2026-01-01\n"
+          "last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: r\n"
+          "ai_summary: What it is and when to open it.\n---\n\nbody\n")
+    write(docs / "without.md",
+          "---\ntitle: Without\nstatus: active\ncreated: 2026-01-01\n"
+          "last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: r\n---\n\nbody\n")
+    rows = _triage.collect(docs)
+    assert [r["path"] for r in rows] == ["with.md", "without.md"], "summarised sort first"
+    assert rows[1]["summary"] == ""
+    out = _triage.render(rows)
+    assert "without.md" in out and "NO ai_summary" in out
+
+
+def test_triage_never_prints_a_document_body(tmp_path):
+    """The whole point: a routing table that included bodies would cost exactly what it
+    was built to avoid."""
+    docs = tmp_path / "docs"
+    write(docs / "a.md",
+          "---\ntitle: A\nstatus: active\ncreated: 2026-01-01\n"
+          "last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: r\n"
+          "ai_summary: A summary.\n---\n\nSECRET_BODY_MARKER\n")
+    assert "SECRET_BODY_MARKER" not in _triage.render(_triage.collect(docs))

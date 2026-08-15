@@ -81,8 +81,9 @@ new falsifiable claim.
 
 ## Secret-guard rule (non-negotiable)
 
-This repo is **public** ([ADR-002](docs/decisions/002-publish-hephaestus-publicly-retiring-the-private-distribution-non-goal.md)),
-which makes this rule stricter rather than looser: it must contain **zero** references to
+This repo is **public** (ADR-002, currently on `main` only — see the note in
+[docs/ROADMAP.md](docs/ROADMAP.md)), which makes this rule stricter rather than looser:
+it must contain **zero** references to
 any employer/secret system (the generic plugins were extracted clean-room from a private
 fork), and publication means a leak cannot be walked back. Before every commit and as a
 release precondition, run:
