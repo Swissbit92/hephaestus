@@ -30,6 +30,21 @@ LORE_PATTERN = re.compile(r"/docs/lore/", re.IGNORECASE)
 TODAY = date.today().isoformat()
 
 
+def _utf8_stdio() -> None:
+    """Force UTF-8 on the streams this script writes to.
+
+    Windows consoles default to a legacy codepage (commonly cp1252), so a single em-dash
+    or check-mark in otherwise successful output raises UnicodeEncodeError *after* the
+    work is done — turning a passing gate into exit 1, which reads as a real failure.
+    Reconfiguring is a no-op on platforms that are already UTF-8.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass  # a detached or captured stream (pytest); nothing to reconfigure
+
+
 def infer_repo(path: Path) -> str:
     rel = path.relative_to(REPO_ROOT)
     return rel.parts[0] if len(rel.parts) > 1 else "ecosystem"
@@ -120,4 +135,5 @@ def main():
 
 
 if __name__ == "__main__":
+    _utf8_stdio()
     main()

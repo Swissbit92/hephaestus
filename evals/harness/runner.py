@@ -125,7 +125,7 @@ def run_skill(
     stdout = ""
     try:
         proc = subprocess.run(cmd, cwd=str(fixture_dir), env=run_env,
-                              capture_output=True, text=True, timeout=timeout)
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
         stdout = proc.stdout
         exit_ok = proc.returncode == 0
     except subprocess.TimeoutExpired as e:

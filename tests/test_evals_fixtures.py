@@ -7,6 +7,7 @@ import json
 import re
 import sqlite3
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -87,8 +88,8 @@ def _run_pytest(repo: Path) -> tuple[int, int]:
     """(passed, failed) for the fixture's own tiny suite."""
     import re as _re
     import subprocess
-    out = subprocess.run(["python3", "-m", "pytest", "-q", "-p", "no:cacheprovider", str(repo / "tests")],
-                         capture_output=True, text=True, cwd=str(repo)).stdout
+    out = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", str(repo / "tests")],
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(repo)).stdout
     passed = int(m.group(1)) if (m := _re.search(r"(\d+) passed", out)) else 0
     failed = int(m.group(1)) if (m := _re.search(r"(\d+) failed", out)) else 0
     return passed, failed
@@ -103,7 +104,7 @@ def test_qa_regression_defeats_count_only_comparison(tmp_path):
 
     base = tmp_path / "base"
     subprocess.run(["git", "-C", str(repo), "worktree", "add", "--detach", str(base), "dev"],
-                   check=True, capture_output=True, text=True)
+                   check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     base_passed, base_failed = _run_pytest(base)
     assert (base_passed, base_failed) == (3, 0), f"expected 3 passed/0 failed at BASE, got {base_passed}/{base_failed}"
     assert head_passed == base_passed          # counts agree — the trap
@@ -133,7 +134,7 @@ def test_qa_deleted_tests_is_green_at_head_but_shrunken_vs_base(tmp_path):
 
     base = tmp_path / "base"
     subprocess.run(["git", "-C", str(repo), "worktree", "add", "--detach", str(base), "dev"],
-                   check=True, capture_output=True, text=True)
+                   check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     base_passed, base_failed = _run_pytest(base)
     assert (base_passed, base_failed) == (4, 0)
     assert head_failed == 0                    # nothing fails — the trap

@@ -24,11 +24,50 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 
 PRUNE = {".venv", "venv", "__pycache__", ".git", "node_modules", ".tox",
          "dist", "build", ".mypy_cache", ".pytest_cache", "site-packages"}
+
+
+def _utf8_stdio() -> None:
+    """Force UTF-8 on the streams this script writes to.
+
+    Windows consoles default to a legacy codepage (commonly cp1252), so a single em-dash
+    or check-mark in otherwise successful output raises UnicodeEncodeError *after* the
+    work is done — turning a passing gate into exit 1, which reads as a real failure.
+    Reconfiguring is a no-op on platforms that are already UTF-8.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass  # a detached or captured stream (pytest); nothing to reconfigure
+
+
+def python_token() -> str:
+    """The interpreter token to embed in an emitted, shell-runnable gate command.
+
+    On POSIX this stays the bare name `python3`, so an activated venv still wins at run
+    time and the emitted line stays readable.
+
+    On Windows it becomes this interpreter's own absolute path, because no name is
+    trustworthy there: `shutil.which("python3")` normally *succeeds* by finding the
+    Microsoft Store App Execution Alias in `WindowsApps`, which is not an interpreter —
+    it prints an install ad and exits without running anything. A which() check therefore
+    cannot tell a working `python3` from that stub, and a gate line that cannot run is
+    not a gate. Forward slashes are used because these lines are executed through a
+    POSIX-ish shell (Git Bash), where a backslash is an escape character.
+    """
+    if sys.platform == "win32":
+        exe = Path(sys.executable).as_posix() if sys.executable else ""
+        if exe:
+            return f'"{exe}"' if " " in exe else exe
+    if shutil.which("python3"):
+        return "python3"
+    return "python"
 
 # Gate  = runnable now, hermetic, deterministic.
 # Capability = present but needs a live service or browser; reported, never auto-gated,
@@ -73,10 +112,11 @@ def _python_profile(root: Path, rel: str) -> dict | None:
 
     gates, notes = [], []
     if has_cfg or has_tests:
-        gates.append({"name": "tests", "cmd": "python3 -m pytest", "kind": GATE,
+        py = python_token()
+        gates.append({"name": "tests", "cmd": f"{py} -m pytest", "kind": GATE,
                       "source": where or "tests/ directory (no pytest config found)"})
         gates.append({"name": "coverage-delta", "kind": GATE,
-                      "cmd": f'python3 "$CRUCIBLE_SCRIPTS/coverage_delta.py" --repo {rel or "."}',
+                      "cmd": f'{py} "$CRUCIBLE_SCRIPTS/coverage_delta.py" --repo {rel or "."}',
                       "source": "crucible"})
     if not has_cfg and has_tests:
         notes.append("no pytest config found; the bare command may pick a different rootdir "
@@ -183,7 +223,11 @@ def detect(repo: Path, max_depth: int = 3) -> list[dict]:
     repo = repo.resolve()
 
     def visit(d: Path, depth: int) -> None:
-        rel = "" if d == repo else str(d.relative_to(repo))
+        # as_posix(), not str(): this value is a machine-readable identifier that lands in
+        # JSON, in emitted `--repo <rel>` gate lines, and in test assertions. str() yields
+        # "services\gw" on Windows, which is neither comparable across platforms nor safe
+        # to paste into a shell command where the backslash is an escape.
+        rel = "" if d == repo else d.relative_to(repo).as_posix()
         py = _python_profile(d, rel)
         if py:
             profiles.append(py)
@@ -285,4 +329,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    _utf8_stdio()
     raise SystemExit(main())

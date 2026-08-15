@@ -281,7 +281,7 @@ CHECK_PY = Path(common.__file__).parent / "check.py"
 def _run_check_file(target: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(CHECK_PY), "--file", str(target)],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
 
 
@@ -340,7 +340,7 @@ def _resolved_state_dir(env_overrides: dict) -> Path:
             env.pop(k, None)
     out = subprocess.run(
         [sys.executable, "-c", "import common; print(common.STATE_DIR)"],
-        capture_output=True, text=True, env=env,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
         cwd=str(Path(common.__file__).parent),
     )
     assert out.returncode == 0, out.stderr

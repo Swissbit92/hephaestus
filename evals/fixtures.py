@@ -8,12 +8,12 @@ from pathlib import Path
 
 
 def _g(repo: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def _init(repo: Path, default_branch: str = "main") -> None:
     repo.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "init", "-b", default_branch, str(repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "init", "-b", default_branch, str(repo)], check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     _g(repo, "config", "user.email", "eval@example.com")
     _g(repo, "config", "user.name", "eval")
 

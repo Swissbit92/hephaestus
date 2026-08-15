@@ -43,6 +43,21 @@ _FIELD = re.compile(r"^(Status|Statement|Falsifiable|Check)\s*:\s*(.*)$", re.I)
 _NONE = {"", "none", "none yet", "todo", "tbd", "-", "n/a"}
 
 
+def _utf8_stdio() -> None:
+    """Force UTF-8 on the streams this script writes to.
+
+    Windows consoles default to a legacy codepage (commonly cp1252), so a single em-dash
+    or check-mark in otherwise successful output raises UnicodeEncodeError *after* the
+    work is done — turning a passing gate into exit 1, which reads as a real failure.
+    Reconfiguring is a no-op on platforms that are already UTF-8.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass  # a detached or captured stream (pytest); nothing to reconfigure
+
+
 class Entry:
     __slots__ = ("title", "status", "statement", "falsifiable", "check")
 
@@ -101,7 +116,7 @@ def run_check(repo: Path, entry: Entry, timeout: int = 300) -> tuple[int, str]:
     else:
         cmd = [str(target), *parts[1:]]
     try:
-        p = subprocess.run(cmd, cwd=str(repo), capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run(cmd, cwd=str(repo), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
     except (OSError, subprocess.TimeoutExpired) as e:
         return 2, f"could not execute: {type(e).__name__}: {e}"
     out = ((p.stdout or "") + (p.stderr or "")).strip()
@@ -168,4 +183,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    _utf8_stdio()
     raise SystemExit(main())
