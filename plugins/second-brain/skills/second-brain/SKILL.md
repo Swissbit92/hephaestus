@@ -81,16 +81,34 @@ match). A proposal the user can't audit is a proposal they can't trust.
 ## `review` — read-only vault health report
 
 A pure read pass. **Writes nothing** — it surfaces what needs attention so the user decides.
-Scan the vault and report:
 
-- **Orphans:** notes with no inbound and no outbound `[[links]]` (isolated islands).
-- **Stale:** notes not modified in a long window (default >180 days) — list, don't touch.
-- **Tag drift:** near-duplicate tags (`#ml` vs `#machine-learning`), tags used once
-  (candidates to fold in), and tags not in the controlled vocabulary (`_meta/tags.md`).
-- **Broken links:** `[[targets]]` that resolve to no note.
+**Run the script; do not read the vault yourself.**
 
-Output a compact report grouped by category with counts and the worst offenders first.
-Offer follow-ups ("want me to `process` the orphans?") but take no action here.
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/second-brain/scripts/vault_graph.py" <vault> [--stale-days N] [--top N] [--json]
+```
+
+Exit `0` = report produced · `2` = **could not determine** (no such directory, or no
+notes) — which is not a clean bill of health and must never be reported as one.
+
+It computes, in one pass: **orphans** (no inbound and no outbound `[[links]]`), **broken
+links** (targets resolving to no note), **stale** notes, **tag variants** and **tags used
+once**, plus **tags outside `_meta/tags.md`** when that vocabulary exists.
+
+Reading the vault yourself instead costs tokens proportional to its size, and — the part
+that actually matters — gives a slightly different answer each run, so nothing can be
+trended. A health report you cannot compare to last month's is just a mood.
+
+**Then do the part the script cannot.** It matches strings, so it pairs `#machine-learning`
+with `#machine_learning` and `#book` with `#books`. It will never pair `#ml` with
+`#machine-learning`, because those share no substring and no string metric will find them.
+That judgment is yours, made from the tag list it prints — and it is a *proposal*, like
+everything else here, never a silent merge.
+
+Present the script's output grouped by category, worst offenders first, and add your own
+reading on top: which orphans look like genuine dead ends versus notes someone simply has
+not linked yet, and which tag pairs are really the same idea. Offer follow-ups ("want me
+to `process` the orphans?") but take no action here.
 
 ## `capture` — quick inbox note
 
