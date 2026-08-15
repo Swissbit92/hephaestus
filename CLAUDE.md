@@ -1,6 +1,6 @@
 # hephaestus — repo guide
 
-A private [Claude Code](https://code.claude.com) **marketplace** of small, sharp plugins.
+A [Claude Code](https://code.claude.com) **marketplace** of small, sharp plugins.
 This file orients contributors and AI agents working in this repo.
 
 ## What this is
@@ -63,7 +63,7 @@ new falsifiable claim.
 
 ## Secret-guard rule (non-negotiable)
 
-This repo is **private**, but it must still contain **zero** references to any
+This repo must contain **zero** references to any
 employer/secret system (the generic plugins were extracted clean-room from a private
 fork). Before every commit and as a release precondition, run:
 

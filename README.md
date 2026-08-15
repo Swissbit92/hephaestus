@@ -2,9 +2,13 @@
 
 [![CI](https://github.com/Swissbit92/hephaestus/actions/workflows/ci.yml/badge.svg)](https://github.com/Swissbit92/hephaestus/actions/workflows/ci.yml)
 
-**hephaestus** is a private [Claude Code](https://code.claude.com) marketplace of small, sharp
+**hephaestus** is a [Claude Code](https://code.claude.com) marketplace of small, sharp
 plugins — a workshop for keeping your craft sharp. Each plugin is self-contained, vendor-neutral,
 and versioned independently, so you install only what you need and update it on its own cadence.
+
+> Shared as-is by a single operator, with no support promised. Issues and pull requests are
+> welcome but may go unanswered. Vendor-neutrality is enforced by `tests/test_seam.py` and
+> `scripts/check-public-safe.sh`, not merely intended.
 
 The flagship is **crucible**: a bundle of generic, domain-free craft tools that make AI-assisted
 development *disciplined* rather than chaotic — a structured `develop` workflow with QA gates

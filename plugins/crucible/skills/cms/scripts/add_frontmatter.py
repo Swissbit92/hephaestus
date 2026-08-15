@@ -15,12 +15,16 @@ from pathlib import Path
 _pos = [a for a in sys.argv[1:] if not a.startswith("-")]
 REPO_ROOT = Path(_pos[0]).expanduser().resolve() if _pos else Path.cwd()
 
-# Files whose status should be 'completed' based on name patterns
+# Files whose status should be 'completed', matched on vendor-neutral name SUFFIXES.
+#
+# Suffixes only — never a specific document name. A generic plugin that hardcodes one
+# repo's filenames is a seam violation (ADR-001): it silently does nothing for every
+# other repo, and it goes stale the moment that repo renames or archives the file.
+# Earlier revisions listed real per-repo documents here; they were removed, and
+# tests/test_seam.py::test_generic_plugin_hardcodes_no_specific_doc_names now fails the
+# build if any come back. Every suffix below reads as a document *kind*, not a title.
 COMPLETED_PATTERNS = re.compile(
-    r"(_REVIEW|_TEST_RUN|_RESULTS|_BASELINE|_COMPLETE|REMEDIATION_PROGRESS|"
-    r"JUPITER_WALLET_IMPLEMENTATION|LORE_DEEPDIVE_PLAN|MULTI_ASSET_PLAN|OAUTH_IMPLEMENTATION_PLAN|"
-    r"E2E_TEST_RUN|EDGE_CASE_TEST_RESULTS|QA_WAVE1|UX_WAVE1|UI_TESTING_BASELINE|"
-    r"SCORER_PROMPT_IMPROVEMENTS)\.md$",
+    r"(_REVIEW|_TEST_RUN|_RESULTS|_BASELINE|_COMPLETE|_ASSESSMENT)\.md$",
     re.IGNORECASE,
 )
 
