@@ -21,10 +21,11 @@ from pathlib import Path
 
 _NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
-_DEFAULT_SKILLS_DIR = (
-    Path(__file__).resolve().parent.parent
-    / "plugins" / "crucible" / "skills"
-)
+# This script ships INSIDE the crucible plugin, so the skills directory is its sibling.
+# It used to live at the repo root while `author-skill` told agents to run it from
+# ${CLAUDE_PLUGIN_ROOT}/scripts/ — a path that exists only in a checkout of this repo, so
+# the scaffolder was missing for everyone who installed the plugin from the marketplace.
+_DEFAULT_SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
 
 STUB = """\
 ---

@@ -59,7 +59,7 @@ human) can pick it up cold.
 | **qa-gatekeeper** | agent | Skeptical QA gate used by `develop`'s Phase 4 — verifies stated changes, hunts bugs/orphaned code, runs tests, and returns PASS / CONDITIONAL PASS / REJECT. |
 | **eval-first** | skill | Eval-first development — freeze a baseline, then gate every change on match-or-beat-or-revert. Deterministic-first checks → swap-augmented blind A/B judge (with self-grading guard) → `verdict`. Generic stdlib scripts + scaffolding templates; domain scorers plug in via injected `judge_fn`/`embed_fn`. |
 | **flag-gate** | skill | Default-OFF feature-flag rollout with instant revert — ship behind a flag, keep the legacy path byte-identical, flip only on an eval-first gate, revert by flipping off, retire after soak. Pairs with `eval-first`. |
-| **author-skill** | skill | Guide + scaffolder for writing a high-quality skill/plugin — lays out the authoring patterns (with real exemplars) and creates a pre-structured `SKILL.md` via `scripts/new_skill.py`. User-invoked. |
+| **author-skill** | skill | Guide + scaffolder for writing a high-quality skill/plugin — lays out the authoring patterns (with real exemplars) and creates a pre-structured `SKILL.md` via the plugin's `scripts/new_skill.py`. User-invoked. |
 | **loop-harness** | skill | Run a bounded, single-threaded, **read-only** agent loop safely — hard turn/budget ceilings + cost log (`loop_budget`), a `LOOP-STATE` ledger for memory (`loop_ledger`), a `PreToolUse` safety hook that blocks merge/push/out-of-worktree while a loop is armed (`loop_hook`), a test-log summarizer (`loop_logscan`), and `loop_sweep` — one command for a read-only CI sweep → needs-me report. Single-threaded, *not* role-teams (evidence-backed). |
 | **act-for-real** | skill | The inverse of `loop-harness`: for when you **must** act irreversibly on a **live system you often don't own** (money movement, credential rotation, one-way migration, registrar/DNS, real mail). Classify reversibility → bind authority to the *exact* action → never fabricate a real-world identifier → **verify from a fresh read, not from the call** → emit an `ACTION RECORD` or say `UNVERIFIED`. Fires rarely by design (evidence-backed). |
 
@@ -138,7 +138,7 @@ overwrite the cached plugin dir, so state resolves in this order:
 ```
 hephaestus/
 ├── .claude-plugin/marketplace.json     # marketplace catalog (lists all plugins)
-├── scripts/                            # release.sh · bump_version.py · new_skill.py · check-public-safe.sh
+├── scripts/                            # release.sh · bump_version.py · validate_manifests.py · skill_lint.py · check-public-safe.sh
 ├── evals/                              # skill-eval harness (behavioral scenarios)
 ├── tests/                              # pytest suite
 ├── docs/                               # ROADMAP · decisions/ (ADRs) · research/ — cms-managed

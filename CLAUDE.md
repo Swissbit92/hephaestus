@@ -1,6 +1,6 @@
 # hephaestus — repo guide
 
-A private [Claude Code](https://code.claude.com) **marketplace** of small, sharp plugins.
+A public [Claude Code](https://code.claude.com) **marketplace** of small, sharp plugins.
 This file orients contributors and AI agents working in this repo.
 
 ## What this is
@@ -11,7 +11,7 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 
 | Plugin | Scope |
 |--------|-------|
-| **crucible** | Generic, vendor-neutral craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill`, `eval-first`, `flag-gate`, `loop-harness`, `act-for-real`, `repo-audit` |
+| **crucible** | Generic, vendor-neutral craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill`, `session-to-skill`, `eval-first`, `flag-gate`, `loop-harness`, `act-for-real`, `repo-audit`, `refactor-audit` |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server (3-layer read-only, NL→SQL) |
 | **mcp-starter** | Template for packaging a Python MCP server as a plugin |
 | **second-brain** | Obsidian inbox processor (suggest-then-confirm; skills-only) |
@@ -115,7 +115,6 @@ hephaestus/
 ├── scripts/
 │   ├── release.sh                    # per-plugin version bump + tag + GitHub release
 │   ├── bump_version.py               # semver math (used by release.sh; unit-tested)
-│   ├── new_skill.py                  # scaffold a new skill (used by author-skill)
 │   ├── validate_manifests.py         # marketplace + plugin manifest agreement (CI gate)
 │   ├── skill_lint.py                 # skill budget + cross-skill duplication (CI gate)
 │   ├── check-public-safe.sh          # private-token guard
@@ -128,7 +127,8 @@ hephaestus/
 └── plugins/
     ├── crucible/
     │   ├── .claude-plugin/plugin.json
-    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,author-skill,eval-first,flag-gate,loop-harness,act-for-real,repo-audit}/
+    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,author-skill,session-to-skill,eval-first,flag-gate,loop-harness,act-for-real,repo-audit,refactor-audit}/
+│   ├── scripts/                 # detect_profile · coverage_delta · invariants_run · new_skill
     │   ├── commands/develop.md
     │   └── agents/qa-gatekeeper.md
     ├── sqlite-readonly/         # read-only SQLite MCP server (uv project under servers/)
