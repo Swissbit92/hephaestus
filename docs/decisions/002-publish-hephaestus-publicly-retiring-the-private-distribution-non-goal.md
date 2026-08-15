@@ -1,6 +1,6 @@
 ---
 title: Publish hephaestus publicly, retiring the private-distribution non-goal
-status: Proposed
+status: Accepted
 created: 2026-08-15
 last_reviewed_on: 2026-08-15
 review_in: 24 months
@@ -47,11 +47,30 @@ Residual, and deliberately not scrubbed: roughly twenty mentions of the operator
 4. `check-public-safe.sh` and `test_seam.py` are promoted from hygiene to **release gates** — they are what makes the clean-room claim true rather than remembered.
 5. Support expectations are stated plainly in the README: shared as-is, no support promised. Publishing invites issues and pull requests; a single-operator workshop should say so rather than disappoint quietly.
 
-Status stays **Proposed** until the visibility flip actually happens. Flipping is a one-way door — a public commit history cannot be recalled — and the docs must not claim a state the repo is not yet in.
-
 ## Status
 
-Proposed
+**Accepted — executed 2026-08-15.** The repository is public at
+<https://github.com/Swissbit92/hephaestus>.
+
+Order of operations, deliberately: every prerequisite first, the one-way door last.
+
+1. Pre-flight re-run immediately before the flip — public-safety guard, full suite, no
+   personal paths, LICENSE present, clean tree, in sync with origin, and a fresh secret
+   sweep over **526 blobs across all refs: 0 hits**.
+2. Repository visibility flipped to public.
+3. Branch protection applied on `main` within the same minute: `checks` required and
+   **strict** (a branch must be current with `main` before merging), force-pushes and
+   branch deletion disabled.
+
+Both release gates were already wired into the `checks` job before publication —
+`pytest -q` (which carries `tests/test_seam.py`) and `scripts/check-public-safe.sh` — so
+requiring `checks` promotes them from hygiene to enforcement, exactly as this ADR asks.
+Branch protection could not be applied while the repo was private (GitHub returns 403 and
+requires Pro or a public repo), which is why it follows the flip rather than preceding it.
+
+`enforce_admins` is deliberately **false**: a single operator locking themselves out of
+their own `main` buys nothing, and the honest control here is the required status check,
+not a self-imposed gate that would just be toggled off under pressure.
 
 ## Consequences
 
