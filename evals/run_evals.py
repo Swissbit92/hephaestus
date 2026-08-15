@@ -32,13 +32,28 @@ from harness import runner, scoring  # noqa: E402
 from harness.model import Criterion  # noqa: E402
 
 
+def _utf8_stdio() -> None:
+    """Force UTF-8 on the streams this script writes to.
+
+    Windows consoles default to a legacy codepage (commonly cp1252), so a single em-dash
+    or check-mark in otherwise successful output raises UnicodeEncodeError *after* the
+    work is done — turning a passing gate into exit 1, which reads as a real failure.
+    Reconfiguring is a no-op on platforms that are already UTF-8.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass  # a detached or captured stream (pytest); nothing to reconfigure
+
+
 def make_cli_judge(model: str):
     """A judge_fn that calls the pinned Claude model via the CLI and returns its text."""
     def judge_fn(prompt: str) -> str:
         r = subprocess.run(
             ["claude", "--bare", "-p", prompt, "--settings", json.dumps({"model": model}),
              "--output-format", "json"],
-            capture_output=True, text=True, timeout=180,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180,
         )
         if r.returncode != 0:
             raise RuntimeError(f"judge CLI failed: {r.stderr[:200]}")
@@ -135,4 +150,5 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
+    _utf8_stdio()
     sys.exit(main(sys.argv[1:]))

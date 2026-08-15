@@ -28,6 +28,26 @@ _COUNT = {
 _FAILED_NODE = re.compile(r"^(?:FAILED|ERROR)\s+(\S+)", re.MULTILINE)
 
 
+def _utf8_stdio() -> None:
+    """Force UTF-8 on the streams this script writes to.
+
+    Deliberately local rather than `loop_common.use_utf8_stdio`: importing
+    loop_common resolves and *creates* the state directory at import time, and
+    this script has no state — a log parser should not make a directory as a side
+    effect of being imported. Duplicating six lines is the cheaper trade.
+
+    Windows consoles default to a legacy codepage (commonly cp1252), so a single em-dash
+    or check-mark in otherwise successful output raises UnicodeEncodeError *after* the
+    work is done — turning a passing gate into exit 1, which reads as a real failure.
+    Reconfiguring is a no-op on platforms that are already UTF-8.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass  # a detached or captured stream (pytest); nothing to reconfigure
+
+
 def _clean_summary_line(text: str) -> str:
     candidates = [l.strip() for l in text.splitlines() if any(p.search(l) for p in _COUNT.values())]
     return candidates[-1] if candidates else ""
@@ -62,4 +82,5 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
+    _utf8_stdio()
     raise SystemExit(main())

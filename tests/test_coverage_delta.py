@@ -93,7 +93,7 @@ def test_detect_collect_cmd_returns_none_when_unknown(tmp_path):
 # --------------------------------------------------------------------------- end-to-end
 def _run_script(repo: Path) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(SCRIPT), "--repo", str(repo)],
-                          capture_output=True, text=True, timeout=300)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
 
 
 def test_end_to_end_detects_the_green_but_shrunken_suite(tmp_path):
@@ -126,7 +126,7 @@ def test_exit_2_when_it_cannot_tell(tmp_path):
     repo.mkdir()
     subprocess.run(["git", "init", "-b", "main", str(repo)], capture_output=True, check=True)
     p = subprocess.run([sys.executable, str(SCRIPT), "--repo", str(repo)],
-                       capture_output=True, text=True, timeout=120)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
     assert p.returncode == 2
     assert "cannot determine" in (p.stdout + p.stderr)
 
@@ -137,6 +137,6 @@ def test_zero_vs_zero_is_not_a_pass(tmp_path, monkeypatch):
     repo = fixtures.build("qa_clean", tmp_path / "r")
     p = subprocess.run(
         [sys.executable, str(SCRIPT), "--repo", str(repo), "--collect-cmd", "echo nothing-here"],
-        capture_output=True, text=True, timeout=120)
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
     assert p.returncode == 2, p.stdout + p.stderr
     assert "collected 0 tests at BASE and 0 at HEAD" in (p.stdout + p.stderr)

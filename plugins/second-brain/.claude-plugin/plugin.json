@@ -1,7 +1,7 @@
 {
   "name": "second-brain",
-  "description": "Obsidian vault tender — process (triage the inbox), review (read-only health report: orphans/stale/tag-drift), and capture (quick note). Proposes; never commits without your per-item approval. Suggest-then-confirm by design.",
-  "version": "0.2.0",
+  "description": "Obsidian vault tender — process (triage the inbox), review (read-only health report: orphans/broken links/stale/tag-drift, computed deterministically by a stdlib script so it can be trended, not re-read by the model each time), and capture (quick note). Proposes; never commits without your per-item approval. Suggest-then-confirm by design.",
+  "version": "0.3.0",
   "author": {
     "name": "Swissbit92"
   },

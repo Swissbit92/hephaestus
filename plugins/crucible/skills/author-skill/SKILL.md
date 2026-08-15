@@ -27,7 +27,7 @@ packaging: inline `mcpServers`, `userConfig` injection, uv server, first-run hoo
    faster than either alone. *Exemplar:* the stub's Do-not block; `develop.md` tiering.
 3. **Code-backed, not prose, for deterministic work.** If a step has one right answer, put
    it in a script and call it — don't ask the model to do it by hand. *Exemplars:*
-   `scripts/bump_version.py`, `scripts/new_skill.py`, the `cms` scripts, and
+   `scripts/bump_version.py`, the plugin's `scripts/new_skill.py`, the `cms` scripts, and
    `sqlite-readonly`'s pure `validator.py`/`db.py` (so they're unit-testable).
 4. **Hard-gate vs. best-effort — say which is which.** Mark steps that MUST pass to proceed
    distinctly from steps that degrade gracefully. *Exemplar:* `finish-branch` — "no green,

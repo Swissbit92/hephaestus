@@ -96,9 +96,12 @@ Put the work in its own workspace before touching code, so changes never land
 uncommitted on a shared or deploy branch.
 
 Invoke the `start-branch` skill. It detects the repo's integration target (never
-hardcoded), auto-chooses a plain branch vs. a worktree, names the branch in Conventional
-Branch form, records a clean test baseline, and proposes a one-line plan you confirm
-before anything is created.
+hardcoded) and **records it on the branch** in git config, so the INTEGRATE phase and the
+QA gate recover that answer instead of re-deriving it — a re-run of the heuristic can pick
+a different target than the one this work forked from, and would discard the user's
+correction in the ambiguous case that made them correct it. It also auto-chooses a plain
+branch vs. a worktree, names the branch in Conventional Branch form, records a clean test
+baseline, and proposes a one-line plan you confirm before anything is created.
 
 - **On confirm:** implement (Phase 3) in the isolated branch/worktree.
 - **On decline:** continue in place — no branch. Integration (Phase 6.5) then has nothing

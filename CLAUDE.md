@@ -1,6 +1,6 @@
 # hephaestus — repo guide
 
-A private [Claude Code](https://code.claude.com) **marketplace** of small, sharp plugins.
+A public [Claude Code](https://code.claude.com) **marketplace** of small, sharp plugins.
 This file orients contributors and AI agents working in this repo.
 
 ## What this is
@@ -11,7 +11,7 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 
 | Plugin | Scope |
 |--------|-------|
-| **crucible** | Generic, vendor-neutral craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill`, `eval-first`, `flag-gate`, `loop-harness`, `act-for-real`, `repo-audit` |
+| **crucible** | Generic, vendor-neutral craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill`, `session-to-skill`, `eval-first`, `flag-gate`, `loop-harness`, `act-for-real`, `repo-audit`, `refactor-audit` |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server (3-layer read-only, NL→SQL) |
 | **mcp-starter** | Template for packaging a Python MCP server as a plugin |
 | **second-brain** | Obsidian inbox processor (suggest-then-confirm; skills-only) |
@@ -47,6 +47,24 @@ pytest --collect-only -q  # count tests (baseline check)
 Tests live in `tests/`. The `cms` scripts, the eval-harness core, and the `loop-harness`
 scripts (budget/ledger/safety-hook/logscan/sweep) are the main code under test.
 
+### Running on Windows and macOS
+
+The suite and every script are expected to pass on Linux, macOS **and** Windows, and CI
+enforces that in the `cross-platform` job. Three rules keep it that way, each written
+after a defect that was invisible from a POSIX machine:
+
+- **Never spell an interpreter `python3` in code.** Use `sys.executable`. On Windows that
+  name resolves to a Microsoft Store stub which prints an ad, runs nothing and exits 49 —
+  and `shutil.which()` cannot tell it apart from a real interpreter. Shell scripts source
+  `scripts/checks/_python.sh`, which probes candidates by executing them and honours a
+  `$PYTHON` override.
+- **Pin encodings at both ends.** `subprocess(..., text=True)` decodes with the locale
+  (cp1252 on many Windows installs), and `print()` encodes with the console codepage — the
+  latter once made a *passing* gate exit 1 for printing a check-mark. Pass
+  `encoding="utf-8", errors="replace"` to subprocess, and call `_utf8_stdio()` in `main()`.
+- **Emit paths with `as_posix()`.** A path that lands in JSON, in a gate command or in a
+  test comparison must use forward slashes; a backslash is also a shell escape.
+
 ## Skill-eval harness
 
 `evals/` measures whether the plugins actually behave as their `SKILL.md` specifies —
@@ -63,9 +81,12 @@ new falsifiable claim.
 
 ## Secret-guard rule (non-negotiable)
 
-This repo is **private**, but it must still contain **zero** references to any
-employer/secret system (the generic plugins were extracted clean-room from a private
-fork). Before every commit and as a release precondition, run:
+This repo is **public** (ADR-002, currently on `main` only — see the note in
+[docs/ROADMAP.md](docs/ROADMAP.md)), which makes this rule stricter rather than looser:
+it must contain **zero** references to
+any employer/secret system (the generic plugins were extracted clean-room from a private
+fork), and publication means a leak cannot be walked back. Before every commit and as a
+release precondition, run:
 
 ```bash
 scripts/check-public-safe.sh
@@ -95,8 +116,11 @@ hephaestus/
 ├── scripts/
 │   ├── release.sh                    # per-plugin version bump + tag + GitHub release
 │   ├── bump_version.py               # semver math (used by release.sh; unit-tested)
-│   ├── new_skill.py                  # scaffold a new skill (used by author-skill)
-│   └── check-public-safe.sh          # private-token guard
+│   ├── validate_manifests.py         # marketplace + plugin manifest agreement (CI gate)
+│   ├── skill_lint.py                 # skill budget + cross-skill duplication (CI gate)
+│   ├── check-public-safe.sh          # private-token guard
+│   └── checks/                       # the executable half of docs/INVARIANTS.md
+│       └── _python.sh                # sourced: resolves a Python that actually runs
 ├── evals/                            # skill-eval harness (behavioral scenarios; see its README)
 ├── tests/                            # pytest suite (cms + eval core + loop-harness under test)
 ├── CLAUDE.md                         # this file
@@ -104,7 +128,8 @@ hephaestus/
 └── plugins/
     ├── crucible/
     │   ├── .claude-plugin/plugin.json
-    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,author-skill,eval-first,flag-gate,loop-harness,act-for-real,repo-audit}/
+    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,author-skill,session-to-skill,eval-first,flag-gate,loop-harness,act-for-real,repo-audit,refactor-audit}/
+│   ├── scripts/                 # detect_profile · coverage_delta · invariants_run · new_skill
     │   ├── commands/develop.md
     │   └── agents/qa-gatekeeper.md
     ├── sqlite-readonly/         # read-only SQLite MCP server (uv project under servers/)

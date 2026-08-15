@@ -25,6 +25,24 @@ Classify into one of the common models and name the integration target:
 If the model is genuinely ambiguous, **ask once** — present your best guess and let the
 user confirm or correct. Don't guess silently.
 
+**Then record the answer, once the branch exists (Phase 5):**
+
+```bash
+git config branch.<branch>.integrationTarget <target>
+```
+
+Detection is a heuristic and the user's correction is the only authoritative part of it,
+yet it is the part that evaporates: `finish-branch` and `qa-gatekeeper` re-derive the
+target later, from the same heuristic, in a session that may not be this one. In an
+ambiguous repo they can land on a different branch than the one you actually forked
+from — and then the gate compares against the wrong baseline while looking entirely
+healthy. Writing it into git config makes the answer outlive the conversation.
+
+It goes in `.git/config` deliberately: that file is per-clone, never committed and never
+merged. Recording it in a tracked file instead would put branch bookkeeping into the
+branch's own diff, where it causes conflicts between parallel branches and ends up in
+the merge.
+
 ## Phase 2 — Choose the isolation primitive
 
 Default to a **plain branch** (`git switch -c <name>`).
@@ -37,6 +55,23 @@ available, else `git worktree add`.
 ⚠️ A worktree starts **fresh**: no uncommitted files, no `.env*`, no `node_modules`,
 no build artifacts. Say so before creating one, so the user isn't surprised by a missing
 local setup.
+
+⚠️ **A worktree isolates the source tree and the index — nothing else.** Everything the
+repo shares with the machine is still shared: the dev-server port, the local database,
+the build output directory, deployed artifacts, a running editor's daemon. Parallel
+*editing and building* is safe; anything that deploys, migrates, renders to a fixed path
+or mutates a shared service must be **serialised — one worktree at a time**. This is the
+failure that looks like a bug in the code rather than a bug in the setup, because both
+worktrees are individually correct.
+
+Two mechanics worth stating before they bite:
+
+- **One branch can be checked out in only one worktree.** That is why parallel work forks
+  a *new* branch instead of checking the existing one out again.
+- **Never name a child `<parent>/<slug>` when `<parent>` is itself a ref.** Git stores
+  `feature/api` as a file, so it cannot also create the `feature/api/` directory that
+  `feature/api/auth` needs, and `git worktree add` fails with a refname error that reads
+  as corruption. Use a hyphen: `feature/api-auth`.
 
 ## Phase 3 — Name the branch (Conventional Branch)
 

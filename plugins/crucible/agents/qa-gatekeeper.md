@@ -49,8 +49,16 @@ Re-derive the baseline yourself.
 1. **Infer the test command** from the repo (README/CLAUDE.md, `package.json`, `Makefile`,
    `pyproject.toml`).
 2. **Establish the baseline from ground truth** — the pre-work state, not a remembered count:
-   - Find the integration target (the repo's `CLAUDE.md`/`CONTRIBUTING.md`, else the
-     long-lived branch in git — `main`/`master`/`dev`).
+   - Find the integration target. Read the recorded one first —
+     `git config --get branch."$(git rev-parse --abbrev-ref HEAD)".integrationTarget` —
+     which `start-branch` wrote when the branch was created. Only if it is unset, detect
+     it (the repo's `CLAUDE.md`/`CONTRIBUTING.md`, else the long-lived branch in git —
+     `main`/`master`/`dev`).
+   - This ordering matters for the same reason the count is re-derived rather than
+     trusted: re-running a heuristic is not the same as recovering an answer. The count
+     drifts because work happens, so it must be recomputed; the target does not drift, so
+     recomputing it can only *lose* a correction the user already made. Derive what
+     changes, recover what does not.
    - `BASE=$(git merge-base HEAD <integration-target>)` — the commit this work branched from.
    - Count tests at `BASE` *without disturbing the working tree*, in a throwaway worktree:
      `git worktree add --detach <tmp> "$BASE"` → run the repo's collect/count command there

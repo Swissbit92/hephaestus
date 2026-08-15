@@ -19,6 +19,9 @@ EVALS = REPO_ROOT / "evals"
 EVAL_FIRST_SCRIPTS = REPO_ROOT / "plugins" / "crucible" / "skills" / "eval-first" / "scripts"
 LOOP_HARNESS_SCRIPTS = REPO_ROOT / "plugins" / "crucible" / "skills" / "loop-harness" / "scripts"
 REPO_AUDIT_SCRIPTS = REPO_ROOT / "plugins" / "crucible" / "skills" / "repo-audit" / "scripts"
+SECOND_BRAIN_SCRIPTS = (REPO_ROOT / "plugins" / "second-brain" / "skills"
+                        / "second-brain" / "scripts")
+CRUCIBLE_SCRIPTS = REPO_ROOT / "plugins" / "crucible" / "scripts"
 
 # Isolate cms state writes (common.py creates STATE_DIR at import time).
 import os
@@ -58,6 +61,15 @@ if str(LOOP_HARNESS_SCRIPTS) not in sys.path:
 # Make the repo-audit crucible skill scripts importable (repo_metrics).
 if str(REPO_AUDIT_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(REPO_AUDIT_SCRIPTS))
+
+# Make the second-brain skill scripts importable (vault_graph).
+if str(SECOND_BRAIN_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SECOND_BRAIN_SCRIPTS))
+
+# Make the crucible plugin-level scripts importable (new_skill). These ship inside the
+# plugin so the paths its skills document resolve for installed users, not just here.
+if str(CRUCIBLE_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(CRUCIBLE_SCRIPTS))
 
 
 def pytest_collection_modifyitems(config, items):

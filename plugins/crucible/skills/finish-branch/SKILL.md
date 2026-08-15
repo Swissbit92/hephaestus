@@ -15,7 +15,24 @@ Run the repo's test command. Compare to the baseline `start-branch` recorded.
   and **discard** remain. Say so plainly.
 - Tests green and no regression → all four options are available.
 
-## Phase 2 — Confirm what's being integrated
+## Phase 2 — Resolve the target, then confirm what's being integrated
+
+**Read the recorded target before detecting one:**
+
+```bash
+git config --get branch."$(git rev-parse --abbrev-ref HEAD)".integrationTarget
+```
+
+If it is set, `start-branch` wrote it when the branch was created — including the case
+where the branch model was ambiguous and the *user* resolved it. Prefer it over
+re-detection: re-running the heuristic can pick a different branch than the one this work
+actually forked from, and integrating into the wrong target is not a mistake that
+announces itself.
+
+If it is unset (an older branch, or isolation was done by hand), fall back to detecting
+the model exactly as `start-branch` does, and **say which way you got the answer** — a
+detected target is a guess the user should be given the chance to correct, a recorded one
+is not.
 
 Show the user exactly what would move:
 

@@ -193,7 +193,7 @@ def test_max_depth_bounds_the_walk(tmp_path):
 # --------------------------------------------------------------------------- exit codes
 def _run(*args) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(SCRIPT), *args],
-                          capture_output=True, text=True, timeout=120)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
 
 
 def test_exit_3_when_no_markers_and_it_says_so(tmp_path):
@@ -246,7 +246,12 @@ def test_emit_gates_prefixes_nested_roots_with_a_cd(tmp_path):
     _w(tmp_path, "web/package.json", json.dumps({"scripts": {"test": "vitest"}}))
     runnable, _ = dp.emit_gates(dp.detect(tmp_path))
     lines = runnable.splitlines()
-    assert any(l == "python3 -m pytest" for l in lines), "root gate needs no cd"
+    # Asserted against python_token() rather than the literal "python3": the interpreter
+    # spelling is platform-dependent (an absolute path on Windows, where no bare name is
+    # trustworthy), while the property under test — a ROOT gate carries no `cd` prefix —
+    # is not. Pinning the spelling here would make this a Windows-only failure about
+    # something the test never meant to check.
+    assert f"{dp.python_token()} -m pytest" in lines, "root gate needs no cd"
     assert any(l.startswith("cd web && ") for l in lines), "nested gate must cd first"
 
 
@@ -269,3 +274,31 @@ def test_detector_never_executes_anything(tmp_path):
     p = _run("--repo", str(tmp_path))
     assert p.returncode == 0
     assert not sentinel.exists(), "detector must never run a discovered script"
+
+
+# --------------------------------------------------------------------------- portability
+def test_python_token_actually_executes(tmp_path):
+    """An emitted gate line that cannot run is not a gate, and this is the one check a
+    which() lookup cannot make: on Windows `shutil.which("python3")` succeeds by finding
+    the Microsoft Store App Execution Alias, which prints an install ad and runs nothing.
+    So execute the token rather than merely resolving it."""
+    exe = dp.python_token().strip('"')
+    p = subprocess.run([exe, "-c", "print('ok')"], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", timeout=60)
+    assert p.returncode == 0, f"emitted interpreter token does not run: {dp.python_token()!r}"
+    assert "ok" in p.stdout
+
+
+def test_emitted_gates_carry_no_backslashes(tmp_path):
+    """Gate lines are executed through a POSIX-ish shell, where a backslash is an escape
+    character — so a Windows-native separator in a nested root's `cd` or `--repo` argument
+    silently mangles the command instead of failing loudly."""
+    _w(tmp_path, "pyproject.toml", "[tool.pytest.ini_options]\ntestpaths=['tests']\n")
+    _w(tmp_path, "tests/test_a.py", "def test_a():\n    assert True\n")
+    _w(tmp_path, "services/gw/pyproject.toml", "[tool.pytest.ini_options]\n")
+    _w(tmp_path, "services/gw/tests/test_b.py", "def test_b():\n    assert True\n")
+    runnable, _ = dp.emit_gates(dp.detect(tmp_path))
+    for line in runnable.splitlines():
+        # the interpreter token itself is an absolute path on Windows and legitimately
+        # contains drive letters, but it is emitted in forward-slash form too
+        assert "\\" not in line, f"backslash in emitted gate line: {line!r}"

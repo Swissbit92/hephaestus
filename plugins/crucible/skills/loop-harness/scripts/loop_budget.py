@@ -208,4 +208,5 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
+    loop_common.use_utf8_stdio()
     raise SystemExit(main())

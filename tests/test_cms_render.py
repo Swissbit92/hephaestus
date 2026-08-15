@@ -318,7 +318,7 @@ class TestProvenanceGate:
         return subprocess.run(
             [sys.executable, str(TOOLS / "render.py"),
              "--check", "-i", str(md), "-o", str(out)],
-            capture_output=True, text=True).returncode
+            capture_output=True, text=True, encoding="utf-8", errors="replace").returncode
 
     def test_current_page_passes(self, pair):
         assert self._rc(*pair) == 0
@@ -659,7 +659,7 @@ class TestPublishManifest:
     def _run(self, repo, *flags):
         return subprocess.run(
             [sys.executable, str(TOOLS / "render.py"), str(repo), *flags],
-            capture_output=True, text=True)
+            capture_output=True, text=True, encoding="utf-8", errors="replace")
 
     def test_a_bound_doc_prints_its_existing_address(self, tmp_path):
         r = self._run(self._repo(tmp_path, "published_url: https://example.invalid/x\n"),

@@ -21,10 +21,11 @@ from pathlib import Path
 
 _NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
-_DEFAULT_SKILLS_DIR = (
-    Path(__file__).resolve().parent.parent
-    / "plugins" / "crucible" / "skills"
-)
+# This script ships INSIDE the crucible plugin, so the skills directory is its sibling.
+# It used to live at the repo root while `author-skill` told agents to run it from
+# ${CLAUDE_PLUGIN_ROOT}/scripts/ — a path that exists only in a checkout of this repo, so
+# the scaffolder was missing for everyone who installed the plugin from the marketplace.
+_DEFAULT_SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
 
 STUB = """\
 ---
@@ -68,6 +69,21 @@ You are <role>. <One sentence on the job this skill does and the outcome it prod
      (progressive disclosure). If it needs deterministic work, back it with a script in
      scripts/ rather than prose (code-backed). -->
 """
+
+
+def _utf8_stdio() -> None:
+    """Force UTF-8 on the streams this script writes to.
+
+    Windows consoles default to a legacy codepage (commonly cp1252), so a single em-dash
+    or check-mark in otherwise successful output raises UnicodeEncodeError *after* the
+    work is done — turning a passing gate into exit 1, which reads as a real failure.
+    Reconfiguring is a no-op on platforms that are already UTF-8.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass  # a detached or captured stream (pytest); nothing to reconfigure
 
 
 def valid_name(name: str) -> bool:
@@ -120,4 +136,5 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
+    _utf8_stdio()
     sys.exit(main(sys.argv[1:]))
