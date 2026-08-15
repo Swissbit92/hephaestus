@@ -1,6 +1,6 @@
 # Security Policy
 
-How to report a vulnerability in hephaestus, and what to expect in return. This is a **private** repository (single operator); this policy documents the discipline, not a public bug-bounty.
+How to report a vulnerability in hephaestus, and what to expect in return. This is a single-operator repository; this policy documents the discipline, not a public bug-bounty.
 
 ## Supported versions
 
@@ -8,7 +8,7 @@ Plugins version independently (tag namespace `<plugin>-v<x.y.z>`). The latest ta
 
 ## Reporting a vulnerability
 
-Private repo, single maintainer (Swissbit92). Record security findings as a GitHub issue (repo is private) or in [docs/LESSONS_LEARNED.md](docs/LESSONS_LEARNED.md) with the `security` label. Include affected plugin/commit, reproduction, impact, and suggested fix.
+Single maintainer (Swissbit92). Record security findings as a GitHub issue or in [docs/LESSONS_LEARNED.md](docs/LESSONS_LEARNED.md) with the `security` label. Include affected plugin/commit, reproduction, impact, and suggested fix.
 
 ## Scope
 
