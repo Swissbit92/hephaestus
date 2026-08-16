@@ -23,7 +23,7 @@ from pathlib import Path
 import skill_lint as sl
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = REPO_ROOT / "scripts" / "skill_lint.py"
+SCRIPT = REPO_ROOT / "plugins" / "crucible" / "scripts" / "skill_lint.py"
 
 
 def _skill(root: Path, plugin: str, name: str, description: str = "Does a thing. Use when asked.",

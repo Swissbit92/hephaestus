@@ -4,7 +4,7 @@
 The emitted SKILL.md is not blank boilerplate — it lays out the high-leverage patterns
 (exemplar-first negatives, good/bad pairs, hard-gate vs best-effort, visible reasoning,
 progressive disclosure) as guided placeholders so the skill starts mature. Pair with the
-`author-skill` skill, which explains each pattern with real exemplars.
+`skill-craft` skill, which explains each pattern with real exemplars.
 
 Usage:
     new_skill.py <name> [--skills-dir DIR] [--description TEXT] [--force]
@@ -22,7 +22,7 @@ from pathlib import Path
 _NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 # This script ships INSIDE the crucible plugin, so the skills directory is its sibling.
-# It used to live at the repo root while `author-skill` told agents to run it from
+# It used to live at the repo root while the authoring skill told agents to run it from
 # ${CLAUDE_PLUGIN_ROOT}/scripts/ — a path that exists only in a checkout of this repo, so
 # the scaffolder was missing for everyone who installed the plugin from the marketplace.
 _DEFAULT_SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
@@ -33,7 +33,7 @@ name: {name}
 description: {description}
 ---
 
-<!-- Authoring guide: run `/crucible:author-skill` for the patterns + real exemplars.
+<!-- Authoring guide: run `/crucible:skill-craft` for the patterns + real exemplars.
      Delete these comments as you fill each section in. -->
 
 You are <role>. <One sentence on the job this skill does and the outcome it produces.>
@@ -131,7 +131,7 @@ def main(argv: list[str]) -> int:
         sys.stderr.write(f"error: {e}\n")
         return 1
     print(f"created {path}")
-    print("Next: open it, run /crucible:author-skill for the patterns, fill the sections.")
+    print("Next: open it, run /crucible:skill-craft for the patterns, fill the sections.")
     return 0
 
 

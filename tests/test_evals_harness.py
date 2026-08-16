@@ -362,3 +362,61 @@ def test_freeze_and_compare_baseline(tmp_path):
     rep_fail = report.build_report([report.summarize_scenario({"id": "s1", "gate_mode": "all"}, [[det("a", False)]])])
     cmp = report.compare_to_baseline(rep_fail, rep_pass)
     assert cmp["regressions"] == ["s1"] and cmp["clean"] is False
+
+
+# --------------------------------------------------------------------------- auth mode
+# `--bare` decides how the suite authenticates, and getting it wrong is expensive in both
+# directions: omitted in CI the run has no credentials at all, and forced locally it
+# ignores the login you already have and starts billing an API key. It is threaded from
+# the CLI down to the runner, so these pin the wiring rather than the flag's existence.
+
+def test_bare_defaults_off_so_a_local_run_uses_the_existing_login(monkeypatch, tmp_path):
+    """The default must stay `False`. The behavioural suite going unrun for months was a
+    cost argument that only ever applied to CI — locally it rides your normal plan."""
+    import run_evals
+    seen = {}
+
+    def _fake_run_skill(prompt, fixture_dir, plugin_root, **kw):
+        seen.update(kw)
+        raise RuntimeError("stop here — the call signature is what is under test")
+
+    monkeypatch.setattr(run_evals.runner, "run_skill", _fake_run_skill)
+    scenario = {"id": "x", "fixture": "start_clean", "plugin": "crucible",
+                "prompt": "p", "checks": []}
+    with pytest.raises(RuntimeError):
+        run_evals.run_scenario(scenario, 1, None, None)
+    assert seen["bare"] is False
+
+
+def test_bare_is_forwarded_to_the_runner_when_requested(monkeypatch, tmp_path):
+    import run_evals
+    seen = {}
+
+    def _fake_run_skill(prompt, fixture_dir, plugin_root, **kw):
+        seen.update(kw)
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(run_evals.runner, "run_skill", _fake_run_skill)
+    scenario = {"id": "x", "fixture": "start_clean", "plugin": "crucible",
+                "prompt": "p", "checks": []}
+    with pytest.raises(RuntimeError):
+        run_evals.run_scenario(scenario, 1, None, None, bare=True)
+    assert seen["bare"] is True
+
+
+def test_cli_advertises_the_flags_ci_invokes_it_with():
+    """The workflow calls `run_evals.py --bare --model ... -k ...`. An unrecognised flag
+    there fails the job for a reason unrelated to any skill, and the failure would arrive
+    weekly on a schedule with nobody watching — so assert the surface CI depends on.
+
+    Asserted through `--help` rather than a parser object: that is the same code path the
+    workflow hits, and it stays true if the parser is ever refactored."""
+    import subprocess
+    import sys
+    from pathlib import Path
+    script = Path(__file__).resolve().parent.parent / "evals" / "run_evals.py"
+    p = subprocess.run([sys.executable, str(script), "--help"], capture_output=True,
+                       text=True, encoding="utf-8", errors="replace", timeout=60)
+    assert p.returncode == 0
+    for flag in ("--bare", "--model", "-k"):
+        assert flag in p.stdout, f"CI passes {flag} and the CLI does not accept it"

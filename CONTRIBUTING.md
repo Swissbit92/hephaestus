@@ -24,7 +24,7 @@ Thanks for sharpening the workshop. A few rules keep the marketplace clean and r
 
 ## Adding a skill
 
-Run `/crucible:author-skill` — it scaffolds a pre-structured `SKILL.md` (via
+Run `/crucible:skill-craft` — it scaffolds a pre-structured `SKILL.md` (via
 `plugins/crucible/scripts/new_skill.py`) and coaches each section against the repo's authoring patterns
 (exemplar-first negatives, hard-gate vs. best-effort, code-backed helpers, progressive
 disclosure, …), citing shipped skills as examples. Or run the scaffolder directly:

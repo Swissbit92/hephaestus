@@ -58,8 +58,16 @@ distinguish "acceptable now, blocks production" from "wrong now".
    new subsystem and you audit its design; a modified file is existing code and you audit
    the blast radius on everything sharing it.
 
-2. **Load intent before the diff.** Read the repo's agent-context and convention files,
-   then whatever decision records it keeps. Extract four things: the premise the work was
+2. **Load intent before the diff.** Start with the routing table rather than opening
+   candidates — searching by opening costs the full text of everything you opened and
+   were wrong about:
+
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/skills/cms/scripts/triage.py" --repo .
+   ```
+
+   Then read the repo's agent-context and convention files, and the decision records
+   the table points at. Extract four things: the premise the work was
    done under, the decisions already made, the conventions that override generic advice,
    and how the code is verified. State the premise in the report and audit *inside* it.
 

@@ -11,7 +11,7 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 
 | Plugin | Scope |
 |--------|-------|
-| **crucible** | Generic, vendor-neutral craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `author-skill`, `session-to-skill`, `eval-first`, `flag-gate`, `loop-harness`, `act-for-real`, `repo-audit`, `refactor-audit` |
+| **crucible** | Generic, vendor-neutral craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `skill-craft`, `eval-first`, `flag-gate`, `loop-harness`, `act-for-real`, `repo-audit`, `refactor-audit` |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server (3-layer read-only, NL→SQL) |
 | **mcp-starter** | Template for packaging a Python MCP server as a plugin |
 | **second-brain** | Obsidian inbox processor (suggest-then-confirm; skills-only) |
@@ -102,9 +102,14 @@ patterns in, private content out.
 We build hephaestus *using* crucible. For non-trivial work:
 
 1. `develop` — classify (FULL / LIGHT / TRIVIAL) and run the matching phases.
+   FULL records a falsifiable prediction before implementing and settles it at completion.
 2. `start-branch` (FULL/LIGHT) — isolate on a feature branch before touching code.
 3. Implement → QA (tests green, no regression, `check-public-safe.sh` clean) → docs.
 4. `finish-branch` (FULL/LIGHT) — test-gated merge/PR + safe cleanup.
+
+Periodically — monthly, or after a burst of work — run `curate`: a maintenance pass over
+the skills, docs, recent changes and open predictions that produces a ranked backlog.
+`develop` builds; `curate` is what keeps the fabric from silently accumulating debt.
 
 Do **not** push or cut a release without an explicit go from the maintainer.
 
@@ -117,7 +122,6 @@ hephaestus/
 │   ├── release.sh                    # per-plugin version bump + tag + GitHub release
 │   ├── bump_version.py               # semver math (used by release.sh; unit-tested)
 │   ├── validate_manifests.py         # marketplace + plugin manifest agreement (CI gate)
-│   ├── skill_lint.py                 # skill budget + cross-skill duplication (CI gate)
 │   ├── check-public-safe.sh          # private-token guard
 │   └── checks/                       # the executable half of docs/INVARIANTS.md
 │       └── _python.sh                # sourced: resolves a Python that actually runs
@@ -128,9 +132,9 @@ hephaestus/
 └── plugins/
     ├── crucible/
     │   ├── .claude-plugin/plugin.json
-    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,author-skill,session-to-skill,eval-first,flag-gate,loop-harness,act-for-real,repo-audit,refactor-audit}/
-│   ├── scripts/                 # detect_profile · coverage_delta · invariants_run · new_skill
-    │   ├── commands/develop.md
+    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,skill-craft,eval-first,flag-gate,loop-harness,act-for-real,repo-audit,refactor-audit}/
+    │   ├── scripts/                 # detect_profile · coverage_delta · invariants_run · new_skill · skill_lint (+ hook) · predictions
+    │   ├── commands/{develop,curate}.md
     │   └── agents/qa-gatekeeper.md
     ├── sqlite-readonly/         # read-only SQLite MCP server (uv project under servers/)
     ├── mcp-starter/             # MCP-plugin packaging template
