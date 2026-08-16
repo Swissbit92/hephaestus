@@ -1,0 +1,69 @@
+{
+  "_comment": [
+    "What counts as proof in this repository. Read by plugins/crucible/scripts/evidence_gate.py,",
+    "which reports these classes narrowed to a diff; it never decides whether the evidence exists.",
+    "",
+    "This file is also dogfooding: without it hephaestus fell through to the implied class ('the",
+    "test suite passes'), which is exactly the default ADR-003 exists to move past. Two of the",
+    "classes below are things the suite genuinely cannot check, and one of them had already cost a",
+    "real failure before this file existed - see the ci-workflow class."
+  ],
+  "classes": [
+    {
+      "when": "Python under scripts/, plugins/**/scripts/, or evals/",
+      "evidence": "pytest green with no regression against the branch point (coverage_delta.py exit 0), and python_floor.py clean - a file that will not parse takes down collection for the whole suite, not just itself",
+      "paths": [
+        "scripts/*.py",
+        "plugins/*/scripts/*.py",
+        "plugins/*/skills/*/scripts/*.py",
+        "evals/*.py",
+        "evals/**/*.py",
+        "tests/*.py"
+      ]
+    },
+    {
+      "when": "a SKILL.md, a command or an agent - prose that instructs a model",
+      "evidence": "a behavioral eval scenario in evals/scenarios.json asserting the new falsifiable claim, plus skill_lint --strict clean. Where a claim cannot be falsified by the harness, say so explicitly rather than omitting it - an untested instruction is not the same as a tested one",
+      "paths": [
+        "plugins/*/skills/*/SKILL.md",
+        "plugins/*/commands/*.md",
+        "plugins/*/agents/*.md"
+      ]
+    },
+    {
+      "when": "the CI workflow itself",
+      "evidence": "an actual run on a pull request, read from the job log. COULD-NOT-CHECK locally is the normal verdict here and must be recorded as such - this is not a formality: the python-floor matrix job added in ADR-003 passed every local check and failed on 3.9 the first time CI ran it, on an interpreter no local machine had",
+      "paths": [
+        ".github/workflows/*.yml"
+      ]
+    },
+    {
+      "when": "release tooling, or anything that writes outside the repo",
+      "evidence": "a real invocation verified by the artefact it leaves behind - a tag, a file, an installed link - never by the command's return value",
+      "paths": [
+        "scripts/release.sh",
+        "scripts/install_skills.py",
+        "scripts/bump_version.py"
+      ]
+    },
+    {
+      "when": "a plugin or marketplace manifest",
+      "evidence": "validate_manifests.py exit 0, and the plugin resolves under a real /plugin install",
+      "paths": [
+        ".claude-plugin/marketplace.json",
+        "plugins/*/.claude-plugin/plugin.json"
+      ]
+    },
+    {
+      "when": "documentation",
+      "evidence": "cms check clean, and check-public-safe.sh clean - the second is not optional in a public repo, and it has caught a real leak in an ADR",
+      "paths": [
+        "*.md",
+        "docs/*.md",
+        "docs/**/*.md",
+        "plugins/*/README.md",
+        "evals/README.md"
+      ]
+    }
+  ]
+}

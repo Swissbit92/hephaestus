@@ -158,7 +158,33 @@ def changed_files(repo: Path, base: Optional[str]) -> List[str]:
     if proc.returncode != 0:
         raise Malformed("cannot diff against {!r}: {}".format(
             base, proc.stderr.strip().splitlines()[0] if proc.stderr.strip() else "git failed"))
-    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+    names = {line.strip() for line in proc.stdout.splitlines() if line.strip()}
+
+    # `git diff <base>...HEAD` sees committed state only, so a file that is new and not yet
+    # committed is invisible to it — and a brand-new file is exactly the case most likely to
+    # introduce a new evidence class. Silently narrowing it away would report a contract
+    # satisfied while skipping the work in progress entirely. Found by adding this repo's own
+    # declaration and watching the gate report "0 files changed".
+    try:
+        status = subprocess.run(
+            ["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=all"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise Malformed("could not read the working tree in {}: {}".format(
+            repo.as_posix(), exc))
+    if status.returncode != 0:
+        raise Malformed("could not read the working tree in {}".format(repo.as_posix()))
+    for line in status.stdout.splitlines():
+        entry = line[3:].strip() if len(line) > 3 else ""
+        if not entry:
+            continue
+        # A rename is reported as `old -> new`; the new path is what a class matches on.
+        if " -> " in entry:
+            entry = entry.split(" -> ", 1)[1]
+        names.add(entry.strip('"'))
+
+    return sorted(names)
 
 
 def applies(entry: Dict[str, Any], files: List[str]) -> bool:
