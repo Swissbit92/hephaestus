@@ -61,7 +61,7 @@ def make_cli_judge(model: str):
     return judge_fn
 
 
-def run_scenario(scenario: dict, k: int, model: str | None, judge_fn) -> dict:
+def run_scenario(scenario: dict, k: int, model: str | None, judge_fn, bare=False) -> dict:
     plugin_root = REPO_ROOT / "plugins" / scenario["plugin"]
     runs: list[list[Criterion]] = []
     for i in range(k):
@@ -78,6 +78,7 @@ def run_scenario(scenario: dict, k: int, model: str | None, judge_fn) -> dict:
                 scenario["prompt"], fixture_dir, plugin_root,
                 model=model, env=env, allowed_tools=scenario.get("allowed_tools"),
                 timeout=scenario.get("timeout", runner.DEFAULT_TIMEOUT),
+                bare=bare,
             )
             target_loaded = scenario["plugin"] in run.loaded_plugins
             criteria: list[Criterion] = [
@@ -99,6 +100,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--scenario", help="run only this scenario id (default: all)")
     ap.add_argument("-k", type=int, default=3, help="runs per scenario (pass^k); default 3")
     ap.add_argument("--model", help="pin the model under test (e.g. claude-sonnet-4-6)")
+    ap.add_argument("--bare", action="store_true",
+                    help="hermetic run: ignore ~/.claude and authenticate via "
+                         "ANTHROPIC_API_KEY. Required in CI, which has no logged-in "
+                         "session; omit it locally to use your existing login for free")
     ap.add_argument("--judge", action="store_true", help="enable optional LLM-judge criteria")
     ap.add_argument("--json", help="write the full JSON report here")
     ap.add_argument("--baseline", help="baseline JSON: compare against it; freeze if absent")
@@ -120,7 +125,7 @@ def main(argv: list[str]) -> int:
     summaries = []
     for s in scenarios:
         print(f"▶ {s['id']}  (k={args.k}) …", flush=True)
-        summary = run_scenario(s, args.k, args.model, judge_fn)
+        summary = run_scenario(s, args.k, args.model, judge_fn, bare=args.bare)
         mark = "✔" if summary["passed"] else "✘"
         print(f"  {mark} {'PASS' if summary['passed'] else 'FAIL'}  "
               f"pass^k={summary['pass_hat_k']} avg={summary['avg_at_k']}")

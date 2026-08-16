@@ -11,7 +11,7 @@ qualitative criteria; the gate is deterministic.
 ```
 scenarios.json ──► run_evals.py ──► for each scenario, k times:
    build a git fixture (fixtures.py)
-   run the skill headlessly (harness/runner.py → `claude --bare -p /plugin:skill`)
+   run the skill headlessly (harness/runner.py → `claude -p /plugin:skill`, `--bare` in CI)
    snapshot git+files before/after (harness/world.py)
    score deterministically (harness/scoring.py) [+ optional judge (harness/judge.py)]
  ──► aggregate + gate (harness/report.py) ──► exit 0/1
@@ -41,6 +41,39 @@ python3 evals/run_evals.py --judge                                 # enable LLM-
 
 Exit code is `0` if the suite gate passes, `1` if any scenario fails, `2` on setup error
 (e.g. no `claude` CLI).
+
+### What it costs, and why that stopped it running
+
+This suite sat behind `if: false` in CI for months on the grounds that it spends tokens.
+That was true of CI and **never true of running it yourself**:
+
+| Where | Auth | Cost |
+|---|---|---|
+| **Locally** (default) | your existing `claude` login — `bare=False` | **nothing beyond your normal plan** |
+| **CI** (`--bare`) | `ANTHROPIC_API_KEY`, since a runner has no logged-in session | metered API usage |
+
+So the behavioural half of this repo's verification has always been free to run on the
+machine you already work on. `python3 evals/run_evals.py` is the whole command.
+
+For CI, `live-eval` now runs on **manual dispatch or the weekly schedule** rather than
+never, defaults to a cheap model, and **exits 2 when `ANTHROPIC_API_KEY` is missing** —
+because a job that skips silently is indistinguishable from one that passed, which is the
+same mistake this repo refuses everywhere else.
+
+Pin a cheaper model to cut the CI bill. These scenarios assert *behavioural compliance* —
+did it refuse the merge, did it avoid pushing, did it write the file — not reasoning
+depth, so the frontier model is not what is under test:
+
+```bash
+python3 evals/run_evals.py --model claude-haiku-4-5-20251001 -k 3
+```
+
+**Why not run this through Codex or Gemini to avoid the key.** The harness parses Claude
+Code's `stream-json` events, asserts the crucible *plugin* loaded, and scores
+`subagent_verdict` off the Agent mechanism — none of which exist in another CLI. You could
+proxy Claude Code at another model, but then a failing scenario has three candidate causes
+(the skill, the model, the proxy) and the result cannot be attributed. An eval whose
+failures cannot be attributed is worse than no eval.
 
 ## The scenarios
 

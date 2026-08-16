@@ -2,9 +2,27 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # `dev` is where work actually lands; `main` is the promotion target. Gating only on
+    # `main` meant every check ran for the first time at the moment of publication —
+    # after review, on a merge commit nobody was still looking at. Both branches now.
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
+  schedule:
+    # Weekly behavioural check. A skill's prose can stop working without any file in this
+    # repo changing — the model underneath it moves — so this is the one check that must
+    # fire on a calendar rather than on a diff.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Model for the live eval suite"
+        required: false
+        default: "claude-haiku-4-5-20251001"
+      k:
+        description: "Runs per scenario (higher = tighter confidence, more tokens)"
+        required: false
+        default: "3"
 
 jobs:
   # Tier 1 — fast, hermetic, no API/credentials. Runs on every push + PR.
@@ -77,21 +95,49 @@ jobs:
   # and (c) running the harness in hermetic mode (bare=True uses ANTHROPIC_API_KEY instead
   # of an interactive login). Consider gating it to PRs that touch skills/ to control cost.
   live-eval:
-    if: false
+    # No longer `if: false`. It was disabled because it spends tokens on every push —
+    # so it now runs only when asked for, or once a week, rather than never.
+    #
+    # It needs an ANTHROPIC_API_KEY repo secret, because CI has no logged-in session and
+    # the runner must use bare mode. Without the secret the job fails fast and says so,
+    # which is the honest state: "not configured" must not look like "passing". Locally
+    # you do NOT need a key — `run_evals.py` defaults to bare=False and uses your existing
+    # login, so the behavioural suite is free to run on a subscription. See evals/README.md.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # A cheap model by default: these scenarios assert *behavioural compliance* with a
+      # SKILL.md — did it refuse the merge, did it avoid pushing — not reasoning depth, so
+      # the frontier model is not what is under test. Override per-run via the input.
+      EVAL_MODEL: ${{ inputs.model || 'claude-haiku-4-5-20251001' }}
+      EVAL_K: ${{ inputs.k || '3' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Fail fast when the key is absent
+        # Exit 2, not 1: "could not determine" is this repo's code for a check that did not
+        # run, and it must never be reported as one that passed.
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY is not set — the live suite cannot run." >&2
+            echo "Add it under Settings > Secrets > Actions, or run the suite locally" >&2
+            echo "with your existing login: python3 evals/run_evals.py" >&2
+            exit 2
+          fi
       - name: Install claude CLI + uv + pytest
         run: |
           npm install -g @anthropic-ai/claude-code
           pip install pytest
           curl -LsSf https://astral.sh/uv/install.sh | sh
-      - name: Run the skill-eval suite (k=3, hermetic)
-        # The runner must be invoked with bare=True so it authenticates via ANTHROPIC_API_KEY
-        # rather than a logged-in session. See evals/README.md.
-        run: python3 evals/run_evals.py -k 3 --json evals/baselines/ci.json
+      - name: Run the skill-eval suite (hermetic)
+        run: python3 evals/run_evals.py -k "$EVAL_K" --model "$EVAL_MODEL" --bare --json evals/baselines/ci.json
+      - name: Keep the report even when the gate fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: evals/baselines/ci.json
+          if-no-files-found: warn
