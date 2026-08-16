@@ -23,8 +23,12 @@ import json
 import re
 import shutil
 import sys
-import tomllib
 from pathlib import Path
+
+# `tomllib` is 3.11+, and this module is imported by the cms test suite on the declared
+# floor (3.9). A top-level import here made the module unimportable there, which does not
+# degrade one feature — it stops pytest collecting. It is imported in `main()` instead, at
+# the one place a site.toml is actually read.
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import render  # noqa: E402
@@ -379,12 +383,15 @@ def build_nav(repos: list[dict], repo_slug: str, page_slug: str) -> str:
     listed = [p for p in current["pages"] if not p.get("reference")]
     on_ref = any(p["slug"] == page_slug and p.get("reference")
                  for p in current["pages"])
-    pages = "".join(
-        f'<a href="{p["slug"]}.html"'
-        f'{" class=\"on\"" if p["slug"] == page_slug or (on_ref and p["slug"] == "reference") else ""}>'
-        f'{html.escape(p["title"])}</a>'
-        for p in listed
-    )
+    def page_link(p):
+        # The class is bound before the f-string, not inlined into it: a backslash
+        # inside an f-string expression is a SyntaxError before Python 3.12, and the
+        # declared floor is 3.9. Same shape as repo_link above.
+        here = p["slug"] == page_slug or (on_ref and p["slug"] == "reference")
+        cls = ' class="on"' if here else ""
+        return f'<a href="{p["slug"]}.html"{cls}>{html.escape(p["title"])}</a>'
+
+    pages = "".join(page_link(p) for p in listed)
     return (
         '<div class="snav">'
         '<div class="grp"><a class="home" href="../index.html">&#9670; ALL</a>'
@@ -619,6 +626,14 @@ def main() -> int:
     cfg_path = args.config or root / "site.toml"
     if not cfg_path.is_file():
         print(f"missing {cfg_path}", file=sys.stderr)
+        return 2
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        # Exit 2, not 1: the check did not fail, it could not run. Everything else in cms
+        # works on the floor; only reading a site.toml needs the newer stdlib.
+        print("the multi-repo site builder needs Python 3.11+ for tomllib; "
+              "the rest of cms runs on the declared floor", file=sys.stderr)
         return 2
     cfg = tomllib.loads(cfg_path.read_text(encoding="utf-8"))
     out = (args.output or root / cfg.get("output", "_site")).resolve()

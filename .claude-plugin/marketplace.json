@@ -9,13 +9,25 @@
     {
       "name": "crucible",
       "source": "./plugins/crucible",
-      "description": "Doc-discipline (cms — linting and ADRs, plus a rendered HTML view of any document and a multi-repo documentation site built from the markdown already in the repos), a sparring partner for ideas still being formed (spar-with-me), adversarial stress-testing once they harden (grill-me), a structured development workflow (develop), a safe branch lifecycle (start-branch / finish-branch), eval-first development (freeze a baseline, gate on match-or-beat-or-revert), flag-gate (default-OFF rollout with instant revert), bounded read-only agent loops (loop-harness), irreversible-action discipline (act-for-real), and recurring whole-repo health audits (repo-audit), a diff-scoped quality audit (refactor-audit) and skill-craft, which authors, distils and lints the skills themselves.",
+      "description": "Doc-discipline (cms — linting and ADRs, plus a rendered HTML view of any document and a multi-repo documentation site built from the markdown already in the repos), a sparring partner for ideas still being formed (spar-with-me), adversarial stress-testing once they harden (grill-me), a structured development workflow (develop), a safe branch lifecycle (start-branch / sync-branch / finish-branch, gating on whatever the repo declares as proof rather than assuming a test suite exists), eval-first development (freeze a baseline, gate on match-or-beat-or-revert), flag-gate (default-OFF rollout with instant revert), bounded read-only agent loops (loop-harness), irreversible-action discipline (act-for-real), and recurring whole-repo health audits (repo-audit), a diff-scoped quality audit (refactor-audit) and skill-craft, which authors, distils and lints the skills themselves.",
       "category": "productivity",
       "tags": [
         "documentation",
         "workflow",
         "review",
         "static-site"
+      ]
+    },
+    {
+      "name": "forge-unity",
+      "source": "./plugins/forge-unity",
+      "description": "The Unity half of an evidence-gated workflow — an asset-integrity sweep for the failures neither the compiler nor a test suite can see (source Unity never imported, orphaned .meta records, components bound to nothing), plus an adapter contract so a published plugin can drive commands it cannot ship: your project maps its own command names onto a canonical, engine-neutral vocabulary in .forge/adapter.json, and an unimplemented verb is reported as a gap rather than guessed. Ships no engine reference material by design.",
+      "category": "productivity",
+      "tags": [
+        "unity",
+        "game-development",
+        "evidence",
+        "adapter"
       ]
     },
     {

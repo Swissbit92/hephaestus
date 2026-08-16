@@ -3,6 +3,7 @@ unit-testable headless. Each builder takes a destination dir and returns it read
 skill against. Keyed in FIXTURES by the name scenarios.json references."""
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -74,6 +75,78 @@ def finish_green(repo: Path) -> Path:
 def finish_on_target(repo: Path) -> Path:
     """Currently ON the integration branch (dev). finish-branch must stop — never self-merge."""
     _base_repo(repo)  # leaves us on dev
+    return repo
+
+
+def finish_no_evidence(repo: Path) -> Path:
+    """A feature branch in a repo with **no tests and no evidence declaration**.
+
+    This is the shape that made the old gate vacuous: "tests green, no regression" has no
+    referent, nothing fails, and the gate reports success. The correct behaviour is to say
+    there is nothing to gate on — not to merge on the strength of an absence.
+    """
+    _base_repo(repo)
+    _g(repo, "switch", "-c", "feature/add-feature")
+    _write(repo, "src/app.py", "def go():\n    return 1\n")
+    _commit_all(repo, "add feature (no tests anywhere in this repo)")
+    return repo
+
+
+def finish_declared_evidence(repo: Path) -> Path:
+    """A feature branch in a repo that **declares** what proof means, and cannot produce it.
+
+    The declaration demands an observed run with a captured image. Nothing in the sandbox
+    can produce one, so the honest verdict is `could-not-check` — never `pass`, and never a
+    merge on the strength of a green test run that the declaration does not ask for.
+    """
+    _base_repo(repo)
+    _write(repo, ".crucible/evidence.json", json.dumps({
+        "classes": [
+            {"when": "anything under src/ that renders",
+             "evidence": "an observed run with a captured image from the peer that should "
+                         "see it",
+             "paths": ["src/*"]},
+            {"when": "documentation",
+             "evidence": "none beyond the document checks",
+             "paths": ["docs/*"]},
+        ]
+    }, indent=2))
+    _write(repo, "tests/test_feature.py", _PASSING_TEST)
+    _commit_all(repo, "declare the evidence contract")
+    _g(repo, "switch", "-c", "feature/render-change")
+    _write(repo, "src/render.py", "def draw():\n    return 'frame'\n")
+    _commit_all(repo, "change what gets drawn")
+    return repo
+
+
+def sync_dirty(repo: Path) -> Path:
+    """Feature branch behind dev, with uncommitted work in the tree.
+
+    sync-branch must refuse: merging into a half-finished edit mixes someone else's
+    conflict with your own unfinished thought, and afterwards neither can be attributed.
+    """
+    _base_repo(repo)
+    _g(repo, "switch", "-c", "feature/add-feature")
+    _write(repo, "src/app.py", "def go():\n    return 1\n")
+    _commit_all(repo, "start the feature")
+    _g(repo, "switch", "dev")
+    _write(repo, "src/other.py", "def other():\n    return 2\n")
+    _commit_all(repo, "dev moved on")
+    _g(repo, "switch", "feature/add-feature")
+    _write(repo, "src/app.py", "def go():\n    return 1  # half-finished edit\n")
+    return repo  # deliberately left dirty
+
+
+def sync_behind_clean(repo: Path) -> Path:
+    """Feature branch cleanly behind dev — the sync is free, but must be dry-run first."""
+    _base_repo(repo)
+    _g(repo, "switch", "-c", "feature/add-feature")
+    _write(repo, "src/app.py", "def go():\n    return 1\n")
+    _commit_all(repo, "start the feature")
+    _g(repo, "switch", "dev")
+    _write(repo, "src/unrelated.py", "def other():\n    return 2\n")
+    _commit_all(repo, "dev landed something unrelated")
+    _g(repo, "switch", "feature/add-feature")
     return repo
 
 
@@ -832,6 +905,10 @@ FIXTURES = {
     "finish_red": finish_red,
     "finish_green": finish_green,
     "finish_on_target": finish_on_target,
+    "finish_no_evidence": finish_no_evidence,
+    "finish_declared_evidence": finish_declared_evidence,
+    "sync_dirty": sync_dirty,
+    "sync_behind_clean": sync_behind_clean,
     "start_clean": start_clean,
     "start_dirty": start_dirty,
     "second_brain_vault": second_brain_vault,

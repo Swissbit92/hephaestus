@@ -19,7 +19,17 @@ cd "$REPO_ROOT"
 
 # Case-insensitive, word-ish boundaries where it helps avoid false positives.
 # Add tokens here as new private sources are referenced — keep it broad.
+#
+# Two groups, for two different reasons:
+#
+#   employer     the original reason this script exists (ADR-002).
+#   third-party  a private *project* whose tooling informed a plugin here. forge-unity
+#                (ADR-003) generalises patterns learned in someone else's game repo, and
+#                that repo is not ours to publish: its name, its teammates, its command
+#                prefixes and its Photon app id must not travel with the generalisation.
+#                A plugin may carry the lesson; it may not carry the project.
 PATTERN='roche|gxp|gamp|alcoa|21 cfr|part 11|snowflake|datamesh|data mesh manager|\brtis\b|synapse|neo4j-readonly|@emea\.|\.roche\.|gloaz|zehnder2'
+PATTERN="$PATTERN"'|schlegli|gump.bros|schleglijump|\bsgb_|sgb-team|orangutanlover|robinguedel|rgquiet'
 
 MODE="${1:-tracked}"
 
