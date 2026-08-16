@@ -40,7 +40,30 @@ entry point to its call site: route → handler → … → this function. If yo
 path, the control is decorative, and say so. A test that imports the module directly proves
 the logic works; it does not prove the code runs in production.
 
-### 4. Run tests — against a live baseline, never a stated number
+### 4. Run the evidence the repo demands — against a live baseline, never a stated number
+
+**First establish what proof looks like here.** Not every repo verifies with a test suite,
+and in one that does not, "the suite is green" is vacuously true rather than reassuring:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/evidence_gate.py" --repo . --base <integration-target>
+```
+
+`0` prints the classes that apply to this diff · `2` a declaration exists and is malformed
+(**could not determine** — do not fall back to tests, the repo has stated a requirement) ·
+`3` there is nothing to gate on, which is a **SKIP and never a pass**.
+
+If the contract is *implied* (the repo has test gates and no declaration), everything below
+is exactly what it demands, unchanged. If it is *declared*, the declared classes are the
+requirement and the test run is at most one of them.
+
+**Report one of three verdicts, never two:** `pass`, `fail`, or `could-not-check`. The
+third is not a soft fail — it means the evidence could not be produced on this machine (no
+second peer, no device, wrong platform). Recording it as `pass` is how an unverified change
+gets a green tick; recording it as `fail` turns a missing capability into an accusation.
+Name it, and name what would settle it.
+
+#### The test class, in detail
 Test counts drift: tests get added during the work, and a baseline number stated earlier
 gets summarized away or mis-remembered. A *stated* count is a hint, not ground truth — if
 you gate on it you will false-alarm the moment the milestone legitimately adds a test.

@@ -789,3 +789,103 @@ def test_triage_never_prints_a_document_body(tmp_path):
           "last_reviewed_on: 2026-01-01\nreview_in: 6 months\napplies_to: r\n"
           "ai_summary: A summary.\n---\n\nSECRET_BODY_MARKER\n")
     assert "SECRET_BODY_MARKER" not in _triage.render(_triage.collect(docs))
+
+
+# --------------------------------------------------------------------------- check.check_relative_links
+#
+# A cross-reference that no longer resolves is the most common way a documentation set rots,
+# and it is invisible: the prose still reads correctly, so review does not catch it, and
+# nothing executes it. Introduced with ADR-003, this check found three genuinely broken links
+# in this repository on its first run — two wrong-depth paths and one scaffolded placeholder
+# pointing at a directory that has never existed here.
+#
+# The quiet cases below matter as much as the loud ones. A link checker that flags examples
+# inside code fences produces noise on exactly the documents that contain the most links, and
+# a check people switch off protects nothing.
+
+def _linkdoc(tmp_path, name, body):
+    p = tmp_path / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(body, encoding="utf-8")
+    return p
+
+
+def test_relative_link_to_a_missing_file_is_an_error(tmp_path):
+    f = _linkdoc(tmp_path, "a.md", "See [the plan](plan.md).\n")
+    findings = check.check_relative_links(f)
+    assert len(findings) == 1
+    assert "plan.md" in findings[0].message
+
+
+def test_relative_link_that_resolves_is_silent(tmp_path):
+    _linkdoc(tmp_path, "plan.md", "x\n")
+    f = _linkdoc(tmp_path, "a.md", "See [the plan](plan.md).\n")
+    assert check.check_relative_links(f) == []
+
+
+def test_wrong_depth_is_caught(tmp_path):
+    """The real failure: `../VISION.md` from docs/research/ resolves to docs/VISION.md."""
+    _linkdoc(tmp_path, "VISION.md", "x\n")
+    f = _linkdoc(tmp_path, "docs/research/note.md", "See [VISION](../VISION.md).\n")
+    assert len(check.check_relative_links(f)) == 1
+    ok = _linkdoc(tmp_path, "docs/research/ok.md", "See [VISION](../../VISION.md).\n")
+    assert check.check_relative_links(ok) == []
+
+
+def test_anchor_on_an_existing_file_is_fine(tmp_path):
+    _linkdoc(tmp_path, "plan.md", "x\n")
+    f = _linkdoc(tmp_path, "a.md", "See [step](plan.md#step-two).\n")
+    assert check.check_relative_links(f) == []
+
+
+def test_bare_anchor_addresses_this_document(tmp_path):
+    f = _linkdoc(tmp_path, "a.md", "Jump to [later](#later).\n")
+    assert check.check_relative_links(f) == []
+
+
+def test_external_schemes_are_not_ours_to_resolve(tmp_path):
+    f = _linkdoc(tmp_path, "a.md",
+             "[web](https://example.invalid/x) [mail](mailto:a@b.c) [proto](//cdn/x)\n")
+    assert check.check_relative_links(f) == []
+
+
+def test_links_inside_a_fenced_block_are_examples_not_references(tmp_path):
+    f = _linkdoc(tmp_path, "a.md",
+             "Real prose.\n\n```markdown\n[example](does-not-exist.md)\n```\n")
+    assert check.check_relative_links(f) == []
+
+
+def test_links_inside_inline_code_are_examples(tmp_path):
+    f = _linkdoc(tmp_path, "a.md", "Write `[label](path/to/file.md)` like this.\n")
+    assert check.check_relative_links(f) == []
+
+
+def test_a_directory_target_resolves(tmp_path):
+    (tmp_path / "decisions").mkdir()
+    f = _linkdoc(tmp_path, "a.md", "See [decisions](decisions/).\n")
+    assert check.check_relative_links(f) == []
+
+
+def test_percent_encoded_spaces_resolve(tmp_path):
+    _linkdoc(tmp_path, "my plan.md", "x\n")
+    f = _linkdoc(tmp_path, "a.md", "See [plan](my%20plan.md).\n")
+    assert check.check_relative_links(f) == []
+
+
+def test_an_image_with_a_missing_source_is_caught(tmp_path):
+    f = _linkdoc(tmp_path, "a.md", "![diagram](img/arch.png)\n")
+    assert len(check.check_relative_links(f)) == 1
+
+
+def test_each_broken_target_is_reported_once(tmp_path):
+    f = _linkdoc(tmp_path, "a.md", "[a](x.md) and [b](x.md) and [c](x.md)\n")
+    assert len(check.check_relative_links(f)) == 1
+
+
+def test_this_repository_has_no_broken_links():
+    """Regression: the three found on first run stay fixed."""
+    findings = []
+    repo = Path(__file__).resolve().parent.parent
+    for md in common.iter_md_files(repo, include_archive=False):
+        findings.extend(check.check_relative_links(md))
+    assert findings == [], [f.message for f in findings]

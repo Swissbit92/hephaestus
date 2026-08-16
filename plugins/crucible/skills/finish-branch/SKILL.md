@@ -7,13 +7,51 @@ You integrate finished work back to its target and clean up — without ever sil
 losing commits or pushing to a protected branch by surprise. You never pick the
 integration action for the user.
 
-## Phase 1 — Gate on tests (no exceptions)
+## Phase 1 — Gate on evidence (no exceptions)
 
-Run the repo's test command. Compare to the baseline `start-branch` recorded.
+**Ask the repo what counts as proof before assuming it is a test run.** In a repo with a
+suite it is; in one without, "tests green" has no referent and the gate silently becomes a
+no-op that reports success because nothing failed — which is a different claim from *it
+works*.
 
-- Tests fail or regress vs. baseline → **merge and PR are off the table.** Only **keep**
-  and **discard** remain. Say so plainly.
-- Tests green and no regression → all four options are available.
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/evidence_gate.py" --repo . --base <target>
+```
+
+`0` = a contract exists and the applicable classes are printed · `2` = **could not
+determine** (a declaration is present and malformed — fix it, never delete it) · `3` =
+**nothing to gate on**: no `.crucible/evidence.json` and no runnable gates. Exit 3 is a
+SKIP, not a pass, and it must be said out loud before any option is offered.
+
+The contract resolves in one of two ways, and you do not choose it:
+
+- **Declared** — `.crucible/evidence.json` lists classes (`when` / `evidence`, optionally
+  scoped by `paths`). `--base` narrows to the classes this diff actually triggers.
+- **Implied** — no declaration, but the repo has runnable gates, so the class is "the
+  repo's own test gates pass, with no regression against the branch point". This is the
+  pre-existing behaviour and needs no configuration.
+
+Then run what the applicable classes demand — for the implied class that is the repo's
+test command, compared against the baseline `start-branch` recorded.
+
+**Record a verdict word, not a tick.** Three outcomes, never two:
+
+| Verdict | Meaning | Effect on the options |
+|---|---|---|
+| `pass` | every applicable class produced its evidence, and you can name it | all four options available |
+| `fail` | evidence was produced and it was negative | **merge and PR are off the table** — only keep and discard |
+| `could-not-check` | the evidence could not be produced *here* — no second peer, no device, wrong platform | **merge and PR are off the table by default.** It may be overridden, but only by the user, out loud, with the gap named |
+
+`could-not-check` is the reason this phase exists. Folding it into `pass` is how an
+unverified change acquires a green tick, and folding it into `fail` is how a gate that
+cannot run on this machine becomes an accusation. Name it, and say what would settle it.
+
+If the reason you cannot check is that the *environment* is misbehaving rather than absent —
+calls succeeding while nothing happens — that is a session-level stop with its own signal:
+`act-for-real`'s [blocked-signal](../act-for-real/references/blocked-signal.md). A session
+that emitted it and then recorded `pass` has contradicted itself.
+
+A pass that cannot name its evidence is not a pass, it is a feeling.
 
 ## Phase 2 — Resolve the target, then confirm what's being integrated
 

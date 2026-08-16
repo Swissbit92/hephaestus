@@ -11,7 +11,8 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 
 | Plugin | Scope |
 |--------|-------|
-| **crucible** | Generic, vendor-neutral craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `skill-craft`, `eval-first`, `flag-gate`, `loop-harness`, `act-for-real`, `repo-audit`, `refactor-audit` |
+| **crucible** | Generic, vendor-neutral craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `sync-branch`, `finish-branch`, `qa-gatekeeper`, `skill-craft`, `eval-first`, `flag-gate`, `loop-harness`, `act-for-real`, `repo-audit`, `refactor-audit` |
+| **forge-unity** | Unity evidence + the `.forge/adapter.json` contract. Engine-specific but **operator-free** — it may name Unity, never a particular game ([ADR-003](docs/decisions/003-decompose-game-development-support-into-a-growing-crucible-and-one-thin-engine-adapter.md)) |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server (3-layer read-only, NL→SQL) |
 | **mcp-starter** | Template for packaging a Python MCP server as a plugin |
 | **second-brain** | Obsidian inbox processor (suggest-then-confirm; skills-only) |
@@ -64,6 +65,21 @@ after a defect that was invisible from a POSIX machine:
   `encoding="utf-8", errors="replace"` to subprocess, and call `_utf8_stdio()` in `main()`.
 - **Emit paths with `as_posix()`.** A path that lands in JSON, in a gate command or in a
   test comparison must use forward slashes; a backslash is also a shell escape.
+- **Do not exceed the Python floor the README promises (3.9).** A file that will not parse
+  does not degrade one feature — it stops `pytest` collecting, so the suite is unavailable
+  on that interpreter. Note that `ast.parse(feature_version=…)` **cannot** catch this alone:
+  PEP 701 was a tokenizer change, so a 3.13 interpreter accepts 3.12-only f-strings whatever
+  floor you request. `scripts/python_floor.py` runs three passes (grammar, f-string
+  constructs, module-level stdlib imports) and CI runs the suite on 3.9–3.13.
+
+### Cross-agent (Claude Code, Codex, Pi)
+
+Claude Code consumes this repo as **plugins**; Codex and Pi discover **skill directories**.
+So the portable subset is exactly the skills — slash commands, subagents, hooks and MCP
+servers do not travel, and `scripts/install_skills.py` prints that gap rather than letting a
+skill quietly lose its hook. Keep every `SKILL.md` inside the frontmatter set all three
+honour (`name`, `description`, `disable-model-invocation`, `metadata`); `skill_lint.py`
+warns on anything else.
 
 ## Skill-eval harness
 
@@ -122,7 +138,9 @@ hephaestus/
 │   ├── release.sh                    # per-plugin version bump + tag + GitHub release
 │   ├── bump_version.py               # semver math (used by release.sh; unit-tested)
 │   ├── validate_manifests.py         # marketplace + plugin manifest agreement (CI gate)
-│   ├── check-public-safe.sh          # private-token guard
+│   ├── check-public-safe.sh          # private-token guard (employer + third-party project)
+│   ├── python_floor.py               # the declared floor, enforced (grammar + f-strings + stdlib)
+│   ├── install_skills.py             # link skills into ~/.claude, ~/.codex, ~/.pi
 │   └── checks/                       # the executable half of docs/INVARIANTS.md
 │       └── _python.sh                # sourced: resolves a Python that actually runs
 ├── evals/                            # skill-eval harness (behavioral scenarios; see its README)
@@ -132,10 +150,14 @@ hephaestus/
 └── plugins/
     ├── crucible/
     │   ├── .claude-plugin/plugin.json
-    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,skill-craft,eval-first,flag-gate,loop-harness,act-for-real,repo-audit,refactor-audit}/
-    │   ├── scripts/                 # detect_profile · coverage_delta · invariants_run · new_skill · skill_lint (+ hook) · predictions
+    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,sync-branch,finish-branch,skill-craft,eval-first,flag-gate,loop-harness,act-for-real,repo-audit,refactor-audit}/
+    │   ├── scripts/                 # detect_profile · evidence_gate · coverage_delta · invariants_run · new_skill · skill_lint (+ hook) · predictions
     │   ├── commands/{develop,curate}.md
     │   └── agents/qa-gatekeeper.md
+    ├── forge-unity/             # Unity evidence + adapter contract (engine-specific, operator-free)
+    │   ├── skills/{unity-bridge,unity-asset-integrity}/
+    │   ├── scripts/{adapter.py,asset_integrity.py}
+    │   └── commands/forge-init.md
     ├── sqlite-readonly/         # read-only SQLite MCP server (uv project under servers/)
     ├── mcp-starter/             # MCP-plugin packaging template
     ├── second-brain/            # Obsidian inbox processor (suggest-then-confirm; skills-only)

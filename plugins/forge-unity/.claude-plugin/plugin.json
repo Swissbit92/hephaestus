@@ -1,0 +1,18 @@
+{
+  "name": "forge-unity",
+  "description": "The Unity half of an evidence-gated workflow, and deliberately only that half. It carries what stays true across engine releases — the asset-integrity sweep that finds the failures Unity itself will not report (source files it never imported, orphaned .meta records, components wired to nothing), and the adapter contract that lets a published plugin drive commands it cannot ship. Your project's own observation commands live in your project; `.forge/adapter.json` maps them onto a canonical, engine-neutral vocabulary (editor.compile, session.start, input.script, trace.dump, capture.sheet), so the workflow is written once and a Godot or Unreal adapter is a config file rather than a rewrite. It ships no engine reference material on purpose: that content dates with every release, the shelf is already full of it, and the parts worth keeping are the ones a compiler or an editor can be made to prove. Pairs with crucible — forge-unity supplies the evidence that crucible's finish-branch gate demands.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Swissbit92"
+  },
+  "homepage": "https://github.com/Swissbit92/hephaestus",
+  "repository": "https://github.com/Swissbit92/hephaestus",
+  "license": "MIT",
+  "keywords": [
+    "unity",
+    "game-development",
+    "evidence",
+    "adapter",
+    "claude-code"
+  ]
+}

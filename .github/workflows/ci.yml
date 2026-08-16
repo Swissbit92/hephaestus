@@ -89,6 +89,41 @@ jobs:
           python plugins/crucible/scripts/skill_lint.py --strict
           python plugins/crucible/scripts/detect_profile.py --emit-gates
 
+  # Tier 1c — the same hermetic suite across the interpreter range the README promises.
+  # A separate job for exactly the reason `cross-platform` is one: matrixing `checks` would
+  # rename the required status check and detach branch protection without anything looking
+  # broken.
+  #
+  # The OS matrix could never have caught what motivated this. Every job pinned 3.12 while
+  # the README promised 3.9+, and one PEP 701 f-string in site.py made `pytest` unable to
+  # *collect* on 3.9, 3.10 and 3.11 — the whole suite unavailable, not one degraded feature.
+  # Varying the OS and never the Python left that invisible on all three platforms.
+  #
+  # 3.12 is already covered by `checks`, so it is not repeated here.
+  python-floor:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.13"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test deps
+        run: pip install pytest
+
+      - name: Static floor check (grammar + f-string constructs)
+        run: python scripts/python_floor.py --repo .
+
+      - name: Suite must collect and pass on this interpreter
+        # Collection is the point. A syntax error in any shipped module takes the entire
+        # run down, so "it collected" is already most of what this job proves.
+        run: pytest -q
+
   # Tier 2 (DISABLED by default) — the live skill-eval suite. It drives the real `claude`
   # CLI against the plugins, so it needs the CLI installed and an API key, and it spends
   # tokens. Enable by (a) removing `if: false`, (b) adding an ANTHROPIC_API_KEY repo secret,

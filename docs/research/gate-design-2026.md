@@ -109,7 +109,7 @@ written in prose are skipped at scale.
 
 12. **A design *role* is the documented anti-pattern; a design *check* is not.** E2EDevBench
     degrades 53.5% → 27.7% when a design role is added to a sequential team (already recorded in
-    [VISION](../VISION.md)). The distinction that matters is **opinion vs. evidence**, not
+    [VISION](../../VISION.md)). The distinction that matters is **opinion vs. evidence**, not
     frontend vs. backend.
 
 ### D. Loop vs. graph
