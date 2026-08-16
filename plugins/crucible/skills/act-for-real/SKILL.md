@@ -65,7 +65,24 @@ record    -> ACTION RECORD with evidence, or the literal word UNVERIFIED
 5. **VERIFY.** **HARD GATE.** Confirm from a **fresh read of the system**. A `200`, a green toast,
    a click that didn't error — none of these are the state. Prefer a **second independent channel**
    (confirmation mail, audit log, status list) when one exists. If you cannot confirm: **UNVERIFIED**.
-6. **RECORD.** Emit the ACTION RECORD below.
+6. **RETRY — never blind.** **HARD GATE.** A timeout, a dropped connection or an ambiguous
+   error tells you nothing about whether the action ran: **the channel that reports and the
+   channel that acts are separate.** The effect may already exist. So:
+   - **Verify before every retry**, using step 5. Retry *only* once a fresh read shows the
+     intended state is absent. Nothing here is exempt because it "obviously failed".
+   - **Carry an idempotency key** — a deterministic value derived from the action itself, not
+     a fresh random one per attempt, so the far side can collapse duplicates. If the system
+     offers one (`Idempotency-Key`, a client reference, a request id), use it; if it does not,
+     say so in the record, because that is the case where a duplicate cannot be prevented and
+     can only be detected.
+   - **Give up rather than guess.** Repeated ambiguity is `UNVERIFIED`, not another attempt.
+
+   This is the failure mode with numbers behind it: in published work on verified tool calls,
+   gating retries on a postcondition read held task success at 100% where blind retry decayed
+   from 92% to 64%, and cut duplicate side effects from as high as 72% to at most 20%. The
+   ablation is the part worth keeping — **verification alone accounted for most of the gain.
+   The retries were largely what caused the damage.**
+7. **RECORD.** Emit the ACTION RECORD below.
 
 ## Output
 
@@ -79,7 +96,8 @@ REVERSIBLE: no | partially (<how>)
 AUTHORITY:  agent (in-scope) | HUMAN (credential-gated) - approved <when>, bound to this action
 INPUTS:     <identifier> [provenance: <system-of-record | human>; <check> verified]
 PRE-STATE:  <what a fresh read showed before>
-ACTED:      <what was done, by whom>
+IDEMPOTENCY:<key + where it is honoured> | NONE - duplicates detectable only, not preventable
+ACTED:      <what was done, by whom>   (attempt <n>; each retry preceded by a fresh read)
 VERIFY:     (1) <fresh read of the system>          [primary]
             (2) <independent channel, if any>       [corroborating]
 RESULT:     CONFIRMED <ref> | UNVERIFIED <why>
@@ -87,7 +105,9 @@ RESULT:     CONFIRMED <ref> | UNVERIFIED <why>
 
 **Stop conditions:** identifier fails its check -> stop, ask (do not "fix" it) · pre-act re-read
 disagrees with the plan -> re-plan · approval missing, expired, or granted for a *different* action
--> stop · verification impossible -> proceed only if the human accepts that, and record UNVERIFIED.
+-> stop · verification impossible -> proceed only if the human accepts that, and record UNVERIFIED ·
+**an attempt whose outcome is unknown -> read the state before touching it again; ambiguity twice
+is UNVERIFIED, not a third attempt.**
 
 ## Anti-patterns
 
@@ -98,11 +118,23 @@ disagrees with the plan -> re-plan · approval missing, expired, or granted for 
   short", and it got helpfully completed — now it is plausible, well-formed, and wrong.
 - **Believing a UI error over the rule.** A validator can be wrong or under-informed. Check the
   actual rule (the real checksum, the documented format) before "correcting" good data.
+- **Retrying a timeout.** The most expensive one here, and it wears the mask of diligence. A
+  timeout is silence about the outcome, not news of a failure — the money may already have
+  moved. Read the state first, every time.
+- **A fresh random key per attempt.** An idempotency key that changes between retries is not
+  an idempotency key; it guarantees the far side treats each attempt as a new request. Derive
+  it from the action, once.
 - **Approval creep.** Treating one approval as a licence for the class of action.
 - **Automating the confirmation step.** If the system demands a credential to confirm, that demand
   *is* the control. Scripting past it removes the only guardrail present.
 - **Ceremony on trivial writes.** Firing this gate on reversible, owned changes trains everyone to
   skip it.
+
+**When the *environment* is the thing that cannot be trusted** — calls succeed and nothing
+happens, behaviour flips between identical calls, a port answers but the tool is frozen —
+that is a session-level stop, not an action-level one, and retrying makes the evidence
+worse. The signal and the detector rule:
+[references/blocked-signal.md](references/blocked-signal.md).
 
 ## Guardrails
 

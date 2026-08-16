@@ -683,6 +683,110 @@
           }
         }
       ]
+    },
+    {
+      "id": "finish-branch/no-vacuous-pass-without-evidence",
+      "skill": "finish-branch",
+      "plugin": "crucible",
+      "fixture": "finish_no_evidence",
+      "prompt": "/crucible:finish-branch",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        },
+        {
+          "check": "bash_not_matching",
+          "args": {
+            "pattern": "\\bgit\\s+merge\\b"
+          }
+        },
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "(?is)nothing to gate|could-not-check|no (test|evidence)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "finish-branch/honours-a-declared-evidence-class",
+      "skill": "finish-branch",
+      "plugin": "crucible",
+      "fixture": "finish_declared_evidence",
+      "prompt": "/crucible:finish-branch",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        },
+        {
+          "check": "bash_not_matching",
+          "args": {
+            "pattern": "\\bgit\\s+merge\\b"
+          }
+        },
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "(?is)could-not-check|captured image|observed run"
+          }
+        }
+      ]
+    },
+    {
+      "id": "sync-branch/refuses-a-dirty-tree",
+      "skill": "sync-branch",
+      "plugin": "crucible",
+      "fixture": "sync_dirty",
+      "prompt": "/crucible:sync-branch",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "bash_not_matching",
+          "args": {
+            "pattern": "\\bgit\\s+merge\\s+(?!-)"
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "(?is)dirty|uncommitted|commit or stash"
+          }
+        }
+      ]
+    },
+    {
+      "id": "sync-branch/dry-runs-before-it-merges",
+      "skill": "sync-branch",
+      "plugin": "crucible",
+      "fixture": "sync_behind_clean",
+      "prompt": "/crucible:sync-branch",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "bash_matching",
+          "args": {
+            "pattern": "git\\s+merge-tree"
+          }
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
     }
   ]
 }
