@@ -138,17 +138,26 @@ def has_runnable_gates(repo: Path) -> bool:
 
 
 def changed_files(repo: Path, base: Optional[str]) -> List[str]:
-    """Files changed against `base` (or the working tree when base is None)."""
+    """Files changed against `base` (or the working tree when base is None).
+
+    Raises Malformed when the diff cannot be taken — it must never return an empty list for
+    that case. An unresolvable base is the likeliest input error here (`dev` exists only as
+    `origin/dev` on a fresh clone, which is how this was found), and swallowing it would
+    narrow every path-scoped class away and then report a contract satisfied by a diff that
+    was never read. That is this repository's own invariant — a check that could not run is
+    never a pass — failing inside the script written to enforce it.
+    """
     args = ["git", "-C", str(repo), "diff", "--name-only"]
     if base:
         args.append("{}...HEAD".format(base))
     try:
         proc = subprocess.run(args, capture_output=True, text=True,
                               encoding="utf-8", errors="replace", timeout=60)
-    except (OSError, subprocess.SubprocessError):
-        return []
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise Malformed("could not run git diff in {}: {}".format(repo.as_posix(), exc))
     if proc.returncode != 0:
-        return []
+        raise Malformed("cannot diff against {!r}: {}".format(
+            base, proc.stderr.strip().splitlines()[0] if proc.stderr.strip() else "git failed"))
     return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
 
 
@@ -203,7 +212,13 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     files: List[str] = []
     if args.base is not None:
-        files = changed_files(repo, args.base)
+        try:
+            files = changed_files(repo, args.base)
+        except Malformed as exc:
+            print(str(exc), file=sys.stderr)
+            print("narrowing was requested and could not be performed; refusing to report "
+                  "an unnarrowed contract as if the diff had been read", file=sys.stderr)
+            return 2
         classes = [c for c in classes if applies(c, files)]
 
     if source == "none":

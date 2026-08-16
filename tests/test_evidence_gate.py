@@ -160,6 +160,43 @@ def test_diff_narrows_to_the_classes_a_change_triggers(tmp_path):
     assert whens == ["documentation"], whens
 
 
+def test_an_unresolvable_base_is_exit_2_not_an_empty_diff(tmp_path):
+    """Regression, and the sharpest one in this script's history.
+
+    `changed_files` swallowed a git failure and returned `[]`. The caller read that as "no
+    files changed", narrowed every path-scoped class away, and reported a satisfied
+    contract derived from a diff that was never taken. Found by running the gate on this
+    repo's own branch against `dev`, which exists only as `origin/dev` on a fresh clone —
+    so the failure mode is the *default* one, not an exotic case.
+    """
+    _git_repo(tmp_path)
+    _declare(tmp_path, DECLARATION)
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "render.py").write_text("x", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], capture_output=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "base"], capture_output=True)
+
+    r = _run("--repo", str(tmp_path), "--base", "no-such-branch")
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "cannot diff" in r.stderr
+    assert "refusing to report" in r.stderr
+
+
+def test_a_genuinely_empty_diff_is_still_a_pass(tmp_path):
+    """The fix must not turn 'nothing changed' into an error — only 'could not tell'."""
+    _git_repo(tmp_path)
+    _declare(tmp_path, DECLARATION)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "a.md").write_text("x", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], capture_output=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "base"], capture_output=True)
+
+    r = _run("--repo", str(tmp_path), "--base", "HEAD", "--json")
+    assert r.returncode == 0, r.stdout + r.stderr
+    out = json.loads(r.stdout)
+    assert out["changed_files"] == []
+
+
 def test_an_unscoped_class_always_applies():
     """Narrowing is opt-in: a class with no paths demands evidence for every change.
 
