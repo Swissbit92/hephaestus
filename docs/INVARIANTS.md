@@ -29,3 +29,13 @@ reads as success.
 Falsifiable: WHEN a Phase 4.0 script cannot complete its check THE SYSTEM SHALL exit with a
 code distinct from success.
 Check: scripts/checks/undetermined_is_not_a_pass.sh
+
+## Shipped Python parses on the version the README promises
+
+Status: active
+Statement: No shipped `.py` may use syntax newer than the declared floor. A file that cannot
+be parsed does not degrade one feature — it stops `pytest` collecting, so the whole suite
+becomes unavailable on that interpreter.
+Falsifiable: WHEN any tracked `.py` uses grammar or f-string syntax added after the declared
+floor THE SYSTEM SHALL fail the floor check.
+Check: scripts/checks/python_floor_is_honoured.sh

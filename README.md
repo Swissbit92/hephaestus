@@ -137,6 +137,12 @@ overwrite the cached plugin dir, so state resolves in this order:
 - Claude Code with plugin support
 - Python 3.9+ on `PATH` as `python3` (cms scripts are pure stdlib — no pip installs)
 
+The floor is enforced, not merely stated: `scripts/python_floor.py` fails the build on
+syntax or stdlib imports newer than it, and CI runs the whole suite on 3.9, 3.10, 3.11,
+3.12 and 3.13. One feature needs more — the multi-repo site builder (`site.py`) reads
+`site.toml` through `tomllib`, which is 3.11+, and says so and exits 2 on older
+interpreters rather than failing obscurely. Everything else runs on the floor.
+
 ## Layout
 
 ```
