@@ -1,0 +1,30 @@
+# Line endings are a repository property, not a contributor-machine property.
+#
+# Without this file the result depends on each clone's core.autocrlf: a Windows
+# contributor with autocrlf=false commits CRLF, and a CRLF shell script fails on
+# Linux and macOS with the famously unhelpful "bad interpreter: /bin/sh^M" — a
+# breakage that is invisible on the machine that introduced it. Pinning it here
+# makes the repo behave identically on all three platforms.
+
+* text=auto eol=lf
+
+# Executed as programs, so a stray \r becomes part of the shebang argument.
+# These must be LF even in a Windows working tree, not merely in the index.
+*.sh   text eol=lf
+*.py   text eol=lf
+
+# Windows-native scripts are the one place CRLF is correct: cmd.exe requires it.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# Never touch these — normalization corrupts them.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.pptx binary
+*.db   binary
+*.sqlite binary
+*.sqlite3 binary

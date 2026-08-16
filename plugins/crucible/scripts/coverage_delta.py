@@ -30,9 +30,40 @@ from pathlib import Path
 DEFAULT_TARGETS = ("dev", "main", "master", "trunk")
 
 
+def _utf8_stdio() -> None:
+    """Force UTF-8 on the streams this script writes to.
+
+    Windows consoles default to a legacy codepage (commonly cp1252), so a single em-dash
+    or check-mark in otherwise successful output raises UnicodeEncodeError *after* the
+    work is done — turning a passing gate into exit 1, which reads as a real failure.
+    Reconfiguring is a no-op on platforms that are already UTF-8.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass  # a detached or captured stream (pytest); nothing to reconfigure
+
+
+def python_exe() -> str:
+    """The interpreter to re-invoke for collection.
+
+    Never the literal "python3": that name does not exist on Windows (where the only
+    `python3` on PATH is usually the Microsoft Store stub, which prints an ad and
+    collects nothing — indistinguishable here from "every test was deleted"). It also
+    pins collection to the *same* interpreter running this script, so a venv's pytest
+    is not silently swapped for the system one.
+    """
+    return sys.executable or shutil.which("python3") or shutil.which("python") or "python3"
+
+
 def _run(cmd: list[str], cwd: Path, timeout: int = 300) -> tuple[int, str]:
     try:
-        p = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, timeout=timeout)
+        # encoding is pinned rather than left to the locale: with text=True alone, Windows
+        # decodes via locale.getpreferredencoding() (commonly cp1252), and a single non-ASCII
+        # byte in a test id or traceback then raises or mojibakes mid-parse.
+        p = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=timeout)
     except (OSError, subprocess.TimeoutExpired) as e:
         return 127, f"{type(e).__name__}: {e}"
     return p.returncode, (p.stdout or "") + (p.stderr or "")
@@ -68,7 +99,7 @@ def detect_collect_cmd(repo: Path) -> list[str] | None:
         # sets `addopts = -q` gets `-qq`, and pytest collapses collection to per-file counts
         # ("tests/test_x.py: 54") with no node IDs at all — which parses to an empty set and
         # would read as "every test was deleted", or worse, as a clean 0-vs-0 comparison.
-        return ["python3", "-m", "pytest", "--collect-only", "-q",
+        return [python_exe(), "-m", "pytest", "--collect-only", "-q",
                 "-o", "addopts=", "-p", "no:cacheprovider"]
     return None
 
@@ -200,4 +231,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    _utf8_stdio()
     raise SystemExit(main())

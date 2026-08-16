@@ -65,7 +65,20 @@ Typos, 1-line fixes, formatting, comment updates.
 
 Understand the code and gather external best practices before designing.
 
-Launch in parallel (single message, multiple Agent calls):
+**Start with the routing table, not with candidate files.** Searching a repo's docs by
+opening likely-looking ones costs the full text of everything you opened and were wrong
+about, so the price of orienting scales with the size of the corpus rather than the size of
+the answer:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/cms/scripts/triage.py" --repo .
+```
+
+It prints path, status and summary for every document that has one — read that, pick the
+one or two worth opening, and open those. Documents with no summary are listed too, so the
+table cannot quietly route you around the part of the corpus it cannot see.
+
+Then launch in parallel (single message, multiple Agent calls):
 
 | Agent | Type | Purpose |
 |-------|------|---------|
@@ -88,6 +101,30 @@ It should produce: implementation milestones (ordered), files to create/modify (
 
 **Gate:** present the plan to the user for approval. Do NOT implement without explicit approval.
 
+### Record the prediction (FULL only)
+
+Once the plan is approved and before implementing, write down what this change is expected
+to do and what would settle it:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/predictions.py" record <branch-slug> \
+  --claim "<what this change should achieve, in falsifiable terms>" \
+  --check "<the command or observation that would settle it>" \
+  --date <YYYY-MM-DD>
+```
+
+Every change in a repo was justified at the time. What a repo never accumulates is evidence
+about whether the justifications were *right*, because the prediction is made here and the
+outcome arrives weeks later somewhere else, and nothing puts the two side by side. The
+result is a codebase where every decision looked sound and the overall direction cannot be
+evaluated. Thirty seconds now is the whole cost of fixing that.
+
+Make it falsifiable or do not write it. "This will improve quality" cannot be wrong and so
+is graded correct in hindsight, every time. "The hook will block frontmatter errors that CI
+would otherwise catch a day later, and I expect at least one in the next ten skill edits"
+can be wrong, which is the only reason to record it. The script refuses a prediction with
+no `--check` for exactly this reason.
+
 ---
 
 ## 4.5 PHASE 2.5 — ISOLATE (FULL + LIGHT; TRIVIAL skips)
@@ -96,9 +133,12 @@ Put the work in its own workspace before touching code, so changes never land
 uncommitted on a shared or deploy branch.
 
 Invoke the `start-branch` skill. It detects the repo's integration target (never
-hardcoded), auto-chooses a plain branch vs. a worktree, names the branch in Conventional
-Branch form, records a clean test baseline, and proposes a one-line plan you confirm
-before anything is created.
+hardcoded) and **records it on the branch** in git config, so the INTEGRATE phase and the
+QA gate recover that answer instead of re-deriving it — a re-run of the heuristic can pick
+a different target than the one this work forked from, and would discard the user's
+correction in the ambiguous case that made them correct it. It also auto-chooses a plain
+branch vs. a worktree, names the branch in Conventional Branch form, records a clean test
+baseline, and proposes a one-line plan you confirm before anything is created.
 
 - **On confirm:** implement (Phase 3) in the isolated branch/worktree.
 - **On decline:** continue in place — no branch. Integration (Phase 6.5) then has nothing
@@ -225,6 +265,20 @@ Rules: incremental only; bump test counts if changed materially; bump version nu
 1. Verify the final suite is green with no passing-test regression vs. the branch-point baseline (more tests than baseline is expected, not a regression).
 2. Version bump (FULL only): patch by default; minor for a designated major feature. LIGHT: skip unless notable.
 3. Capture lessons learned: a short note of what worked, what didn't, what was surprising. Persist to memory and/or docs if it's a notable milestone or a critical mistake; otherwise keep it to the conversation.
+
+   **Then settle any prediction that is now answerable** (FULL only):
+
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/predictions.py" list          # what is still open
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/predictions.py" verify <id> \
+     --verdict right|wrong|partial|unclear --evidence "<what the check showed>" --date <YYYY-MM-DD>
+   ```
+
+   Most predictions are not answerable at merge time — leave those open; the weekly
+   `curate` pass picks them up. Verify the ones whose check has already run, and **verify
+   them honestly**: the ledger's entire value is in its `wrong` entries, `list` says so
+   out loud when it has never recorded one, and the recorded claim cannot be edited to
+   match the outcome.
 4. Mark all tasks complete (TaskUpdate).
 5. Summary to the user: what was done, version bump, test count, open items.
 6. Debrief (FULL only), in plain language — **Findings** (what the results actually showed, with numbers), **Lessons learned**, **Recommendations**, **Path forward** (next 1–3 priorities).

@@ -35,6 +35,7 @@ runtime), substitute the absolute path to this skill's `scripts/` directory.
 | `/cms sync` | `sync.py [<root>]` | Cross-repo drift detector (regex allowlist of known-drift facts in `state/sync_facts.yaml`) |
 | `/cms migrate <path>` | `migrate.py <path>` | Propose-and-approve structural migration (extract to docs/, archive stale) |
 | `/cms render [<path>]` | `render.py [<repo>]` | Render `docs/ARCHITECTURE.md` → `docs/ARCHITECTURE.html` (+ `.txt` for agents). `--check` exits 1 when stale; `--publish` prints the publish manifest line |
+| `/cms triage` | `triage.py [--repo <p>] [--docs-dir <d>]` | Print the docs as a routing table — path, status, `ai_summary` — so a lookup reads one body instead of several |
 | — | `check_arch.py <html>` | Structural check on a rendered page's diagrams (overlaps, connectors through boxes, out-of-bounds) |
 
 Invoke this skill with `/crucible:cms`. The `/cms <subcommand>` forms above are
@@ -81,13 +82,11 @@ the conceptual interface — map them to the scripts as shown.
 
 ## Skill principles (why, not just what)
 
-- **ETH Zurich finding:** auto-generated CLAUDE.md content is ~20% more expensive and 0.5-2% worse on task success than hand-curated. This skill **moves structure, does not paraphrase prose**.
-- **Plain links are lazy, @path is eager:** discovered during a live migration when `@path` was incorrectly introduced as a "lazy-loading" mechanism. It is not. In the ecosystem this skill was built for, converting all `@path` to plain links cut session token load by ~39% (836 → 507 total CLAUDE.md lines across 6 repos).
-- **Codex 32 KiB cap + proximity hierarchy:** Claude loads the nearest CLAUDE.md first. Keep root lean, per-repo specialised, avoid duplication.
-- **UK Gov staleness pattern:** `last_reviewed_on + review_in → review_by` exposes doc expiry machine-readably.
-- **GitLab/Datadog tiered CI:** Error blocks, Warning informs — keeps enforcement trustworthy at scale.
-- **Nx/Kubernetes creation-time enforcement:** scaffold correctly at `/cms init` rather than audit retroactively.
-- **Skill content is lazy-loaded correctly:** skill descriptions are small and load at session start; the full skill body only loads on invocation. The right pattern for large reference content needed only for specific tasks.
+The rules above were each adopted from a measured finding rather than a preference —
+the ETH Zurich result on auto-generated context, the ~39% session-token drop from
+converting `@path` to plain links, the UK Gov staleness pattern, tiered Error/Warning
+enforcement, and creation-time scaffolding over retroactive audit. The citations and
+the numbers: [references/design-rationale.md](references/design-rationale.md).
 
 ## Shared state
 
@@ -96,24 +95,39 @@ it must survive a plugin update that overwrites the plugin dir, and it records o
 entry per repo — so inside a generic (Tier A) plugin it becomes domain content,
 which `tests/test_seam.py` rejects under ADR-001.
 
-Resolution order:
+The split that follows from it: **versioned starters inside the plugin, accumulated
+runtime data outside it.** `sync_facts.yaml` is shipped config; `size_history.json`
+is runtime state. Anything you add obeys the same rule.
 
-1. `CMS_STATE_DIR` env var, if set
-2. `${CLAUDE_PLUGIN_DATA}/cms-state` when running as a plugin
-3. `~/.claude/cms-state` — the default in ordinary use, since neither env var is
-   normally set
+Resolution order, migration behaviour and the per-file table:
+[references/shared-state.md](references/shared-state.md).
 
-State written by older versions is migrated out of `<skill>/state/` on first run
-and the legacy copy removed. The migration is non-destructive: an existing file at
-the new location always wins.
+## Retrieval: summaries before bodies
 
-Files:
+The `@path`-vs-plain-link rule above controls what is loaded *unconditionally*. This
+controls what is loaded *while looking for something* — the other half of the same bill,
+and the one that grows with the corpus.
 
-- `size_history.json` — per-repo CLAUDE.md line-count history (for the "grew >20%" warning). **Runtime state** — lives in the resolved state dir above.
-- `sync_facts.yaml` — regex allowlist of known-drift facts (ships empty; grows as you find drift). **Shipped config** — versioned with the plugin at `<skill>/state/`, which is why `sync`'s default `--facts` path points there. It must stay free of ecosystem-specific tokens.
+Searching by opening candidates costs the full text of everything you opened and were
+wrong about. At ten documents that is fine; at fifty, finding one page costs most of a
+context window. So documents may declare an optional **`ai_summary`** in frontmatter, and
+`triage.py` prints them as a routing table: read the table, pick one document, open that
+one.
 
-Anything you add here follows the same split: versioned starters in the plugin,
-accumulated runtime data outside it.
+Three rules make it work, and dropping any one of them turns the index back into a cost:
+
+- **A summary says what the document is and when to open it — never what is in it.** The
+  second kind is a second copy of the document, and it goes stale independently, which is
+  worse than having no summary at all.
+- **It is bounded** (`AI_SUMMARY_MAX_BYTES`, 1500 — about a short paragraph). It is re-read
+  on every triage pass, so an unbounded summary is charged again and again for content
+  you did not ask for. `check` raises a Warning past the cap.
+- **It is optional, and documents without one are listed anyway**, marked and sorted last.
+  An index that silently omitted them would route confidently around the part of the
+  corpus it cannot see.
+
+**Re-derive the summary whenever the body changes materially.** A summary describing the
+previous version is worse than none: it is trusted, and it is wrong.
 
 ## Rendered architecture view
 
@@ -123,50 +137,29 @@ add a second architecture document — a second hand-maintained file would doubl
 the staleness surface rather than solve it, so drift is made structurally
 impossible instead of merely policed.
 
-- Diagrams live in fenced ` ```archview ` blocks inside the markdown, the way
-  mermaid already does. One file to edit, one linter to satisfy.
-- A fenced ` ```archflow ` block walks an `archview` instead of redrawing it —
-  select a flow, everything off its path dims, prev/next steps through it. Same
-  boxes, so "what is here" and "what happens" cannot drift apart. It must sit
-  below the view it references, and every step id is checked at build time.
-- Repo-specific visuals go in a fenced ` ```html ` block and pass through
-  untouched — "the one thing this repo does" differs everywhere and cannot be
-  schema'd, so the format offers a socket rather than a type.
-- A view that is one unbranched chain of 4+ steps is laid out **serpentine**
-  (left to right, wrapping) rather than one row per step. Automatic. A pipeline
-  through the layered engine is a column ~800px tall — worse than the list it
-  replaced.
-- `check` warns when a doc describes a sequence of 4+ steps in prose and has no
-  `archflow`. That exact omission went unnoticed for weeks: the capability had
-  shipped and the content had not, which nothing that checks *whether the page
-  builds* can see.
-- A fenced ` ```archstat ` block renders a gauge row: the few facts worth having
-  before the prose. Values are written, never computed — a gauge row is where
-  "STRUCTURE ONLY, NO RUNTIME STATE" usually dies.
-- A fenced ` ```archplot ` block draws a mechanism as a plot: series, thresholds,
-  bands, vertical marks, and gated spans derived from a named series. Generated
-  data must declare `"schematic": true` or the render refuses. Use ` ```html ` when
-  the figure is not a plot.
-- `[[ok:…]]` / `[[warn:…]]` / `[[bad:…]]` / `[[mute:…]]` render inline state
-  pills, usable in any table cell. Four states and no more; the label carries the
-  meaning so they survive greyscale and print.
-- `site.py <root>` builds a **multi-repo site** from the markdown already in the
-  repos, driven by a `site.toml` that lists repositories and nothing else: a page
-  exists if its sources exist. Adds nav, a home page, cross-repo diagram links and
-  inline search. Details in `references/architecture-views.md`.
-- `published_url` in frontmatter binds the page to one address: the footer links
-  it, and `--publish` redeploys there. Without it every publish mints a new link
-  and the old ones rot in place, indistinguishable from the current one.
-- The palette accent comes from frontmatter (`accent: "#RRGGBB"`), so visual
-  identity belongs to the repo, not to this skill.
-- Staleness is gated on **content hashes of both the source and the renderer**,
-  never mtimes — git does not preserve mtimes, so a checkout reports a
-  byte-identical page as stale. `check` surfaces it as a Warning, never an Error:
-  a gate that blocks on a regenerable artifact is one people learn to bypass.
-- **`check_arch.py` is the authority on layout, not the eye.** Layout engines do
-  not fail loudly; they emit a connector through a box and it looks plausible.
+Diagrams and figures live in fenced blocks inside that one markdown file, the way
+mermaid already does — ` ```archview ` (structure), ` ```archflow ` (a walk over an
+existing view, so "what is here" and "what happens" cannot drift apart),
+` ```archstat ` (a gauge row), ` ```archplot ` (a mechanism as a plot), and ` ```html `
+as the escape hatch for the one visual a schema cannot anticipate. `site.py <root>`
+builds a multi-repo site from the markdown already in the repos.
 
-Full schema, view catalogue and authoring rules: [references/architecture-views.md](references/architecture-views.md).
+Four rules bind whenever you touch these; everything else is schema:
+
+- **`check_arch.py` is the authority on layout, not the eye.** Layout engines do not
+  fail loudly — they route a connector through a box and it looks plausible.
+- **Staleness is gated on content hashes of the source and the renderer, never
+  mtimes** — git does not preserve mtimes, so a fresh checkout would report a
+  byte-identical page as stale. `check` raises it as a Warning, never an Error: a
+  gate that blocks on a regenerable artifact is one people learn to bypass.
+- **`check` warns when prose describes a sequence of 4+ steps and no `archflow`
+  renders it.** That omission went unnoticed for weeks — the capability had shipped
+  and the content had not, which nothing checking *whether the page builds* can see.
+- **Generated plot data must declare `"schematic": true`** or the render refuses; a
+  gauge row is where "STRUCTURE ONLY, NO RUNTIME STATE" usually dies.
+
+Block schemas, the view catalogue, `site.toml`, state pills, `published_url`, `accent`
+and the authoring rules: [references/architecture-views.md](references/architecture-views.md).
 
 ## Hook scope
 

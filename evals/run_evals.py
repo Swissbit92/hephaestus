@@ -32,13 +32,28 @@ from harness import runner, scoring  # noqa: E402
 from harness.model import Criterion  # noqa: E402
 
 
+def _utf8_stdio() -> None:
+    """Force UTF-8 on the streams this script writes to.
+
+    Windows consoles default to a legacy codepage (commonly cp1252), so a single em-dash
+    or check-mark in otherwise successful output raises UnicodeEncodeError *after* the
+    work is done — turning a passing gate into exit 1, which reads as a real failure.
+    Reconfiguring is a no-op on platforms that are already UTF-8.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass  # a detached or captured stream (pytest); nothing to reconfigure
+
+
 def make_cli_judge(model: str):
     """A judge_fn that calls the pinned Claude model via the CLI and returns its text."""
     def judge_fn(prompt: str) -> str:
         r = subprocess.run(
             ["claude", "--bare", "-p", prompt, "--settings", json.dumps({"model": model}),
              "--output-format", "json"],
-            capture_output=True, text=True, timeout=180,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180,
         )
         if r.returncode != 0:
             raise RuntimeError(f"judge CLI failed: {r.stderr[:200]}")
@@ -46,7 +61,7 @@ def make_cli_judge(model: str):
     return judge_fn
 
 
-def run_scenario(scenario: dict, k: int, model: str | None, judge_fn) -> dict:
+def run_scenario(scenario: dict, k: int, model: str | None, judge_fn, bare=False) -> dict:
     plugin_root = REPO_ROOT / "plugins" / scenario["plugin"]
     runs: list[list[Criterion]] = []
     for i in range(k):
@@ -63,6 +78,7 @@ def run_scenario(scenario: dict, k: int, model: str | None, judge_fn) -> dict:
                 scenario["prompt"], fixture_dir, plugin_root,
                 model=model, env=env, allowed_tools=scenario.get("allowed_tools"),
                 timeout=scenario.get("timeout", runner.DEFAULT_TIMEOUT),
+                bare=bare,
             )
             target_loaded = scenario["plugin"] in run.loaded_plugins
             criteria: list[Criterion] = [
@@ -84,6 +100,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--scenario", help="run only this scenario id (default: all)")
     ap.add_argument("-k", type=int, default=3, help="runs per scenario (pass^k); default 3")
     ap.add_argument("--model", help="pin the model under test (e.g. claude-sonnet-4-6)")
+    ap.add_argument("--bare", action="store_true",
+                    help="hermetic run: ignore ~/.claude and authenticate via "
+                         "ANTHROPIC_API_KEY. Required in CI, which has no logged-in "
+                         "session; omit it locally to use your existing login for free")
     ap.add_argument("--judge", action="store_true", help="enable optional LLM-judge criteria")
     ap.add_argument("--json", help="write the full JSON report here")
     ap.add_argument("--baseline", help="baseline JSON: compare against it; freeze if absent")
@@ -105,7 +125,7 @@ def main(argv: list[str]) -> int:
     summaries = []
     for s in scenarios:
         print(f"▶ {s['id']}  (k={args.k}) …", flush=True)
-        summary = run_scenario(s, args.k, args.model, judge_fn)
+        summary = run_scenario(s, args.k, args.model, judge_fn, bare=args.bare)
         mark = "✔" if summary["passed"] else "✘"
         print(f"  {mark} {'PASS' if summary['passed'] else 'FAIL'}  "
               f"pass^k={summary['pass_hat_k']} avg={summary['avg_at_k']}")
@@ -135,4 +155,5 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
+    _utf8_stdio()
     sys.exit(main(sys.argv[1:]))

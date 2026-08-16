@@ -307,7 +307,7 @@ def _run_hook(payload: dict, state_dir: Path) -> subprocess.CompletedProcess:
     env["LOOP_HARNESS_STATE_DIR"] = str(state_dir)
     return subprocess.run(
         [sys.executable, str(HOOK_PY)],
-        input=json.dumps(payload), capture_output=True, text=True, env=env,
+        input=json.dumps(payload), capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
     )
 
 
@@ -331,7 +331,7 @@ def test_hook_subprocess_allows_safe_when_armed(tmp_path):
 def test_hook_subprocess_fails_open_on_bad_stdin(tmp_path):
     env = dict(os.environ)
     env["LOOP_HARNESS_STATE_DIR"] = str(tmp_path)
-    r = subprocess.run([sys.executable, str(HOOK_PY)], input="not json", capture_output=True, text=True, env=env)
+    r = subprocess.run([sys.executable, str(HOOK_PY)], input="not json", capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     assert r.returncode == 0 and "could not parse" in r.stderr
 
 
@@ -468,7 +468,7 @@ def test_logscan_strips_ansi_color():
 def test_logscan_cli_reads_stdin(tmp_path):
     env = dict(os.environ)
     r = subprocess.run([sys.executable, str(LOGSCAN_PY)], input="3 failed, 7 passed in 1s",
-                       capture_output=True, text=True, env=env)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     assert r.returncode == 0 and json.loads(r.stdout)["failed"] == 3
 
 

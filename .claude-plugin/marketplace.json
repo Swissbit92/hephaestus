@@ -9,37 +9,63 @@
     {
       "name": "crucible",
       "source": "./plugins/crucible",
-      "description": "Doc-discipline (cms — linting and ADRs, plus a rendered HTML view of any document and a multi-repo documentation site built from the markdown already in the repos), a sparring partner for ideas still being formed (spar-with-me), adversarial stress-testing once they harden (grill-me), a structured development workflow (develop), a safe branch lifecycle (start-branch / finish-branch), eval-first development (freeze a baseline, gate on match-or-beat-or-revert), flag-gate (default-OFF rollout with instant revert), bounded read-only agent loops (loop-harness), irreversible-action discipline (act-for-real), and recurring whole-repo health audits (repo-audit).",
+      "description": "Doc-discipline (cms — linting and ADRs, plus a rendered HTML view of any document and a multi-repo documentation site built from the markdown already in the repos), a sparring partner for ideas still being formed (spar-with-me), adversarial stress-testing once they harden (grill-me), a structured development workflow (develop), a safe branch lifecycle (start-branch / finish-branch), eval-first development (freeze a baseline, gate on match-or-beat-or-revert), flag-gate (default-OFF rollout with instant revert), bounded read-only agent loops (loop-harness), irreversible-action discipline (act-for-real), and recurring whole-repo health audits (repo-audit), a diff-scoped quality audit (refactor-audit) and skill-craft, which authors, distils and lints the skills themselves.",
       "category": "productivity",
-      "tags": ["documentation", "workflow", "review", "static-site"]
+      "tags": [
+        "documentation",
+        "workflow",
+        "review",
+        "static-site"
+      ]
     },
     {
       "name": "sqlite-readonly",
       "source": "./plugins/sqlite-readonly",
       "description": "Zero-config read-only SQLite MCP server — safely query any local .db (3-layer read-only enforcement, schema introspection, natural-language→SQL).",
       "category": "data",
-      "tags": ["sqlite", "mcp", "read-only", "sql", "database"]
+      "tags": [
+        "sqlite",
+        "mcp",
+        "read-only",
+        "sql",
+        "database"
+      ]
     },
     {
       "name": "mcp-starter",
       "source": "./plugins/mcp-starter",
       "description": "A minimal, working template for packaging a Python MCP server as a Claude Code plugin — userConfig injection, inline mcpServers, uv-isolated server, first-run hook, /setup wizard.",
       "category": "productivity",
-      "tags": ["mcp", "template", "starter", "scaffold"]
+      "tags": [
+        "mcp",
+        "template",
+        "starter",
+        "scaffold"
+      ]
     },
     {
       "name": "second-brain",
       "source": "./plugins/second-brain",
-      "description": "Obsidian inbox processor — proposes tags, links, filing, and action items for your notes, but never commits without your per-item approval. Suggest-then-confirm.",
+      "description": "Obsidian inbox processor — proposes tags, links, filing, and action items for your notes, but never commits without your per-item approval, and computes the vault health report (orphans, broken links, stale notes, tag variants) with a deterministic stdlib script so it can be trended. Suggest-then-confirm.",
       "category": "productivity",
-      "tags": ["obsidian", "notes", "pkm", "second-brain"]
+      "tags": [
+        "obsidian",
+        "notes",
+        "pkm",
+        "second-brain"
+      ]
     },
     {
       "name": "deck-builder",
       "source": "./plugins/deck-builder",
       "description": "Build polished .pptx decks from source material — code-backed (named layout methods, never hand-rolled geometry), mandatory outline-approval gate, research-backed design rules.",
       "category": "productivity",
-      "tags": ["pptx", "powerpoint", "slides", "presentation"]
+      "tags": [
+        "pptx",
+        "powerpoint",
+        "slides",
+        "presentation"
+      ]
     }
   ]
 }
