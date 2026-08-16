@@ -9,7 +9,7 @@ applies_to: hephaestus
 
 # Loop Engineering — 2024/2025 State of the Art
 
-> Research note backing the **Phase 3 CI Sweeper** design ([ROADMAP](ROADMAP.md)).
+> Research note backing the **Phase 3 CI Sweeper** design ([ROADMAP](../ROADMAP.md)).
 > Produced 2026-06-28 via the `deep-research` harness: 22 sources, 25 claims verified
 > (24 confirmed, 1 killed), 8 synthesized findings, 3-vote adversarial verification.
 > **Time-sensitive** — benchmark leaderboards drift; re-verify numbers before relying on them.

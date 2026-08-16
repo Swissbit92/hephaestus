@@ -35,8 +35,12 @@ Reference-style: tables and diagrams, not prose narratives.
 
 ## Cross-repo contracts
 
-Link any shared/canonical contracts this repo depends on (plain links, never `@path`):
-- [TBD shared contract](../docs/shared/TBD.md)
+Link any shared/canonical contracts this repo depends on (plain links, never `@path`).
+
+hephaestus has none: it is a single repository with no root-level `docs/shared/`, so every
+contract it depends on is internal. The scaffolded placeholder that used to sit here pointed
+at a file that has never existed — caught by the link check added with ADR-003, which is
+exactly the rot that check is for.
 
 ## Decisions
 
