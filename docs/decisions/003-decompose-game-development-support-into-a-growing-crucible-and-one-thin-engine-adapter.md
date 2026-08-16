@@ -1,6 +1,6 @@
 ---
 title: Decompose game-development support into a growing crucible and one thin engine adapter
-status: Proposed
+status: Accepted
 created: 2026-08-16
 last_reviewed_on: 2026-08-16
 review_in: 24 months
@@ -173,7 +173,7 @@ checkable in CI.
 
 ## Status
 
-Proposed
+Accepted — implemented 2026-08-16 on `feature/adr-003-plugin-decomposition`.
 
 ## Consequences
 

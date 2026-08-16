@@ -44,7 +44,8 @@ human) can pick it up cold.
 
 | Plugin | What it is |
 |--------|------------|
-| **crucible** | Generic craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `eval-first`, `flag-gate`, `skill-craft`, `loop-harness`, `act-for-real`, `repo-audit` (detailed below). |
+| **crucible** | Generic craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `sync-branch`, `finish-branch`, `qa-gatekeeper`, `eval-first`, `flag-gate`, `skill-craft`, `loop-harness`, `act-for-real`, `repo-audit` (detailed below). |
+| **forge-unity** | The Unity half of an evidence-gated workflow: an asset-integrity sweep for the failures neither the compiler nor a test suite can see, plus an adapter contract (`.forge/adapter.json`) that lets a published plugin drive commands it cannot ship. Ships no engine reference material by design — see [ADR-003](docs/decisions/003-decompose-game-development-support-into-a-growing-crucible-and-one-thin-engine-adapter.md). |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server — query any local `.db` safely (3-layer read-only, schema introspection, NL→SQL). See [its README](plugins/sqlite-readonly/README.md). |
 | **mcp-starter** | A minimal, working template for packaging a Python MCP server as a plugin (userConfig injection, inline servers, uv, first-run hook, `/setup`). See [its README](plugins/mcp-starter/README.md). |
 | **second-brain** | Obsidian inbox processor — proposes tags/links/filing/actions per note, applies only what you approve (suggest-then-confirm). See [its README](plugins/second-brain/README.md). |
@@ -87,9 +88,12 @@ docs go through **cms**; LLM-backed or behavior-changing steps slot in **eval-fi
 
 ## Install
 
+### Claude Code
+
 ```
 /plugin marketplace add Swissbit92/hephaestus
-/plugin install crucible@hephaestus            # generic craft tools
+/plugin install crucible@hephaestus             # generic craft tools
+/plugin install forge-unity@hephaestus          # Unity evidence + adapter contract
 /plugin install sqlite-readonly@hephaestus      # read-only SQLite MCP server (needs uv)
 /plugin install mcp-starter@hephaestus          # MCP-plugin template
 ```
@@ -100,7 +104,31 @@ Then the tools are namespaced under the plugin:
 - `/crucible:spar-with-me` — think an idea through with research and an honest take (read-only)
 - `/crucible:grill-me` — stress-test a decision you've already reached
 - `/crucible:develop` — run the development workflow
-- `/crucible:start-branch` · `/crucible:finish-branch` — isolate / integrate work safely
+- `/crucible:start-branch` · `/crucible:sync-branch` · `/crucible:finish-branch` — isolate,
+  keep current, integrate
+- `/forge-init` — declare a Unity project's own commands so the forge skills can reach them
+
+### Codex and Pi
+
+Those agents have no plugin container — they discover **skill directories**. So the portable
+subset is exactly the skills, and slash commands, subagents, hooks and MCP servers are
+Claude Code only. That asymmetry is printed rather than assumed, because a skill that
+silently loses its hook looks like it works while the guarantee is gone:
+
+```bash
+python3 scripts/install_skills.py --repo .                     # print the plan; writes nothing
+python3 scripts/install_skills.py --repo . --agent codex --apply
+python3 scripts/install_skills.py --repo . --apply --report     # all three + what cannot travel
+```
+
+Targets `~/.claude/skills`, `~/.codex/skills`, `~/.pi/agent/skills`. It links rather than
+copies, so one fix reaches every agent — except where the platform refuses symlinks
+(Windows without Developer Mode), where it copies and **says so**, because a silent copy is
+the drift it exists to prevent.
+
+Every skill here stays inside the frontmatter set all three agents honour — `name`,
+`description`, `disable-model-invocation`, `metadata` — and `skill_lint.py` warns on
+anything else, so portability is enforced rather than remembered.
 
 `cms`, `spar-with-me`, and `grill-me` are also model-invoked: Claude triggers them automatically when their description matches what you're doing (editing docs, asking for an honest take on an idea, validating a decision).
 
@@ -148,17 +176,23 @@ interpreters rather than failing obscurely. Everything else runs on the floor.
 ```
 hephaestus/
 ├── .claude-plugin/marketplace.json     # marketplace catalog (lists all plugins)
-├── scripts/                            # release.sh · bump_version.py · validate_manifests.py · check-public-safe.sh
+├── scripts/                            # release.sh · bump_version.py · validate_manifests.py
+│                                       # check-public-safe.sh · python_floor.py · install_skills.py
 ├── evals/                              # skill-eval harness (behavioral scenarios)
 ├── tests/                              # pytest suite
-├── docs/                               # ROADMAP · decisions/ (ADRs) · research/ — cms-managed
+├── docs/                               # ROADMAP · INVARIANTS · decisions/ (ADRs) · research/ — cms-managed
 ├── VISION.md · CHANGELOG.md · CONTRIBUTING.md
 └── plugins/
     ├── crucible/                        # flagship craft tools (see plugins/crucible/README.md)
     │   ├── .claude-plugin/plugin.json   # manifest + cms & loop-harness PreToolUse hooks
-    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,skill-craft,eval-first,flag-gate,loop-harness,act-for-real,repo-audit}/
-    │   ├── commands/develop.md
+    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,sync-branch,finish-branch,skill-craft,eval-first,flag-gate,loop-harness,act-for-real,repo-audit,refactor-audit}/
+    │   ├── scripts/                     # detect_profile · evidence_gate · coverage_delta · skill_lint · predictions
+    │   ├── commands/{develop,curate}.md
     │   └── agents/qa-gatekeeper.md
+    ├── forge-unity/                    # Unity evidence + the .forge/adapter.json contract
+    │   ├── skills/{unity-bridge,unity-asset-integrity}/
+    │   ├── scripts/{adapter.py,asset_integrity.py}
+    │   └── commands/forge-init.md
     ├── sqlite-readonly/                # read-only SQLite MCP server
     ├── mcp-starter/                    # MCP-plugin packaging template
     ├── second-brain/                   # Obsidian inbox processor
