@@ -102,9 +102,14 @@ patterns in, private content out.
 We build hephaestus *using* crucible. For non-trivial work:
 
 1. `develop` — classify (FULL / LIGHT / TRIVIAL) and run the matching phases.
+   FULL records a falsifiable prediction before implementing and settles it at completion.
 2. `start-branch` (FULL/LIGHT) — isolate on a feature branch before touching code.
 3. Implement → QA (tests green, no regression, `check-public-safe.sh` clean) → docs.
 4. `finish-branch` (FULL/LIGHT) — test-gated merge/PR + safe cleanup.
+
+Periodically — monthly, or after a burst of work — run `curate`: a maintenance pass over
+the skills, docs, recent changes and open predictions that produces a ranked backlog.
+`develop` builds; `curate` is what keeps the fabric from silently accumulating debt.
 
 Do **not** push or cut a release without an explicit go from the maintainer.
 
@@ -128,8 +133,8 @@ hephaestus/
     ├── crucible/
     │   ├── .claude-plugin/plugin.json
     │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,skill-craft,eval-first,flag-gate,loop-harness,act-for-real,repo-audit,refactor-audit}/
-    │   ├── scripts/                 # detect_profile · coverage_delta · invariants_run · new_skill · skill_lint (+ hook)
-    │   ├── commands/develop.md
+    │   ├── scripts/                 # detect_profile · coverage_delta · invariants_run · new_skill · skill_lint (+ hook) · predictions
+    │   ├── commands/{develop,curate}.md
     │   └── agents/qa-gatekeeper.md
     ├── sqlite-readonly/         # read-only SQLite MCP server (uv project under servers/)
     ├── mcp-starter/             # MCP-plugin packaging template
