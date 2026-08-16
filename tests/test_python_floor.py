@@ -110,13 +110,51 @@ def test_multiline_fstring_expression_is_caught(tmp_path):
     assert "spans multiple lines" in r.stdout
 
 
+def _host_parses(src: str) -> bool:
+    """Whether the interpreter running the tests can parse this at all."""
+    try:
+        ast.parse(src)
+        return True
+    except SyntaxError:
+        return False
+
+
 def test_new_grammar_is_caught_at_the_floor(tmp_path):
-    """`match` is 3.10 grammar; at a 3.9 floor it must fail even though it parses here."""
-    _w(tmp_path, "m.py", "def f(x):\n    match x:\n        case 1:\n            return 2\n")
+    """`match` is 3.10 grammar, so a 3.9 floor must reject it.
+
+    The second assertion is conditional, and the reason is the third distinct way
+    `feature_version` has misled this module — it is worth stating rather than working
+    around. **`feature_version` can only make the parser stricter, never more permissive.**
+    Running on 3.9, `ast.parse(src, feature_version=(3, 10))` still cannot parse `match`,
+    because the host parser has no such grammar to enable. It is not a version simulator;
+    it is a restriction on the host's own parser.
+
+    So "a higher floor accepts it" is only a meaningful claim on a host that can parse it,
+    and asserting it unconditionally fails on exactly the oldest interpreter this matrix
+    exists to cover. Caught by CI on 3.9 — the job doing its job, on my test rather than
+    on the shipped code.
+    """
+    match_src = "def f(x):\n    match x:\n        case 1:\n            return 2\n"
+    _w(tmp_path, "m.py", match_src)
+
     r = _run("--repo", str(tmp_path), "--floor", "3.9")
     assert r.returncode == 1, r.stdout + r.stderr
-    r_ok = _run("--repo", str(tmp_path), "--floor", "3.10")
-    assert r_ok.returncode == 0, r_ok.stdout + r_ok.stderr
+
+    if _host_parses(match_src):
+        r_ok = _run("--repo", str(tmp_path), "--floor", "3.10")
+        assert r_ok.returncode == 0, r_ok.stdout + r_ok.stderr
+
+
+def test_feature_version_cannot_grant_grammar_the_host_lacks():
+    """Pins the limitation itself, so the conditional above is never 'simplified' away."""
+    match_src = "def f(x):\n    match x:\n        case 1:\n            return 2\n"
+    if _host_parses(match_src):
+        return  # 3.10+: nothing to demonstrate here
+    try:
+        ast.parse(match_src, feature_version=(3, 10))
+        raise AssertionError("feature_version unexpectedly upgraded the host parser")
+    except SyntaxError:
+        pass  # the documented behaviour, and the reason the assertion above is guarded
 
 
 # --- stdlib newer than the floor --------------------------------------------------------
