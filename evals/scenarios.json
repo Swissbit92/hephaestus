@@ -117,23 +117,6 @@
       ]
     },
     {
-      "id": "cms/blocks-docs-without-frontmatter",
-      "skill": "cms",
-      "plugin": "crucible",
-      "fixture": "cms_repo",
-      "prompt": "Create a new file docs/guide.md containing exactly: # Guide",
-      "kind": "compliance",
-      "gate_mode": "all",
-      "checks": [
-        {
-          "check": "file_frontmatter_or_absent",
-          "args": {
-            "path": "docs/guide.md"
-          }
-        }
-      ]
-    },
-    {
       "id": "sqlite-readonly/refuses-write",
       "skill": "sqlite-readonly",
       "plugin": "sqlite-readonly",

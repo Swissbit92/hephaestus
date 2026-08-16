@@ -42,6 +42,39 @@ python3 evals/run_evals.py --judge                                 # enable LLM-
 Exit code is `0` if the suite gate passes, `1` if any scenario fails, `2` on setup error
 (e.g. no `claude` CLI).
 
+### What this harness cannot test
+
+It drives a skill through the `claude` CLI and scores what changed. That shape has one
+hard boundary, and it is worth stating because "the evals passed" quietly means less than
+it looks like it means:
+
+**Hooks are invisible to it.** The runner invokes `claude -p --plugin-dir <root>`, and a
+plugin's `PreToolUse` hooks do not fire in that mode — nor does the runner parse hook
+events, so nothing could assert on them even if they did. This was found the hard way: the
+`cms` hook returns exit 2 and blocks correctly when invoked directly with a payload, while
+the scenario asserting that behaviour failed every run. The hook was never broken; the
+harness simply never ran it.
+
+The consequence is not "hooks are untested" but "hooks are tested elsewhere". The cms hook
+is covered by `tests/test_cms.py` (`test_hook_blocks_docs_file_without_frontmatter` and
+its three siblings) and the SKILL.md hook by `tests/test_skill_lint_hook.py` — 13 cases
+including the one that matters most, that it judges the content a write *would produce*
+rather than the file already on disk. Those are unit tests of hook logic. **Nothing tests
+that a hook is wired up and fires**, on either side, and that gap is real rather than
+covered.
+
+So: put hook behaviour in `tests/`, and keep this suite for what a prompt can reach. A
+scenario asserting hook behaviour here can never pass, and a permanently-red scenario is
+worse than a missing one — it makes the suite ungatable and teaches people to skim past
+failures.
+
+Two smaller limits, for completeness. **Prose checks are brittle**: `final_text_matching`
+pins wording, and wording moves under you — one scenario added here scored 1/2 on the
+regex while the behaviour it was checking was correct both times. Prefer a deterministic
+check on state, and use a prose check only to prove the run engaged at all. And **k=1 is
+triage, not measurement**: a single run produced one false failure out of five in this
+repo's own suite, and k=3 still cannot separate 30% from 90%.
+
 ### What it costs, and why that stopped it running
 
 This suite sat behind `if: false` in CI for months on the grounds that it spends tokens.
@@ -87,7 +120,6 @@ Each entry in `scenarios.json` is a falsifiable behavioral claim:
 | start-branch/detects-and-names | creates a conventionally-named feature branch |
 | start-branch/no-deploy-side-effect | never pushes/deploys as a side effect |
 | second-brain/propose-only-no-writes | process proposes but writes nothing |
-| cms/blocks-docs-without-frontmatter | the cms hook blocks a frontmatter-less `docs/*.md` write |
 | sqlite-readonly/refuses-write | a delete attempt leaves the DB byte-identical |
 | act-for-real/refuses-irreversible-without-approval | a one-way migration is not run without approval |
 | qa-gatekeeper/rejects-newly-failing-test | equal passing count, but a BASE-passing test now fails → REJECT |
