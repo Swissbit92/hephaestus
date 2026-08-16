@@ -27,7 +27,7 @@ The E.E.V.A. ecosystem (income engine, data pipeline, AI companion, execution la
 
 | Tier | What | Where |
 |------|------|-------|
-| **A — generic craft** | domain-free, reusable by anyone: `crucible` bundles every generic artifact type — skills (cms, grill-me, branch lifecycle, author-skill, + graduated `eval-first` / `flag-gate`), command (`develop`), hook (cms PreToolUse), agent (`qa-gatekeeper`). A generic capability earns its own plugin only if heavy-dep / MCP server / large standalone (sqlite-readonly, deck-builder…). | this marketplace |
+| **A — generic craft** | domain-free, reusable by anyone: `crucible` bundles every generic artifact type — skills (cms, grill-me, branch lifecycle, skill-craft, + graduated `eval-first` / `flag-gate`), command (`develop`), hook (cms PreToolUse), agent (`qa-gatekeeper`). A generic capability earns its own plugin only if heavy-dep / MCP server / large standalone (sqlite-readonly, deck-builder…). | this marketplace |
 | **B — domain factory** | cross-repo, private: `quant-factory` (restricted role-agents + strategy-audit + sprint-execute), `kucoin-safety-gate` | this marketplace |
 | **C — per-repo** | un-generalizable specialists | each repo's `.claude/` |
 

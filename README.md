@@ -12,7 +12,7 @@ between phases, a safe branch lifecycle (`start-branch` / `finish-branch` that n
 red suite), documentation discipline (`cms`), a sparring partner for an idea you're still forming
 (`spar-with-me`) and an adversarial decision-tester for once it's hardened (`grill-me`),
 eval-first change-gating (`eval-first` + `flag-gate`, so a change has to match-or-beat its baseline
-before it ships), a skill-authoring guide (`author-skill`), and `loop-harness` — a bounded,
+before it ships), a skill-authoring guide (`skill-craft`), and `loop-harness` — a bounded,
 single-threaded, **read-only** agent-loop primitive (turn/budget ceilings, a `LOOP-STATE` ledger,
 a worktree-only safety hook, and a one-command CI sweep). Around it sit focused standalone plugins:
 a zero-config read-only SQLite MCP server, an Obsidian inbox processor, a code-backed `.pptx` deck
@@ -40,7 +40,7 @@ human) can pick it up cold.
 
 | Plugin | What it is |
 |--------|------------|
-| **crucible** | Generic craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `eval-first`, `flag-gate`, `author-skill`, `loop-harness`, `act-for-real`, `repo-audit` (detailed below). |
+| **crucible** | Generic craft tools: `cms`, `spar-with-me`, `grill-me`, `develop`, `start-branch`, `finish-branch`, `qa-gatekeeper`, `eval-first`, `flag-gate`, `skill-craft`, `loop-harness`, `act-for-real`, `repo-audit` (detailed below). |
 | **sqlite-readonly** | Zero-config read-only SQLite MCP server — query any local `.db` safely (3-layer read-only, schema introspection, NL→SQL). See [its README](plugins/sqlite-readonly/README.md). |
 | **mcp-starter** | A minimal, working template for packaging a Python MCP server as a plugin (userConfig injection, inline servers, uv, first-run hook, `/setup`). See [its README](plugins/mcp-starter/README.md). |
 | **second-brain** | Obsidian inbox processor — proposes tags/links/filing/actions per note, applies only what you approve (suggest-then-confirm). See [its README](plugins/second-brain/README.md). |
@@ -59,7 +59,7 @@ human) can pick it up cold.
 | **qa-gatekeeper** | agent | Skeptical QA gate used by `develop`'s Phase 4 — verifies stated changes, hunts bugs/orphaned code, runs tests, and returns PASS / CONDITIONAL PASS / REJECT. |
 | **eval-first** | skill | Eval-first development — freeze a baseline, then gate every change on match-or-beat-or-revert. Deterministic-first checks → swap-augmented blind A/B judge (with self-grading guard) → `verdict`. Generic stdlib scripts + scaffolding templates; domain scorers plug in via injected `judge_fn`/`embed_fn`. |
 | **flag-gate** | skill | Default-OFF feature-flag rollout with instant revert — ship behind a flag, keep the legacy path byte-identical, flip only on an eval-first gate, revert by flipping off, retire after soak. Pairs with `eval-first`. |
-| **author-skill** | skill | Guide + scaffolder for writing a high-quality skill/plugin — lays out the authoring patterns (with real exemplars) and creates a pre-structured `SKILL.md` via the plugin's `scripts/new_skill.py`. User-invoked. |
+| **skill-craft** | skill | Build, distil and check skills. Three modes: `author` (scaffold + coach), `distil` (turn a session into a reusable skill), `lint` (budget + cross-skill duplication via the plugin's `scripts/skill_lint.py`). User-invoked. |
 | **loop-harness** | skill | Run a bounded, single-threaded, **read-only** agent loop safely — hard turn/budget ceilings + cost log (`loop_budget`), a `LOOP-STATE` ledger for memory (`loop_ledger`), a `PreToolUse` safety hook that blocks merge/push/out-of-worktree while a loop is armed (`loop_hook`), a test-log summarizer (`loop_logscan`), and `loop_sweep` — one command for a read-only CI sweep → needs-me report. Single-threaded, *not* role-teams (evidence-backed). |
 | **act-for-real** | skill | The inverse of `loop-harness`: for when you **must** act irreversibly on a **live system you often don't own** (money movement, credential rotation, one-way migration, registrar/DNS, real mail). Classify reversibility → bind authority to the *exact* action → never fabricate a real-world identifier → **verify from a fresh read, not from the call** → emit an `ACTION RECORD` or say `UNVERIFIED`. Fires rarely by design (evidence-backed). |
 
@@ -146,7 +146,7 @@ hephaestus/
 └── plugins/
     ├── crucible/                        # flagship craft tools (see plugins/crucible/README.md)
     │   ├── .claude-plugin/plugin.json   # manifest + cms & loop-harness PreToolUse hooks
-    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,author-skill,eval-first,flag-gate,loop-harness,act-for-real,repo-audit}/
+    │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,skill-craft,eval-first,flag-gate,loop-harness,act-for-real,repo-audit}/
     │   ├── commands/develop.md
     │   └── agents/qa-gatekeeper.md
     ├── sqlite-readonly/                # read-only SQLite MCP server
