@@ -37,7 +37,12 @@ PLUGIN_DIR="$REPO_ROOT/plugins/$PLUGIN"
 MANIFEST="$PLUGIN_DIR/.claude-plugin/plugin.json"
 [[ -d "$PLUGIN_DIR" ]] || die "plugin not found: plugins/$PLUGIN (expected a dir under plugins/)"
 [[ -f "$MANIFEST" ]] || die "manifest not found: $MANIFEST"
-command -v python3 >/dev/null || die "python3 not found on PATH"
+# Resolve an interpreter that actually RUNS. `command -v python3` is not evidence on
+# Windows: the name normally resolves to the Microsoft Store App Execution Alias, which
+# prints an install ad, runs nothing and exits 49 — so the old guard passed and the very
+# next line died. Cutting a release is exactly where a half-executed script is worst,
+# since it can leave a version bumped and untagged.
+. "$REPO_ROOT/scripts/checks/_python.sh"
 
 # --- Preconditions -----------------------------------------------------------
 branch="$(git rev-parse --abbrev-ref HEAD)"
@@ -45,8 +50,8 @@ branch="$(git rev-parse --abbrev-ref HEAD)"
 [[ -z "$(git status --porcelain)" ]] || die "working tree not clean — commit or stash first"
 
 # --- Compute next version (math lives in bump_version.py, unit-tested) --------
-CUR="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$MANIFEST")"
-NEW="$(python3 "$REPO_ROOT/scripts/bump_version.py" "$CUR" "$BUMP")" || die "version bump failed"
+CUR="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$MANIFEST")"
+NEW="$("$PY" "$REPO_ROOT/scripts/bump_version.py" "$CUR" "$BUMP")" || die "version bump failed"
 TAG="${PLUGIN}-v$NEW"
 
 git rev-parse "$TAG" >/dev/null 2>&1 && die "tag $TAG already exists"
@@ -74,7 +79,7 @@ fi
 # unreadable in the file, and a spurious diff on every subsequent release. Encoding is
 # pinned rather than left to the platform default for the same reason the plugin scripts
 # pin it: that default is cp1252 on Windows.
-python3 - "$MANIFEST" "$NEW" <<'PY'
+"$PY" - "$MANIFEST" "$NEW" <<'PY'
 import json, sys
 p, new = sys.argv[1], sys.argv[2]
 with open(p, encoding="utf-8") as f:
