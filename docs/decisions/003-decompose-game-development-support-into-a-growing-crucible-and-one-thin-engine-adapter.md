@@ -203,12 +203,38 @@ public-safe surface permanently.
    triple mechanically instead of by manual reading.
 6. Declare the crucible ↔ project seam in the consuming repo's `CLAUDE.md`.
 
-**Unverified, and load-bearing for the size of `forge-unity`.** Whether Unity's official
-MCP or the CoplayDev server reaches a running **standalone development Player** could not
-be confirmed from three sources — the vendor blog returned 403, the package overview is a
-pre-release stub, and the community server's tool catalogue is not enumerated in its
-README. If they do, this plugin shrinks substantially. If they do not, the custom client
-is the only path to two-peer observation and earns its size. **Settle this before
-committing to the client.** The token argument survives either answer: a registered MCP
-server costs its full schema on every request, while a skill costs roughly 100 tokens
-until invoked.
+**Resolved 2026-08-16 — the standalone-Player question.** This was recorded as unverified
+because three documentation sources could not answer it (the vendor blog returned 403, the
+package overview is a pre-release stub, the community server's catalogue is not enumerated
+in its README). Settled instead by reading the source tree of `CoplayDev/unity-mcp` through
+the GitHub API:
+
+| Capability | Off-the-shelf MCP | Where |
+|---|---|---|
+| Enter/exit Play Mode | **yes** | `ManageEditor.cs`, `case "play"` → `EditorApplication.isPlaying` |
+| Read console | **yes** | `ReadConsole.cs` |
+| Recompile / refresh | **yes** | `RefreshUnity.cs` |
+| Run tests, build | **yes** | `RunTests.cs`, `ManageBuild.cs` |
+| Screenshot | **yes** | `ScreenshotUtility.cs` (`ScreenCapture`, camera → `RenderTexture`) |
+| **Drive a standalone development Player** | **no** | — |
+
+Every tool lives under `MCPForUnity/Editor/`, and `EditorApplication.isPlaying` is an Editor
+API by construction. The `Runtime/` assembly exists — but it contains only helpers, compat
+shims and serialisation converters, with **no server, socket or command dispatcher**. It is
+there so Editor code can call screenshot and compatibility helpers that also compile into a
+player, not so a player can be driven.
+
+Two consequences, and they point in opposite directions, which is why the answer was worth
+having:
+
+- **The adapter contract is more justified, not less.** `session.start` and `capture.sheet`
+  against a second, standalone peer cannot be served by any off-the-shelf MCP, and a
+  two-peer traced run is exactly the evidence class that most needs producing.
+- **`forge-unity` should not grow an editor client.** `editor.ping`, `editor.compile` and
+  `editor.logs` are all served well by an existing MCP, so a project should map those verbs
+  straight to it. That the same contract accommodates both a vendor MCP and a project's own
+  transport is the design working as intended — the adapter is transport-agnostic, and this
+  is its first outside confirmation.
+
+The token argument survives either way: a registered MCP server costs its full schema on
+every request, while a skill costs roughly 100 tokens until invoked.

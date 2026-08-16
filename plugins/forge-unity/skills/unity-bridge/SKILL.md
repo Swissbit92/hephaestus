@@ -45,6 +45,22 @@ reported as success, which is the exact failure this whole plugin exists to prev
 
 Run `/forge-init` to scaffold the declaration.
 
+### Map the editor verbs to an existing MCP; the player verbs have no vendor
+
+Verified against `CoplayDev/unity-mcp`'s source on 2026-08-16, and it splits cleanly:
+
+- **`editor.ping` / `editor.compile` / `editor.logs` are solved.** An off-the-shelf Unity
+  MCP serves them, along with play mode, tests, builds and screenshots. Map those verbs
+  straight to it rather than writing a client — this plugin deliberately does not ship one.
+- **Nothing off the shelf reaches a standalone development Player.** Every tool in that
+  server lives under an `Editor/` assembly, and its `Runtime/` assembly holds only helpers
+  and compat shims — no server, no socket, no dispatcher. So `session.start`,
+  `input.script`, `trace.dump` and `capture.sheet` **against a second peer** are yours to
+  implement, which is precisely why the mapping exists.
+
+That split is the contract earning its keep: one declaration accommodates a vendor MCP and
+a project's own transport at the same time.
+
 ## Producing evidence, in the order that makes it cheap
 
 1. **Gate the compile first.** `editor.compile` exits non-zero on error, so it is usable

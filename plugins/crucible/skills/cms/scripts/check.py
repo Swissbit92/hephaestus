@@ -18,6 +18,7 @@ import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import unquote
 
 from common import (
     ARCHIVE_ALLOWLIST,
@@ -112,6 +113,48 @@ def check_atpath_imports(path: Path) -> list[Finding]:
     for raw, target in find_atpath_imports(text, path.parent):
         if not target.exists():
             findings.append(Finding("error", str(path), f"@{raw} points to missing file: {target}"))
+    return findings
+
+
+_FENCE = re.compile(r"^```.*?^```", re.M | re.S)
+_INLINE_CODE = re.compile(r"`[^`\n]+`")
+_MD_LINK = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+_EXTERNAL = re.compile(r"^(?:[a-z][a-z0-9+.-]*:|//|#)", re.I)
+
+
+def check_relative_links(path: Path) -> list[Finding]:
+    """Every relative markdown link resolves to something on disk.
+
+    A cross-reference that no longer resolves is the most common way a documentation set
+    rots, and it is invisible: the prose still reads correctly, so review does not catch it,
+    and nothing executes it. `@path` imports were already validated here; ordinary
+    `[text](path)` links — which is what the standard tells authors to use everywhere,
+    precisely because they load lazily — were not.
+
+    Deliberately quiet in three places, because a check that cries wolf gets switched off:
+    fenced and inline code are examples rather than references, external schemes are not
+    ours to resolve, and a bare `#anchor` addresses the current document.
+    """
+    text = path.read_text(encoding="utf-8", errors="replace")
+    text = _INLINE_CODE.sub(" ", _FENCE.sub("", text))
+    findings: list[Finding] = []
+    seen: set[str] = set()
+
+    for match in _MD_LINK.finditer(text):
+        target = match.group(1).strip()
+        if not target or target in seen or _EXTERNAL.match(target):
+            continue
+        seen.add(target)
+        # `file.md#section` addresses a heading inside a file; only the file is checkable.
+        file_part = target.split("#", 1)[0]
+        if not file_part:
+            continue
+        resolved = (path.parent / unquote(file_part)).resolve()
+        if not resolved.exists():
+            findings.append(Finding(
+                "error", str(path),
+                f"link target does not exist: {file_part} "
+                f"(resolved to {resolved.as_posix()})"))
     return findings
 
 
@@ -539,6 +582,7 @@ def run_repo_check(repo: Path) -> list[Finding]:
         required_fm = "/docs/" in str(md).replace("\\", "/") and md.name not in FRONTMATTER_EXEMPT
         findings.extend(check_frontmatter(md, required=required_fm))
         findings.extend(check_atpath_imports(md))
+        findings.extend(check_relative_links(md))
         findings.extend(check_archive_candidate(md))
     return findings
 

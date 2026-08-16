@@ -160,6 +160,30 @@ def test_diff_narrows_to_the_classes_a_change_triggers(tmp_path):
     assert whens == ["documentation"], whens
 
 
+def test_uncommitted_and_untracked_work_is_in_the_diff(tmp_path):
+    """A brand-new file is the case most likely to introduce a new evidence class.
+
+    `git diff <base>...HEAD` sees committed state only, so an untracked file is invisible to
+    it — and narrowing it away would report a satisfied contract while skipping the work in
+    progress. Found by adding this repository's own declaration and watching the gate say
+    "0 files changed" with a new file sitting right there.
+    """
+    _git_repo(tmp_path)
+    _declare(tmp_path, DECLARATION)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "a.md").write_text("x", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], capture_output=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "base"], capture_output=True)
+
+    # Untracked, never committed, and it belongs to a class the committed diff cannot see.
+    (tmp_path / "src" / "net").mkdir(parents=True)
+    (tmp_path / "src" / "net" / "peer.py").write_text("x", encoding="utf-8")
+
+    out = json.loads(_run("--repo", str(tmp_path), "--base", "HEAD", "--json").stdout)
+    assert "src/net/peer.py" in out["changed_files"], out["changed_files"]
+    assert [c["when"] for c in out["classes"]] == ["netcode, prediction or networked state"]
+
+
 def test_an_unresolvable_base_is_exit_2_not_an_empty_diff(tmp_path):
     """Regression, and the sharpest one in this script's history.
 
