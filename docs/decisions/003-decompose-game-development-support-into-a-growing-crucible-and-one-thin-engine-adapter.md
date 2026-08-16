@@ -5,7 +5,7 @@ created: 2026-08-16
 last_reviewed_on: 2026-08-16
 review_in: 24 months
 applies_to: hephaestus
-ai_summary: "Settles how hephaestus takes on domain-specific (game-development) tooling without becoming a knowledge marketplace. Rejects a game-development plugin set and adopts two plugins instead: crucible grows four domain-neutral capabilities (declarable evidence classes with a three-valued outcome, sync-branch, verify-before-retry and idempotency keys in act-for-real, the BLOCKED stop-signal), and one new thin `forge-unity` adapter carries only what is durably Unity. Project-specific commands never ship: a repo-side `.forge/adapter.json` maps the plugin's abstract verbs onto that project's own command names, so the plugin ships the contract and the detector while the project ships the implementation. Records the evidence — the sjb-verify natural experiment where an engine knowledge layer was built and then discarded, the saturated Unity-knowledge shelf, and the 2026 verified-tool-call literature that independently derives the same verification rules. Read it before adding any domain plugin, before writing engine knowledge content, or when deciding where project-specific tooling belongs. Two preconditions block the work and one capability question is unverified."
+ai_summary: "Settles how hephaestus takes on domain-specific (game-development) tooling without becoming a knowledge marketplace. Rejects a game-development plugin set and adopts two plugins instead: crucible grows four domain-neutral capabilities (declarable evidence classes with a three-valued outcome, sync-branch, verify-before-retry and idempotency keys in act-for-real, the BLOCKED stop-signal), and one new thin `forge-unity` adapter carries only what is durably Unity. Project-specific commands never ship: a repo-side `.forge/adapter.json` maps the plugin's abstract verbs onto that project's own command names, so the plugin ships the contract and the detector while the project ships the implementation. Records the evidence — the natural experiment in a first-generation game repo where an engine knowledge layer was built and then discarded, the saturated Unity-knowledge shelf, and the 2026 verified-tool-call literature that independently derives the same verification rules. Read it before adding any domain plugin, before writing engine knowledge content, or when deciding where project-specific tooling belongs. Two preconditions block the work and one capability question is unverified."
 ---
 
 # ADR-003: Decompose game-development support into a growing crucible and one thin engine adapter
@@ -14,7 +14,7 @@ ai_summary: "Settles how hephaestus takes on domain-specific (game-development) 
 
 hephaestus ships five Tier-A generic plugins. The open question is whether it should
 also carry **domain-specific** tooling — concretely, a game-development plugin set
-extracted from `schlegli-gump-bros`, a networked Unity 6 brawler worked with a
+extracted from a private, third-party networked Unity 6 game worked with a
 13-skill in-repo harness.
 
 Three constraints frame the answer, and all three were confirmed rather than assumed:
@@ -38,26 +38,26 @@ Triaged by what each skill is bound to, not by what it is named:
 | Unity + one third-party package | `editor-client`, `editor-fix-console` | with work |
 | Unity + APFS, macOS-only | `editor-parallel` | partially |
 | Photon Fusion, this game's session identity | `game-multiplayer` | no |
-| **Thirteen `sgb_*` commands defined in this game's own C#** | `game-observe` | **never** |
+| **Thirteen observation commands defined in that game's own C#** | its trace/capture skill | **never** |
 
 The finding that decides the shape: **the most reusable material is not the
 game-specific material.** The genuinely game-shaped skills are the least portable, and
-`game-observe` cannot be extracted at all — it documents an API only one repository on
-earth implements.
+the observation skill cannot be extracted at all — it documents an API only one
+repository on earth implements.
 
 ### The natural experiment already ran
 
-`sjb-verify` is the first-generation repository for the same game (2026-04-11 →
-2026-05-14). Its `.claude/` is a complete, fully-formed game-development plugin:
+That game has a **first-generation** repository, worked from 2026-04-11 to 2026-05-14,
+and its `.claude/` is a complete, fully-formed game-development plugin:
 `unity-code-reviewer` and `project-hygiene-enforcer` agents, three path-scoped
 `rules/unity-*.md` files, three Unity knowledge skills, a PostToolUse compile hook, a
 PreToolUse file guard, a SessionStart state-injection hook, an MCP launcher with
 PowerShell variants, and early copies of `cms`, `grill-me` and `develop`.
 
 hephaestus was born 2026-06-17 carrying those last three. The successor game repo
-(`schlegli-gump-bros`, 2026-05-23 → present) carried almost none of the rest:
+(2026-05-23 → present) carried almost none of the rest:
 
-| `sjb-verify` had | Survived into the successor |
+| The first-generation repo had | Survived into the successor |
 |---|---|
 | 2 Unity agents | no |
 | 3 `rules/unity-*.md` + 3 knowledge skills | no — a grep for `fake-null`, `FindObjectOfType`, `Camera.main` across `.claude/` returns nothing |
@@ -138,14 +138,14 @@ modal-dialog guard, the known-blocker table, and a `/forge-init` command.
 lookup subordinate to a ground-truth verifier — the shape `cpp26-adapter` uses, and the
 shape the game repo already reaches for in *"vendor docs are not authoritative over the
 vendor tree — grep the vendor folder to confirm the API exists."* Always-loaded rule
-files are the artifact `sjb-verify` proved does not survive.
+files are the artifact that first-generation repo proved does not survive.
 
 ### 3 · The adapter contract — how a marketplace carries project-specific work
 
-A plugin can never ship `sgb_trace_start`. So the seam inverts: **the plugin ships the
+A plugin can never ship another project's `trace_start` command. So the seam inverts: **the plugin ships the
 contract and the detector; the project ships the implementation.** `/forge-init`
 scaffolds a repo-side `.forge/adapter.json` mapping abstract verbs onto that project's
-real command names (`capture.sheet → sgb_capture_sheet`). The plugin detects, validates,
+real command names (`capture.sheet → <that project's capture command>`). The plugin detects, validates,
 and reports what is missing — the pattern `scripts/detect_profile.py` already uses for
 test gates, extended rather than invented.
 

@@ -19,6 +19,18 @@
       ]
     },
     {
+      "name": "forge-unity",
+      "source": "./plugins/forge-unity",
+      "description": "The Unity half of an evidence-gated workflow — an asset-integrity sweep for the failures neither the compiler nor a test suite can see (source Unity never imported, orphaned .meta records, components bound to nothing), plus an adapter contract so a published plugin can drive commands it cannot ship: your project maps its own command names onto a canonical, engine-neutral vocabulary in .forge/adapter.json, and an unimplemented verb is reported as a gap rather than guessed. Ships no engine reference material by design.",
+      "category": "productivity",
+      "tags": [
+        "unity",
+        "game-development",
+        "evidence",
+        "adapter"
+      ]
+    },
+    {
       "name": "sqlite-readonly",
       "source": "./plugins/sqlite-readonly",
       "description": "Zero-config read-only SQLite MCP server — safely query any local .db (3-layer read-only enforcement, schema introspection, natural-language→SQL).",
