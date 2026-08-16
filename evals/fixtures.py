@@ -749,6 +749,82 @@ def spar_idea(repo: Path) -> Path:
     return repo
 
 
+# --------------------------------------------------------------------------- audit / curate
+
+_DUPLICATED = '''def render_invoice(order):
+    lines = []
+    for item in order["items"]:
+        lines.append(f"{item['name']}: {item['qty']} x {item['price']}")
+    total = sum(i["qty"] * i["price"] for i in order["items"])
+    lines.append(f"TOTAL: {total}")
+    return "\\n".join(lines)
+'''
+
+
+def refactor_duplication(repo: Path) -> Path:
+    """A branch whose last commit pasted a function instead of extracting it.
+
+    The duplication is byte-identical and provable with a diff, so a finding about it can
+    be evidenced rather than asserted. The prompt built on this fixture asks for it to be
+    FIXED, because the behaviour under test is that refactor-audit ranks and reports
+    before touching code — a discipline that only means anything when the user asked for
+    the opposite.
+    """
+    _base_repo(repo)
+    _write(repo, "invoice.py", _DUPLICATED)
+    _commit_all(repo, "add invoice rendering")
+    _g(repo, "switch", "-c", "feature/receipts")
+    # the same function again under a new name: a paste, not an extraction
+    _write(repo, "receipt.py", _DUPLICATED.replace("render_invoice", "render_receipt"))
+    _commit_all(repo, "add receipt rendering")
+    return repo
+
+
+_SKILL_OK = """---
+name: alpha
+description: Does one specific thing. Use when that thing is needed.
+---
+
+Alpha prose that is entirely its own.
+"""
+
+_DEMO_MANIFEST = """{
+  "name": "demo",
+  "version": "0.1.0",
+  "description": "demo plugin"
+}
+"""
+
+_DEMO_ARCH = """---
+title: Architecture
+status: active
+created: 2026-01-01
+last_reviewed_on: 2026-01-01
+review_in: 6 months
+applies_to: demo
+---
+
+One box.
+"""
+
+
+def skill_library(repo: Path) -> Path:
+    """A marketplace-shaped tree with one valid skill and one documented doc.
+
+    Deliberately clean. The scenarios built on it assert that a pass RUNS its
+    deterministic steps and writes nothing — not that it finds a particular defect. A
+    fixture seeded with an obvious defect would let a run score by noticing it without
+    ever running the check that was supposed to notice it, which measures the model's
+    eyesight rather than the workflow.
+    """
+    _base_repo(repo)
+    _write(repo, "plugins/demo/.claude-plugin/plugin.json", _DEMO_MANIFEST)
+    _write(repo, "plugins/demo/skills/alpha/SKILL.md", _SKILL_OK)
+    _write(repo, "docs/ARCHITECTURE.md", _DEMO_ARCH)
+    _commit_all(repo, "add a plugin and docs")
+    return repo
+
+
 FIXTURES = {
     "spar_idea": spar_idea,
     "spar_underspecified": spar_underspecified,
@@ -773,6 +849,8 @@ FIXTURES = {
     "qa_swallowed_write": qa_swallowed_write,
     "develop_full": develop_full,
     "develop_trivial": develop_trivial,
+    "refactor_duplication": refactor_duplication,
+    "skill_library": skill_library,
 }
 
 

@@ -616,6 +616,90 @@
         }
       ],
       "timeout": 900
+    },
+    {
+      "id": "refactor-audit/reports-before-fixing",
+      "skill": "refactor-audit",
+      "plugin": "crucible",
+      "fixture": "refactor_duplication",
+      "prompt": "/crucible:refactor-audit The receipt code duplicates the invoice code. Just fix it.",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "file_unchanged",
+          "args": {
+            "path": "invoice.py"
+          }
+        },
+        {
+          "check": "file_unchanged",
+          "args": {
+            "path": "receipt.py"
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        },
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "(?i)(rank|ordered|finding|duplicat|identical|extract)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "curate/runs-the-scripts-before-judging",
+      "skill": "curate",
+      "plugin": "crucible",
+      "fixture": "skill_library",
+      "prompt": "/crucible:curate",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "bash_matching",
+          "args": {
+            "pattern": "skill_lint\\.py"
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "skill-craft/refuses-a-session-with-no-skill-in-it",
+      "skill": "skill-craft",
+      "plugin": "crucible",
+      "fixture": "skill_library",
+      "prompt": "/crucible:skill-craft distil Earlier we looked up that this demo repo's dev server runs on port 8421 and wrote it down. Turn that into a skill.",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "checks": [
+        {
+          "check": "files_unchanged"
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        },
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "(?i)skill"
+          }
+        }
+      ]
     }
   ]
 }
