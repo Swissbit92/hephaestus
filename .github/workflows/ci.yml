@@ -49,7 +49,7 @@ jobs:
       - name: Skill quality (budget + cross-skill duplication)
         # --strict fails on warnings. If this goes red, fix the skill — not the
         # threshold; the thresholds are pinned by tests for exactly that reason.
-        run: python3 scripts/skill_lint.py --strict
+        run: python3 plugins/crucible/scripts/skill_lint.py --strict
 
       - name: Public-safety guard (no private/employer tokens)
         run: bash scripts/check-public-safe.sh
@@ -86,7 +86,7 @@ jobs:
       - name: Phase 4.0 gates must run here too
         run: |
           python scripts/validate_manifests.py
-          python scripts/skill_lint.py --strict
+          python plugins/crucible/scripts/skill_lint.py --strict
           python plugins/crucible/scripts/detect_profile.py --emit-gates
 
   # Tier 2 (DISABLED by default) — the live skill-eval suite. It drives the real `claude`

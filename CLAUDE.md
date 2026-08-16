@@ -117,7 +117,6 @@ hephaestus/
 │   ├── release.sh                    # per-plugin version bump + tag + GitHub release
 │   ├── bump_version.py               # semver math (used by release.sh; unit-tested)
 │   ├── validate_manifests.py         # marketplace + plugin manifest agreement (CI gate)
-│   ├── skill_lint.py                 # skill budget + cross-skill duplication (CI gate)
 │   ├── check-public-safe.sh          # private-token guard
 │   └── checks/                       # the executable half of docs/INVARIANTS.md
 │       └── _python.sh                # sourced: resolves a Python that actually runs
@@ -129,7 +128,7 @@ hephaestus/
     ├── crucible/
     │   ├── .claude-plugin/plugin.json
     │   ├── skills/{cms,spar-with-me,grill-me,start-branch,finish-branch,author-skill,session-to-skill,eval-first,flag-gate,loop-harness,act-for-real,repo-audit,refactor-audit}/
-│   ├── scripts/                 # detect_profile · coverage_delta · invariants_run · new_skill
+    │   ├── scripts/                 # detect_profile · coverage_delta · invariants_run · new_skill · skill_lint (+ hook)
     │   ├── commands/develop.md
     │   └── agents/qa-gatekeeper.md
     ├── sqlite-readonly/         # read-only SQLite MCP server (uv project under servers/)

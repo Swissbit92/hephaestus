@@ -195,12 +195,21 @@ def find_skills(root: Path) -> list[Path]:
 
 
 def lint_one(path: Path, root: Path) -> tuple[dict, list[Finding]]:
-    """Per-skill checks. Returns the parsed skill and its findings."""
-    rel = path.relative_to(root).as_posix()
-    text = path.read_text(encoding="utf-8", errors="replace")
+    """Per-skill checks for a file on disk."""
+    return lint_text(path.read_text(encoding="utf-8", errors="replace"),
+                     path.parent.name, path.relative_to(root).as_posix())
+
+
+def lint_text(text: str, dir_name: str, rel: str) -> tuple[dict, list[Finding]]:
+    """Per-skill checks against skill *content*, not a path.
+
+    Split out from `lint_one` so the PreToolUse hook can check the content a write is
+    *about to* produce. Checking the file on disk would test the state the edit is
+    replacing, which is the wrong document and passes exactly when it should not.
+    """
     fm, body, err = parse_frontmatter(text)
     name = fm.get("name", "")
-    subject = name or path.parent.name
+    subject = name or dir_name
     findings: list[Finding] = []
 
     if err:
@@ -214,9 +223,9 @@ def lint_one(path: Path, root: Path) -> tuple[dict, list[Finding]]:
     if name and not NAME_RE.match(name):
         findings.append(Finding(ERROR, subject, "naming",
                                 f"`{name}` is not kebab-case"))
-    if name and name != path.parent.name:
+    if name and name != dir_name:
         findings.append(Finding(ERROR, subject, "naming",
-                                f"frontmatter name `{name}` != directory `{path.parent.name}` "
+                                f"frontmatter name `{name}` != directory `{dir_name}` "
                                 "— the runtime discovers by directory, so these must agree"))
 
     for key in sorted(set(fm) - SANCTIONED_KEYS):

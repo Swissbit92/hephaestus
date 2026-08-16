@@ -138,7 +138,7 @@ overwrite the cached plugin dir, so state resolves in this order:
 ```
 hephaestus/
 ├── .claude-plugin/marketplace.json     # marketplace catalog (lists all plugins)
-├── scripts/                            # release.sh · bump_version.py · validate_manifests.py · skill_lint.py · check-public-safe.sh
+├── scripts/                            # release.sh · bump_version.py · validate_manifests.py · check-public-safe.sh
 ├── evals/                              # skill-eval harness (behavioral scenarios)
 ├── tests/                              # pytest suite
 ├── docs/                               # ROADMAP · decisions/ (ADRs) · research/ — cms-managed

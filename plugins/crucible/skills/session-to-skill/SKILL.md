@@ -70,7 +70,7 @@ generic yet, or it belongs in that project's own `.claude/` rather than in a plu
 7. **Verify it loads, then lint it:**
 
    ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/../../scripts/skill_lint.py" --strict
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/skill_lint.py" --strict
    ```
 
    A new skill distilled from a session is the most likely thing in the library to overlap
