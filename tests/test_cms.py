@@ -175,6 +175,27 @@ def test_archive_candidate_recent_pattern_match_silent(tmp_path):
     assert check.check_archive_candidate(f) == []
 
 
+def test_a_business_plan_is_not_a_transient_plan(tmp_path):
+    """The `*_PLAN.md` pattern targets plans that stop mattering once executed. A
+    BUSINESS_PLAN is the opposite: a standing statement of what the product is, which
+    gets more load-bearing with age. Found in the wild flagging a repo's primary
+    founder document as archive-fodder purely for ending in "_PLAN"."""
+    f = write(tmp_path / "BUSINESS_PLAN.md", "x")
+    old = time.time() - 400 * 86400
+    os.utime(f, (old, old))
+    assert check.check_archive_candidate(f) == []
+
+
+def test_transient_plans_are_still_flagged(tmp_path):
+    """The counterpart guard: exempting BUSINESS_PLAN must not blunt the rule itself,
+    or the pattern stops earning its place."""
+    for name in ("MIGRATION_PLAN.md", "PHASE2_PLAN.md", "ROLLOUT_PLAN.md"):
+        f = write(tmp_path / name, "x")
+        old = time.time() - 400 * 86400
+        os.utime(f, (old, old))
+        assert any(x.level == "warning" for x in check.check_archive_candidate(f)), name
+
+
 # --------------------------------------------------------------------------- Phase 1A: frontmatter-exempt split
 def test_docs_canonical_file_requires_frontmatter(tmp_path):
     """Regression: canonical docs/ files (ARCHITECTURE/ROADMAP/LESSONS_LEARNED) are

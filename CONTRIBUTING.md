@@ -4,7 +4,7 @@ Thanks for sharpening the workshop. A few rules keep the marketplace clean and r
 
 ## Ground rules
 
-- **No secrets, ever.** This repo is private, but must still contain no references to any
+- **No secrets, ever.** This repo must contain no references to any
   employer/secret system (the generic plugins were extracted clean-room from a private
   fork). Run `scripts/check-public-safe.sh` before every commit — a non-zero exit blocks the
   change. The generic↔domain seam is enforced separately by `tests/test_seam.py`. When

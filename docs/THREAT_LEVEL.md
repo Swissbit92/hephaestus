@@ -40,14 +40,14 @@ Untrusted: anything an LLM emits, anything retrieved, any non-first-party plugin
 | **S**poofing | Low | single-operator, GitHub auth | n/a |
 | **T**ampering | **Yes** | live-system actions only via deterministic `PreToolUse` hooks (`kucoin-safety-gate`) | Phase 1 |
 | **R**epudiation | Low | git history; `[executed]/[inspected]/[assumed]` claim tagging | partial |
-| **I**nformation disclosure | **Yes** | repo private; no secrets committed; `check-public-safe.sh` linter | active |
+| **I**nformation disclosure | **Yes** | no secrets committed (verified: 517 blobs, all refs, 0 hits); `check-public-safe.sh` linter; `tests/test_seam.py`. **Repo privacy is deliberately NOT counted here** — it would evaporate on publication ([ADR-002](decisions/002-publish-hephaestus-publicly-retiring-the-private-distribution-non-goal.md)), and a control that disappears when the repo changes state was never really the control. | active |
 | **D**enial of service | **Yes** | runaway loops bounded by `--max-turns`/budget ceilings + `loop-cost`/`loop-audit` | Phase 3 |
 | **E**levation of privilege | **Yes** | agent issuing a live order w/o confirmation → hard-blocked by safety gate; injection-guard blocks RAG-triggered tool calls | Phase 1 (`safety-middleware`, `kucoin-safety-gate`) |
 
 ## Top risks
 
 - **A03 Injection** — prompt-injection via retrieved content triggering a tool call → `safety-middleware` injection-guard (trust hierarchy system > user > RAG; retrieved content informs, never triggers).
-- **A08 Software/data integrity (supply chain)** — a malicious/compromised plugin or skill (ClawHavoc: 1,184+ marketplace skills weaponized with crypto-wallet infostealers). Mitigation: **first-party plugins only**, repo private, review before adding any external plugin.
+- **A08 Software/data integrity (supply chain)** — a malicious/compromised plugin or skill (ClawHavoc: 1,184+ marketplace skills weaponized with crypto-wallet infostealers). Mitigation: **first-party plugins only**, review before adding any external plugin. **Publication inverts this risk rather than merely removing a mitigation** ([ADR-002](decisions/002-publish-hephaestus-publicly-retiring-the-private-distribution-non-goal.md)): a private marketplace is reachable only by its owner, a public one can be forked, typosquatted, or targeted by a malicious pull request. Branch protection on `main` and review-before-merge become load-bearing at that point, not optional.
 - **EoP via live order** — the headline risk. `kucoin-safety-gate` (deterministic `PreToolUse` hard-block) is the irreducible control; built in Phase 1.
 
 ## Residual risks

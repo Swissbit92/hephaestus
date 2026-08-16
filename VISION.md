@@ -38,7 +38,7 @@ The E.E.V.A. ecosystem (income engine, data pipeline, AI companion, execution la
 - **Role-play multi-agent teams.** Verification beats theater on sequential software work.
 - **Over-scaffolding.** mini-SWE-agent (~100 lines, >74% SWE-bench) is the reminder: harness complexity is a liability as models improve. Add machinery only where it buys measurable reliability.
 - **Cloud-hosted unattended agents over the codebase.** Rejected on the same grounds as the ecosystem's cloud-LLM and OpenClaw rejections (data leakage / supply-chain risk).
-- **Public distribution.** This repo is private; the generic tools were once public (whetstone) but the factory carries domain judgment that stays private.
+- **~~Public distribution.~~ Retired 2026-08-15** — [ADR-002](docs/decisions/002-publish-hephaestus-publicly-retiring-the-private-distribution-non-goal.md). This non-goal assumed the marketplace would carry a Tier-B domain factory whose judgment had to stay private. That tier was never built: all five shipped plugins are Tier-A generic, the seam is enforced by `tests/test_seam.py` rather than asserted, and `scripts/check-public-safe.sh` gates employer-system tokens. The reason for the non-goal was absent from the repo, so the repo is now public — with `checks` a required status check on `main` and the supply-chain risk re-scored upward in [THREAT_LEVEL.md](docs/THREAT_LEVEL.md), since publication *inverts* that risk rather than merely removing a control.
 - **Letting documentation become the work.** Docs are lean; the build is the point.
 
 ## Origin

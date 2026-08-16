@@ -1,3 +1,8 @@
+---
+description: Reference material for develop's Phase 4.0 evidence profiles. Not an invocable command — it sits under commands/ only so develop.md can link to it relatively.
+disable-model-invocation: true
+---
+
 # Evidence profiles — what each marker implies
 
 Loaded only when extending or debugging `scripts/detect_profile.py`. `develop.md` Phase 4.0
