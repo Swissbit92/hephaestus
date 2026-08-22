@@ -319,10 +319,11 @@ def render_search_page(repos: list[dict], cfg: dict) -> str:
             '<input id="sq" type="search" autocomplete="off" spellcheck="false" '
             'placeholder="Search all documents…" aria-label="Search all documents">'
             '<div id="sr"></div>')
-    page = render.TEMPLATE.format(
+    page = render._render_page(
+        cfg.get("accent", "#F5A623"),
         title=f'{cfg.get("title", "Documentation")} — Search',
         repo=html.escape(cfg.get("title", "Documentation").upper()),
-        accent=cfg.get("accent", "#F5A623"), src_hash="-",
+        src_hash="-",
         gen_hash=render._gen_hash(), tags="", nav="", body=body,
         published="", source_label="EVERY DOCUMENT IN THE SITE",
         sitenav=build_root_nav(repos, "search"))
@@ -514,10 +515,10 @@ def render_home(repos: list[dict], cfg: dict) -> str:
     # anchor links would have pointed at ids that are never emitted.
     nav = "".join(f'<a href="{r["slug"]}/index.html">{html.escape(r["name"])}</a>'
                   for r in repos)
-    page = render.TEMPLATE.format(
+    page = render._render_page(
+        cfg.get("accent", "#F5A623"),
         title=cfg.get("title", "Documentation"),
         repo=html.escape(cfg.get("title", "Documentation").upper()),
-        accent=cfg.get("accent", "#F5A623"),
         src_hash="-", gen_hash=render._gen_hash(),
         tags="", nav=nav, body=body, published="",
         source_label="SITE.TOML",
@@ -553,9 +554,10 @@ def render_reference_index(r: dict, pg: dict, nav: str) -> str:
             f'that links to them resolve and so search can reach them.</p>\n'
             f'<table><thead><tr><th>Document</th><th>Source</th></tr></thead>'
             f'<tbody>{rows}</tbody></table>')
-    return render.TEMPLATE.format(
+    return render._render_page(
+        "#F5A623",
         title=f'{r["name"]} — Reference', repo=html.escape(r["name"].upper()),
-        accent="#F5A623", src_hash="-", gen_hash=render._gen_hash(),
+        src_hash="-", gen_hash=render._gen_hash(),
         tags="", nav="", body=body, published="", source_label="DOCS/",
         sitenav=nav)
 

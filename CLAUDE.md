@@ -179,6 +179,8 @@ hephaestus/
     ├── crucible/
     │   ├── .claude-plugin/plugin.json
     │   ├── skills/{cms,spar-with-me,grill-me,start-branch,sync-branch,finish-branch,skill-craft,eval-first,flag-gate,loop-harness,act-for-real,repo-audit,refactor-audit}/
+    │   │                             # cms/assets/ holds the renderer's CSS+JS as real
+    │   │                             # files; cms/scripts/render_layout.py is the pure geometry
     │   ├── scripts/                 # detect_profile · evidence_gate · coverage_delta · invariants_run · new_skill · skill_lint (+ hook) · predictions
     │   ├── commands/{develop,curate}.md
     │   └── agents/qa-gatekeeper.md
