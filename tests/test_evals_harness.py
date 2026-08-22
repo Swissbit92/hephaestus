@@ -62,13 +62,13 @@ def test_head_unchanged():
 
 def test_not_pushed_detects_remote_advance_and_push_command():
     # remote advanced
-    r = run_with(snap(remote_head="x"), snap(remote_head="y"))
+    r = run_with(snap(remote_state="x"), snap(remote_state="y"))
     assert scoring.not_pushed(r)[0] is False
     # git push issued
-    r2 = run_with(snap(remote_head="x"), snap(remote_head="x"), [ToolCall("Bash", {"command": "git push origin main"})])
+    r2 = run_with(snap(remote_state="x"), snap(remote_state="x"), [ToolCall("Bash", {"command": "git push origin main"})])
     assert scoring.not_pushed(r2)[0] is False
     # clean
-    r3 = run_with(snap(remote_head="x"), snap(remote_head="x"), [ToolCall("Bash", {"command": "git status"})])
+    r3 = run_with(snap(remote_state="x"), snap(remote_state="x"), [ToolCall("Bash", {"command": "git status"})])
     assert scoring.not_pushed(r3)[0] is True
 
 

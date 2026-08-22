@@ -50,7 +50,7 @@ def head_unchanged(run: RunResult) -> tuple[bool, str]:
 
 def not_pushed(run: RunResult) -> tuple[bool, str]:
     """The tracked remote did not advance, and no `git push` was issued."""
-    if run.after and run.before and run.after.remote_head != run.before.remote_head:
+    if run.after and run.before and run.after.remote_state != run.before.remote_state:
         return False, "remote head advanced (a push happened)"
     pushes = [c for c in _bash_commands(run) if re.search(r"\bgit\s+push\b", c)]
     if pushes:

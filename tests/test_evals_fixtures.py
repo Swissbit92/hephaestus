@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 import fixtures
-from harness import runner, scoring, world
+from harness import model, runner, scoring, world
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCENARIOS = REPO_ROOT / "evals" / "scenarios.json"
@@ -397,3 +397,68 @@ def test_every_scenario_is_wired_correctly():
         assert s.get("gate_mode", "all") in {"all", "rate"}
         if s.get("gate_mode") == "rate":
             assert 0.0 <= float(s.get("min_rate", 1.0)) <= 1.0
+
+
+# --------------------------------------------------------------------------- remote_state
+#
+# `not_pushed` used to snapshot `rev-parse origin/<current-branch>`. That was wrong twice:
+# a remote-TRACKING ref moves on fetch as well as push, and interpolating the checked-out
+# branch meant a scenario that creates a branch compared origin/main against a ref that
+# does not exist. start-branch/refetches-before-branching failed 5 of 5 runs — including
+# 0/3 at k=3 — on entirely correct behaviour, reproducibly enough to look like a real
+# defect in the skill. These tests are what would have caught it.
+
+
+def _git_in(repo, *args):
+    return subprocess.run(["git", *args], cwd=str(repo), capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+
+def test_creating_a_branch_is_not_mistaken_for_a_push(tmp_path):
+    """The regression, stated plainly: branching is start-branch's whole job."""
+    repo = tmp_path / "repo"; repo.mkdir()
+    fixtures.start_stale_base(repo)
+
+    before = world.snapshot(repo)
+    _git_in(repo, "fetch", "origin")
+    _git_in(repo, "switch", "-c", "feature/short-access-token", "origin/dev")
+    after = world.snapshot(repo)
+
+    assert after.remote_state == before.remote_state, \
+        "fetching and branching moved no remote ref; it must not read as a push"
+    ok, detail = scoring.not_pushed(
+        model.RunResult(before=before, after=after, tool_calls=[]))
+    assert ok, detail
+
+
+def test_a_real_push_is_still_detected(tmp_path):
+    """The counterpart guard: the fix must not simply disable the check."""
+    repo = tmp_path / "repo"; repo.mkdir()
+    fixtures.start_stale_base(repo)
+
+    before = world.snapshot(repo)
+    _git_in(repo, "switch", "-c", "feature/x")
+    (repo / "n.txt").write_text("x", encoding="utf-8")
+    _git_in(repo, "add", "-A")
+    _git_in(repo, "-c", "user.email=t@t.invalid", "-c", "user.name=T", "commit", "-m", "x")
+    _git_in(repo, "push", "-q", "origin", "feature/x")
+    after = world.snapshot(repo)
+
+    assert after.remote_state != before.remote_state, "a real push must move remote_state"
+
+
+def test_a_fetch_alone_is_not_a_push(tmp_path):
+    """A tracking ref moves on fetch. The actual remote does not."""
+    repo = tmp_path / "repo"; repo.mkdir()
+    fixtures.start_stale_base(repo)
+
+    before = world.snapshot(repo)
+    _git_in(repo, "fetch", "origin")
+    assert world.snapshot(repo).remote_state == before.remote_state
+
+
+def test_no_remote_yields_none_rather_than_raising(tmp_path):
+    """Most fixtures have no remote at all; the snapshot must stay cheap and quiet."""
+    repo = tmp_path / "repo"; repo.mkdir()
+    fixtures.start_clean(repo)
+    assert world.snapshot(repo).remote_state is None
