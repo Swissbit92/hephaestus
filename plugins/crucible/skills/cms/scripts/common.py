@@ -194,6 +194,26 @@ def parse_review_in(value: str) -> int | None:
     return n * {"day": 1, "week": 7, "month": 30, "year": 365}[unit]
 
 
+def frontmatter_is_unterminated(text: str) -> bool:
+    """Does this file open a frontmatter fence it never closes?
+
+    `parse_frontmatter` returns `({}, 0)` for this, which is byte-identical to what it
+    returns for a file with no frontmatter at all — so every one of its nine callers
+    treats "you made a typo in the closing fence" and "this file has no frontmatter" as
+    the same thing. For a `docs/` file that surfaced as a misleading "missing frontmatter"
+    error; for a frontmatter-exempt file it surfaced as nothing whatsoever, and the
+    document's real metadata was silently ignored.
+
+    Returning `{}` is still the right parse result — half-read frontmatter is worse than
+    none, and callers should not have to handle a partial dict. What was missing was any
+    way to tell the two conditions apart, which is what this answers.
+    """
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != FENCE:
+        return False
+    return not any(line.strip() == FENCE for line in lines[1:])
+
+
 def parse_iso_date(value: str) -> date | None:
     try:
         return datetime.strptime(value.strip(), "%Y-%m-%d").date()

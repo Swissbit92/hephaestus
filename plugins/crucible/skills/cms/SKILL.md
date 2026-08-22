@@ -26,7 +26,7 @@ Pure stdlib, Python 3.9+. Run as
 | `/cms check [<path>]` | `check.py [<path>]` | Lint against standard. Tiered Error/Warning. Exit non-zero on Error |
 | `/cms check --mechanical <file>` | `check.py --mechanical <file>` | Fast frontmatter check. Used by PreToolUse hook |
 | `/cms new-adr <title>` | `new_adr.py "<title>" [--path <dir>]` | Scaffold next NNN-title.md ADR with Nygard template |
-| `/cms sync` | `sync.py [<root>]` | Cross-repo drift detector (regex allowlist of known-drift facts in `state/sync_facts.yaml`) |
+| `/cms sync` | `sync.py [<root>]` | Cross-repo drift detector (facts in `state/sync_facts.yaml`). Exits **2** on a facts file it cannot parse — a drift detector's healthy output is silence, so a parse failure reported as 0 is indistinguishable from a clean run |
 | `/cms migrate <path>` | `migrate.py <path>` | Propose-and-approve structural migration (extract to docs/, archive stale) |
 | `/cms render [<path>]` | `render.py [<repo>]` | Render `docs/ARCHITECTURE.md` → `docs/ARCHITECTURE.html` (+ `.txt` for agents). `--check` exits 1 when stale; `--publish` prints the publish manifest line |
 | `/cms triage` | `triage.py [--repo <p>] [--docs-dir <d>]` | Print the docs as a routing table — path, status, `ai_summary` — so a lookup reads one body instead of several |

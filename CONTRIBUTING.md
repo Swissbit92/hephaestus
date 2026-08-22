@@ -34,6 +34,11 @@ Thanks for sharpening the workshop. A few rules keep the marketplace clean and r
   prediction-check, reintroduce the defect and confirm it goes red. This repo settled three
   predictions on instruments that could not have distinguished success from failure, so
   `predictions.py record` now requires `--baseline` — what the check shows before the change.
+- **Exit 2 when you could not check.** `0` means it passed, `1` means it failed, `2` means
+  the check could not run — a malformed config, a missing tool, an unreadable input. Folding
+  the third into `0` is how a tool that has stopped working keeps reporting clean; folding it
+  into `1` turns a missing capability into an accusation. `sync.py` returned `0` for any
+  facts file outside its YAML subset until this was fixed.
 
 ## Adding a skill
 

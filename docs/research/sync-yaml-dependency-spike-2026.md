@@ -16,6 +16,16 @@ ai_summary: "Timeboxed spike on whether cms's drift detector should depend on Py
 **Answer: no — and the dependency question was hiding a defect worth more than the
 dependency would have fixed.** Recommendation at the bottom.
 
+> **Implemented 2026-08-22 (crucible 1.2.0).** All four recommendations shipped:
+> `load_facts` now raises `FactsUnreadable` and `sync` exits **2** — could-not-determine
+> — rather than reporting a clean run on a file it could not read. Every case below is
+> pinned by a test in `tests/test_sync_facts.py`. One thing the implementation found
+> that this spike did not: the unknown-key rule was initially unreachable, because the
+> parser discarded unrecognised keys instead of recording them, so a typo fell through
+> to the missing-pattern rule and the error blamed the wrong thing. The parser now
+> records them. A guard that cannot fire is not a guard — the same defect this repo
+> found in `predictions.py` the same week.
+
 Timeboxed spike. Read-only: nothing in `sync.py` was changed.
 
 ## What the parser actually does

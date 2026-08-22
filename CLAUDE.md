@@ -75,6 +75,16 @@ after a defect that was invisible from a POSIX machine:
   batching, shallow-clone detection and fallbacks) or a date carried in the file's content.
   Enforced by `scripts/mtime_guard.py`, which parses rather than greps — a textual search
   flags `doc_age.py`'s own docstring, and a rule that accuses its own fix gets switched off.
+- **A check that cannot fail is not a check, and silence is not success.** Three defects
+  this month shared one shape: the code was present, plausible, and quiet when wrong. Age
+  from mtime worked locally and was dead on every clone; `predictions.py`'s `--check`
+  refusal sat behind `required=True` so argparse answered first and the message was never
+  once displayed; `sync.py` returned zero facts and exit 0 for any YAML outside its narrow
+  subset, which reads exactly like "no drift". Before trusting a new gate, **reintroduce
+  the defect and watch it go red** — that is what `--baseline` forces at record time and
+  what `tests/test_mtime_guard.py` and `tests/test_sync_facts.py` pin permanently. Where a
+  check genuinely cannot run, exit **2**; folding could-not-determine into 0 is how an
+  unverified change acquires a green tick.
 - **Do not exceed the Python floor the README promises (3.9).** A file that will not parse
   does not degrade one feature — it stops `pytest` collecting, so the suite is unavailable
   on that interpreter. Note that `ast.parse(feature_version=…)` **cannot** catch this alone:

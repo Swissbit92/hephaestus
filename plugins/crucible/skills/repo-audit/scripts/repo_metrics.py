@@ -73,12 +73,32 @@ ARTIFACT_PATTERNS: tuple[tuple[str, str], ...] = (
 # secret — they're meant to be tracked. Exempt them from the .env artifact rule.
 ENV_EXEMPT = re.compile(r"(^|/)\.env\.(example|template|sample|dist)$")
 
-# Standard artifact fragments a .gitignore is expected to cover. We report which are
-# absent so the DevOps lens knows what hygiene the repo hasn't declared.
-GITIGNORE_EXPECTED: tuple[str, ...] = (
-    "__pycache__", ".pytest_cache", "node_modules", ".coverage", "htmlcov",
-    "dist", "build", ".env", "*.log",
+# Artifact fragments a .gitignore is expected to cover, each paired with the evidence that
+# the repo could actually produce that artifact.
+#
+# A flat list charged every repo for every ecosystem: a pure-stdlib Python repo with no
+# build step was docked for not ignoring `node_modules`, `dist` and `build`, which it can
+# never generate. That is not a small inaccuracy — it is most of a penalty, and a score
+# that is wrong for reasons the reader can see is a score the reader stops using. The
+# gate is per-entry evidence, not a project-type guess, because a repo can be several
+# things at once and usually is.
+#
+# Keys are the fragment; values are the marker files that make it relevant. An empty
+# tuple means "always relevant" — a secret or a stray log can appear in any repo.
+GITIGNORE_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("__pycache__", ("*.py",)),
+    (".pytest_cache", ("pytest.ini", "setup.cfg", "pyproject.toml", "tox.ini", "conftest.py")),
+    ("node_modules", ("package.json",)),
+    (".coverage", (".coveragerc", "pyproject.toml", "setup.cfg", "tox.ini")),
+    ("htmlcov", (".coveragerc", "pyproject.toml", "setup.cfg", "tox.ini")),
+    ("dist", ("setup.py", "pyproject.toml", "package.json", "Cargo.toml")),
+    ("build", ("setup.py", "pyproject.toml", "package.json", "Makefile", "CMakeLists.txt")),
+    (".env", ()),
+    ("*.log", ()),
 )
+
+# Kept for consumers that imported the old name. Derived, so the two cannot drift apart.
+GITIGNORE_EXPECTED: tuple[str, ...] = tuple(frag for frag, _ in GITIGNORE_RULES)
 
 # Default heuristics for "feature flag" reads, generic across the common stacks. Purely a
 # count of how much conditional-on-config branching exists — high counts feed the
@@ -219,18 +239,39 @@ def _is_artifact(posix_path: str) -> str | None:
     return None
 
 
-def _gitignore_gaps(root: Path) -> tuple[bool, list[str]]:
+def _relevant_gitignore_fragments(root: Path, files: list) -> list:
+    """The fragments this repo could actually produce, given what is in it.
+
+    Charging a repo for not ignoring artifacts it cannot generate is the difference
+    between a metric that is merely noisy and one that is wrong, and a reader who can see
+    it is wrong stops reading the rest of the number too.
+    """
+    names = {Path(f).name for f in files}
+    suffixes = {Path(f).suffix for f in files}
+
+    def present(marker: str) -> bool:
+        if marker.startswith("*."):
+            return marker[1:] in suffixes
+        return marker in names
+
+    return [frag for frag, markers in GITIGNORE_RULES
+            if not markers or any(present(m) for m in markers)]
+
+
+def _gitignore_gaps(root: Path, files: list = None) -> tuple[bool, list[str]]:
+    relevant = (_relevant_gitignore_fragments(root, files) if files is not None
+                else list(GITIGNORE_EXPECTED))
     gi = root / ".gitignore"
     if not gi.exists():
-        return False, list(GITIGNORE_EXPECTED)
+        return False, relevant
     try:
         body = gi.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return True, list(GITIGNORE_EXPECTED)
+        return True, relevant
     present_lines = {ln.strip().rstrip("/") for ln in body.splitlines()
                      if ln.strip() and not ln.strip().startswith("#")}
     gaps = []
-    for expected in GITIGNORE_EXPECTED:
+    for expected in relevant:
         needle = expected.rstrip("/*").lstrip("*").lstrip(".")
         if not any(needle in ln for ln in present_lines):
             gaps.append(expected)
@@ -246,20 +287,49 @@ def _python_dead_module_candidates(records: list[tuple[str, Path]]) -> list[str]
     """
     py = [(rel, ap) for rel, ap in records if rel.endswith(".py")]
     # Build the corpus of import references once.
-    import_re = re.compile(r"^\s*(?:from|import)\s+([\w.]+)", re.MULTILINE)
+    #
+    # BOTH halves of a `from X import a, b` are recorded, and that is the whole point.
+    # Matching only the module path after `from` missed every submodule imported the most
+    # ordinary way there is — `from harness import runner, scoring`, `from . import db, nl`
+    # — so a package's own modules were reported as dead while being imported on the very
+    # next line. On this repo that was a 100% false-positive rate: all six candidates were
+    # live. A dead-code metric that is wrong about live code does not get used carefully,
+    # it gets ignored.
+    # Same-line whitespace only. `\s` inside a character class matches newlines too, so
+    # `[\w.,\s]+` swallows the following lines and the capture stops being one import
+    # statement — which silently broke EVERY bare `import x`, not just unusual ones.
+    from_re = re.compile(r"^[^\S\n]*from[^\S\n]+([\w.]*)[^\S\n]+import[^\S\n]+(.+)$",
+                         re.MULTILINE)
+    import_re = re.compile(r"^[^\S\n]*import[^\S\n]+(.+)$", re.MULTILINE)
     referenced: set[str] = set()
     bodies: dict[str, str] = {}
+
+    def _record_dotted(raw: str) -> None:
+        for seg in raw.split("."):
+            seg = seg.strip()
+            if seg:
+                referenced.add(seg)
+
     for rel, ap in py:
         try:
             text = ap.read_text(encoding="utf-8", errors="replace")
         except OSError:
             text = ""
         bodies[rel] = text
+        for m in from_re.finditer(text):
+            _record_dotted(m.group(1))          # the package path
+            names = m.group(2).split("#")[0]    # drop a trailing comment
+            names = names.replace("(", " ").replace(")", " ").replace("*", " ")
+            for part in names.split(","):
+                # `from x import y as z` — `y` is the module that is actually referenced.
+                name = part.strip().split(" as ")[0].strip()
+                if name:
+                    _record_dotted(name)
         for m in import_re.finditer(text):
-            # record every dotted segment: `from a.b.c import x` -> a, b, c
-            for seg in m.group(1).split("."):
-                if seg:
-                    referenced.add(seg)
+            # `import x  # noqa: E402` is ordinary in this repo (sys.path juggling before
+            # imports), so the trailing comment has to come off before splitting.
+            for part in m.group(1).split("#")[0].split(","):
+                _record_dotted(part.strip().split(" as ")[0])
     candidates: list[str] = []
     for rel, _ap in py:
         stem = Path(rel).stem
@@ -395,7 +465,7 @@ def collect(root: str | Path, *, files: list[str] | None = None,
     flags.sort(key=lambda f: (-f.hits, f.path))
     flag_total = sum(f.hits for f in flags)
 
-    gi_present, gi_gaps = _gitignore_gaps(root)
+    gi_present, gi_gaps = _gitignore_gaps(root, files)
     dead = _python_dead_module_candidates([(rel, ap) for rel, ap, _s, _l in records])
 
     breakdown = _score(
