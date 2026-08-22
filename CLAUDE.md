@@ -156,6 +156,7 @@ hephaestus/
 ├── .claude-plugin/marketplace.json   # marketplace catalog (lists all plugins)
 ├── scripts/
 │   ├── release.sh                    # per-plugin version bump + tag + GitHub release
+│   │                                 # (notes exclude sibling plugins, not scope to one dir)
 │   ├── bump_version.py               # semver math (used by release.sh; unit-tested)
 │   ├── validate_manifests.py         # marketplace + plugin manifest agreement (CI gate)
 │   ├── check-public-safe.sh          # private-token guard (employer + third-party project)

@@ -56,11 +56,38 @@ TAG="${PLUGIN}-v$NEW"
 
 git rev-parse "$TAG" >/dev/null 2>&1 && die "tag $TAG already exists"
 
-# --- Release notes: commits since this plugin's last tag, scoped to its path --
+# --- Release notes: commits since this plugin's last tag ---------------------
+#
+# Scoped by EXCLUDING sibling plugins rather than by including this plugin's directory.
+# The difference is not cosmetic. A plugin's release routinely lands work outside its own
+# tree — a gate in scripts/, its tests in tests/, an ADR or research note in docs/ — and a
+# `-- plugins/<name>` filter cannot see any of it. Measured across the three releases
+# before this change: 5 of 11 non-merge commits were dropped, including an invariant that
+# lived entirely in scripts/ and a spike that lived entirely in docs/. The notes did not
+# look wrong, they looked short, which is why it went unnoticed for three releases.
+#
+# Excluding siblings keeps the property the old filter was actually buying: releasing
+# crucible must not narrate forge-unity's work.
 LAST_TAG="$(git describe --tags --match "${PLUGIN}-v*" --abbrev=0 2>/dev/null || true)"
 RANGE="${LAST_TAG:+$LAST_TAG..HEAD}"
-NOTES="$(git log ${RANGE:+"$RANGE"} --pretty='- %s' -- "plugins/$PLUGIN" 2>/dev/null | grep -vi '^- Co-Authored' || true)"
-[[ -n "$NOTES" ]] || NOTES="- Maintenance release"
+
+PATHSPEC=(".")
+for d in "$REPO_ROOT"/plugins/*/; do
+  other="$(basename "$d")"
+  [[ "$other" == "$PLUGIN" ]] && continue
+  PATHSPEC+=(":(exclude)plugins/$other")
+done
+
+# --no-merges: a merge subject ("Merge pull request #7 from ...") tells a reader nothing
+# about what shipped, and the commits it brought in are already in the range.
+NOTES="$(git log ${RANGE:+"$RANGE"} --no-merges --pretty='- %s' -- "${PATHSPEC[@]}" 2>/dev/null \
+         | grep -vi '^- Co-Authored' | grep -vi '^- Claude-Session' || true)"
+if [[ -z "$NOTES" ]]; then
+  # Say which of the two this is. "Maintenance release" reads as a deliberate choice, and
+  # for three releases it was silently covering for a filter that matched nothing.
+  echo "note: no commits found in ${RANGE:-history} — notes will say 'Maintenance release'" >&2
+  NOTES="- Maintenance release"
+fi
 
 echo "plugin:  $PLUGIN"
 echo "version: $CUR  ->  $NEW   (tag $TAG)"
