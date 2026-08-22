@@ -8,8 +8,18 @@ depends on git or the real tree.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import repo_metrics as rm
+
+
+def _tmp_py(source: str) -> Path:
+    """A real file on disk holding `source` — the dead-module scan reads bodies."""
+    import tempfile
+    fh = tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8")
+    fh.write(source)
+    fh.close()
+    return Path(fh.name)
 
 
 # --------------------------------------------------------------------------- helpers
@@ -90,23 +100,35 @@ def test_env_example_is_not_an_artifact(tmp_path):
 # --------------------------------------------------------------------------- gitignore
 
 def test_gitignore_gaps_reported_when_absent(tmp_path):
+    """Gaps are reported for what THIS tree could actually produce.
+
+    This used to assert `node_modules` for a fixture holding one .py file — it was pinning
+    the flat expectation list, which charged every repo for every ecosystem. A pure-Python
+    tree with no package.json cannot produce node_modules, and docking it for that is not
+    a stricter standard, just a wrong one.
+    """
     files = [_write(tmp_path, "a.py", "x=1\n")]
     m = rm.collect(tmp_path, files=files)
     assert m.gitignore_present is False
-    assert "node_modules" in m.gitignore_gaps
-    assert "__pycache__" in m.gitignore_gaps
+    assert "__pycache__" in m.gitignore_gaps, "there is Python here; caches are real"
+    assert ".env" in m.gitignore_gaps, "secrets can leak from any repo"
+    assert "node_modules" not in m.gitignore_gaps, "no package.json in this tree"
 
 
 def test_gitignore_gaps_shrink_when_covered(tmp_path):
+    """Declared fragments stop being gaps. `dist` is still expected because the fixture
+    carries a pyproject.toml, which is what makes a build output possible at all."""
     _write(tmp_path, ".gitignore", "__pycache__/\nnode_modules/\n.env\n*.log\n")
-    files = [_write(tmp_path, "a.py", "x=1\n")]
+    files = [
+        _write(tmp_path, "a.py", "x=1\n"),
+        _write(tmp_path, "pyproject.toml", "[project]\nname = 'x'\n"),
+    ]
     m = rm.collect(tmp_path, files=files)
     assert m.gitignore_present is True
     assert "__pycache__" not in m.gitignore_gaps
-    assert "node_modules" not in m.gitignore_gaps
     assert ".env" not in m.gitignore_gaps
     assert "*.log" not in m.gitignore_gaps
-    # dist/build still not declared -> still gaps
+    # dist/build are buildable here (pyproject.toml) and undeclared -> still gaps
     assert "dist" in m.gitignore_gaps
 
 
@@ -245,3 +267,102 @@ def test_main_emits_json(tmp_path, capsys):
     parsed = json.loads(out)
     assert parsed["file_count"] >= 1
     assert any("not a git repo" in n for n in parsed["notes"])
+
+
+# --------------------------------------------------------------------------- metric accuracy
+#
+# Both fixes below were prompted by the same failure: the anchor score reported 42/100 for
+# this repo with 18 of 58 penalty points coming from findings that were simply wrong. A
+# score that is wrong for reasons the reader can check is worse than no score, because the
+# reader stops trusting the parts that were right.
+
+
+def test_from_import_records_the_imported_names_not_just_the_package():
+    """`from harness import runner, scoring` must mark runner and scoring as referenced.
+
+    Matching only the path after `from` missed the most ordinary way there is to import a
+    submodule, so a package's own modules were reported dead while being imported on the
+    next line. All six of this repo's candidates were live.
+    """
+    src = "from harness import runner, scoring\n"
+    dead = rm._python_dead_module_candidates([
+        ("pkg/user.py", _tmp_py(src)),
+        ("pkg/runner.py", _tmp_py("X = 1\n")),
+        ("pkg/scoring.py", _tmp_py("Y = 2\n")),
+    ])
+    # user.py itself is unreferenced and correctly flagged; the claim is about the two
+    # modules it imports, so assert on those rather than on an empty list.
+    assert "pkg/runner.py" not in dead
+    assert "pkg/scoring.py" not in dead
+
+
+def test_bare_import_is_recorded():
+    r"""`\s` inside a character class matches newlines, so a naive `[\w.,\s]+` swallows
+    the following lines and breaks every bare `import x`."""
+    dead = rm._python_dead_module_candidates([
+        ("pkg/user.py", _tmp_py("import loop_common\n\nfrom pathlib import Path\n")),
+        ("pkg/loop_common.py", _tmp_py("X = 1\n")),
+    ])
+    assert "pkg/loop_common.py" not in dead
+
+
+def test_import_with_a_trailing_comment_is_recorded():
+    """`import fixtures  # noqa: E402` is ordinary in this repo (sys.path juggling)."""
+    dead = rm._python_dead_module_candidates([
+        ("pkg/user.py", _tmp_py("import fixtures  # noqa: E402\n")),
+        ("pkg/fixtures.py", _tmp_py("X = 1\n")),
+    ])
+    assert "pkg/fixtures.py" not in dead
+
+
+def test_import_aliased_records_the_real_module():
+    dead = rm._python_dead_module_candidates([
+        ("pkg/user.py", _tmp_py("import baseline as bl\nfrom . import db, nl\n")),
+        ("pkg/baseline.py", _tmp_py("X = 1\n")),
+        ("pkg/db.py", _tmp_py("Y = 2\n")),
+        ("pkg/nl.py", _tmp_py("Z = 3\n")),
+    ])
+    assert not {"pkg/baseline.py", "pkg/db.py", "pkg/nl.py"} & set(dead)
+
+
+def test_a_genuinely_unreferenced_module_is_still_reported():
+    """The counterpart guard: fixing the false positives must not blunt the check."""
+    dead = rm._python_dead_module_candidates([
+        ("pkg/user.py", _tmp_py("import something_else\n")),
+        ("pkg/orphan.py", _tmp_py("X = 1\n")),
+    ])
+    assert "pkg/orphan.py" in dead
+
+
+def test_gitignore_gaps_skip_ecosystems_the_repo_does_not_have(tmp_path):
+    """A pure-Python repo with no build step was docked for not ignoring node_modules."""
+    (tmp_path / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+    files = ["main.py", "conftest.py"]
+
+    present, gaps = rm._gitignore_gaps(tmp_path, files)
+
+    assert present
+    assert "node_modules" not in gaps, "no package.json — node_modules cannot occur here"
+    assert "dist" not in gaps and "build" not in gaps, "no build config in this tree"
+    assert ".env" in gaps and "*.log" in gaps, "secrets and logs can appear in any repo"
+
+
+def test_gitignore_gaps_include_an_ecosystem_the_repo_does_have(tmp_path):
+    (tmp_path / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+    files = ["main.py", "package.json"]
+
+    _present, gaps = rm._gitignore_gaps(tmp_path, files)
+
+    assert "node_modules" in gaps, "package.json present — node_modules is a real risk"
+
+
+def test_gitignore_gaps_without_a_file_list_keeps_the_old_behaviour(tmp_path):
+    """Callers that pass no file list still get the full expectation set."""
+    (tmp_path / ".gitignore").write_text("nothing\n", encoding="utf-8")
+    _present, gaps = rm._gitignore_gaps(tmp_path)
+    assert set(gaps) == set(rm.GITIGNORE_EXPECTED)
+
+
+def test_gitignore_expected_is_derived_from_the_rules():
+    """The compatibility alias must not drift from the table it mirrors."""
+    assert rm.GITIGNORE_EXPECTED == tuple(f for f, _ in rm.GITIGNORE_RULES)

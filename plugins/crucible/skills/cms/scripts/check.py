@@ -34,6 +34,7 @@ from common import (
     REQUIRED_FILES,
     Finding,
     find_atpath_imports,
+    frontmatter_is_unterminated,
     iter_md_files,
     load_state,
     parse_frontmatter,
@@ -65,7 +66,16 @@ def check_frontmatter(path: Path, required: bool) -> list[Finding]:
     findings: list[Finding] = []
     rel = str(path)
     if not fm:
-        if required:
+        # An unterminated fence is a different fault from having no frontmatter, and they
+        # used to be reported as the same thing (or, on an exempt file, as nothing at all).
+        # It is an Error everywhere, not only where frontmatter is required: the author
+        # plainly intended metadata, and every consumer is silently ignoring all of it.
+        if frontmatter_is_unterminated(text):
+            findings.append(Finding(
+                "error", rel,
+                "frontmatter opens with '---' but is never closed — every field in it is "
+                "being ignored by every tool that reads this file. Add the closing '---'."))
+        elif required:
             findings.append(Finding("error", rel, "missing frontmatter (required for files under docs/)"))
         return findings
     # Required-field completeness only applies where frontmatter is required. But any

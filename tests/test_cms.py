@@ -975,3 +975,51 @@ def test_aggregate_counts_bytes_not_characters(tmp_path):
 
     assert len(findings) == 1, "30 x ~1400 bytes should trip a 20000-byte cap"
     assert str(30 * 1402) in findings[0].message
+
+
+# --------------------------------------------------------------------------- unterminated frontmatter
+#
+# parse_frontmatter returns ({}, 0) for BOTH an unclosed fence and no frontmatter at all,
+# so all nine of its callers treated "you typo'd the closing fence" and "this file has no
+# frontmatter" as the same condition. On a docs/ file that surfaced as a misleading
+# "missing frontmatter"; on an exempt file it surfaced as nothing, and the document's real
+# metadata was silently ignored by every tool that reads it.
+
+
+def test_parse_frontmatter_still_returns_empty_for_an_unclosed_fence():
+    """The return contract is deliberately unchanged — half-read frontmatter is worse than
+    none, and no caller should have to handle a partial dict."""
+    assert common.parse_frontmatter("---\ntitle: x\nno closing fence\n") == ({}, 0)
+
+
+def test_unterminated_is_distinguishable_from_absent():
+    assert common.frontmatter_is_unterminated("---\ntitle: x\nno closing fence\n") is True
+    assert common.frontmatter_is_unterminated("no frontmatter here\n") is False
+    assert common.frontmatter_is_unterminated("---\ntitle: x\n---\n\nbody\n") is False
+    assert common.frontmatter_is_unterminated("") is False
+
+
+def test_a_body_dash_rule_does_not_count_as_a_closing_fence():
+    """`---` on line 1 with a horizontal rule later still closes the block as far as YAML
+    is concerned, so this must NOT be reported as unterminated."""
+    assert common.frontmatter_is_unterminated("---\ntitle: x\n---\n\ntext\n\n---\n") is False
+
+
+def test_unclosed_fence_is_an_error_even_where_frontmatter_is_not_required(tmp_path):
+    """The case that previously produced silence. The author plainly intended metadata."""
+    f = write(tmp_path / "README.md", "---\ntitle: x\nstatus: active\nno fence\n")
+
+    findings = check.check_frontmatter(f, required=False)
+
+    assert [x for x in findings if x.level == "error"], "an unclosed fence must not be silent"
+    assert "never closed" in findings[0].message
+
+
+def test_unclosed_fence_reports_the_real_fault_not_missing_frontmatter(tmp_path):
+    f = write(tmp_path / "doc.md", "---\ntitle: x\nno fence\n")
+
+    messages = [x.message for x in check.check_frontmatter(f, required=True)]
+
+    assert any("never closed" in m for m in messages)
+    assert not any("missing frontmatter" in m for m in messages), \
+        "reporting 'missing' for a typo'd fence sends the author to the wrong fix"
