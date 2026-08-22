@@ -238,3 +238,28 @@ def test_a_commit_touching_both_a_sibling_and_shared_paths_is_included(repo):
 
     assert "pure beta work" not in out, "a commit touching only a sibling stays out"
     assert "shared tooling, also touching beta" in out, "a mixed commit is in, by design"
+
+
+def test_the_script_runs_past_its_guards_when_the_version_is_unchanged(repo):
+    """A real (non-dry) run reaches the version computation before the guards read it.
+
+    The guards were originally placed above `CUR`/`NEW`, so under `set -u` a real run died
+    with "CUR: unbound variable" before doing anything. `--dry-run` skips both guards, so
+    the dry-run tests passed and could never have caught it — the guard had never been
+    watched running.
+
+    This exercises the ordering without publishing anything: the fixture repo has no
+    remote and no `gh` context, so the protection probe finds nothing and the run proceeds
+    to the gates, which fail on the absent test suite. Reaching a *gate* failure is the
+    proof — it means the version block ran first.
+    """
+    _commit(repo, "scripts/x.py", "x = 1\n", "feat: something")
+    proc = subprocess.run(
+        [BASH, "scripts/release.sh", "alpha", "0.1.0"],   # same version: no bump commit
+        cwd=str(repo), capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=300)
+
+    combined = proc.stdout + proc.stderr
+    assert "unbound variable" not in combined, \
+        "a guard read a variable the script had not computed yet"
+    assert "CUR" not in combined or "unbound" not in combined

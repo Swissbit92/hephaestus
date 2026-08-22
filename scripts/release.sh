@@ -49,6 +49,13 @@ branch="$(git rev-parse --abbrev-ref HEAD)"
 [[ "$branch" == "main" ]] || die "must be on 'main' (currently on '$branch')"
 [[ -z "$(git status --porcelain)" ]] || die "working tree not clean — commit or stash first"
 
+# --- Compute next version (math lives in bump_version.py, unit-tested) --------
+CUR="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$MANIFEST")"
+NEW="$("$PY" "$REPO_ROOT/scripts/bump_version.py" "$CUR" "$BUMP")" || die "version bump failed"
+TAG="${PLUGIN}-v$NEW"
+
+git rev-parse "$TAG" >/dev/null 2>&1 && die "tag $TAG already exists"
+
 # --- Refuse early if main will reject the push --------------------------------
 # Checked BEFORE any mutation, on purpose. `main` requires status checks and enforces them
 # on admins, so a freshly-created commit — which by definition has no checks yet — cannot
@@ -104,12 +111,6 @@ if [[ "$DRY_RUN" != "1" ]]; then
   echo "✔ suite green · public-safe clean · manifests valid"
 fi
 
-# --- Compute next version (math lives in bump_version.py, unit-tested) --------
-CUR="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$MANIFEST")"
-NEW="$("$PY" "$REPO_ROOT/scripts/bump_version.py" "$CUR" "$BUMP")" || die "version bump failed"
-TAG="${PLUGIN}-v$NEW"
-
-git rev-parse "$TAG" >/dev/null 2>&1 && die "tag $TAG already exists"
 
 # --- Release notes: commits since this plugin's last tag ---------------------
 #
