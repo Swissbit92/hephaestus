@@ -5,6 +5,7 @@ created: 2026-06-28
 last_reviewed_on: 2026-06-28
 review_in: 24 months
 applies_to: hephaestus
+ai_summary: "ADR-001. Settles the marketplace topology (one marketplace, not a public/private split) and establishes the generic/domain seam that tests/test_seam.py now enforces — the rule that a generic plugin may not carry tokens specific to one operator's stack. Superseded in part by ADR-002 on the public/private question. Read it before adding a plugin, before writing anything domain-specific into a generic one, or when you need the original reasoning behind the seam."
 ---
 
 # ADR-001: Consolidated private marketplace and restricted-agent factory architecture
