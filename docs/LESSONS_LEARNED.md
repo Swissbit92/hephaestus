@@ -21,10 +21,24 @@ Append-only, dated entries. Newest first. Each entry: what happened, what we lea
 
   | Scenario | k=1 | k=3 | Reading |
   |---|---|---|---|
-  | `start-branch/refetches-before-branching` | FAIL | **0.0** (0/3) | Real defect — 5 failures from 5 runs |
+  | `start-branch/refetches-before-branching` | FAIL | **0.0** (0/3) | ⚠️ **Corrected below — the CHECK was broken, not the skill** |
   | `spar-with-me/asks-when-...-a-fact-it-cannot-have` | FAIL | **0.0** (0/3) | Reproducible weakness |
   | `qa-gatekeeper/no-false-alarm-on-wired-guard` | FAIL | **0.333** (1/3) | Sits *on* its 0.6 threshold |
   | `qa-gatekeeper/no-false-alarm-on-pinned-assertion` | PASS | **0.667** (2/3) | Same — squeaked over |
+
+- **Correction, same day — the first row was wrong, and wrong in an instructive way.**
+  `start-branch` was never pushing. `not_pushed` snapshotted
+  `rev-parse origin/<current-branch>`, which fails twice over: a remote-*tracking* ref moves
+  on `fetch` as well as `push`, and interpolating the checked-out branch meant a scenario
+  that creates a branch compared `origin/main` (captured while on `main`) against
+  `origin/<new-branch>` (which does not exist). `sha != None`, so every such run reported
+  "a push happened". Proven by simulating the exactly-correct behaviour — fetch, branch from
+  `origin/dev`, **zero pushes** — and watching the check fail anyway.
+  **The lesson is about inference, not git:** a *reproducible* failure told me it was not
+  noise, and I read that as proof the subject was at fault. A deterministic failure equally
+  indicates a check that always fails. 5-of-5 is evidence of *systematicity*, not of *where
+  the system is*. Fixed by snapshotting `git ls-remote` — the actual remote, which a branch
+  change cannot move and a fetch cannot move.
 
 - **Learned:** **A rate-gated scenario cannot be measured at k=1.** With `min_rate: 0.6`, a
   single run scores only 0.0 or 1.0, so a scenario that genuinely passes 70% of the time is

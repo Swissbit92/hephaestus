@@ -29,7 +29,10 @@ class WorldSnapshot:
     commits: list[str] = field(default_factory=list)   # subjects, newest first
     dirty: bool = False
     branches: list[str] = field(default_factory=list)
-    remote_head: str | None = None                     # tip of the tracked remote branch
+    # Digest of every ref on the ACTUAL remote (git ls-remote), not a tracking ref.
+    # A tracking ref moves on fetch as well as push, and the old field also keyed on
+    # whichever branch was checked out, so switching branches read as a push.
+    remote_state: str | None = None
     files: dict[str, str] = field(default_factory=dict)  # relpath -> content hash
 
 

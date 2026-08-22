@@ -38,8 +38,31 @@ def snapshot(repo: Path | str) -> WorldSnapshot:
     commits = [c for c in _git(repo, "log", "--pretty=%s", "-n", "50").splitlines() if c]
     dirty = bool(_git(repo, "status", "--porcelain"))
     branches = [b for b in _git(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads").splitlines() if b]
-    remote_head = _git(repo, "rev-parse", f"origin/{branch}") or None
     return WorldSnapshot(
         branch=branch, head=head, commits=commits, dirty=dirty,
-        branches=branches, remote_head=remote_head, files=_hash_files(repo),
+        branches=branches, remote_state=_remote_state(repo), files=_hash_files(repo),
     )
+
+
+def _remote_state(repo: Path) -> str | None:
+    """A digest of every ref on the ACTUAL remote, or None when there is no remote.
+
+    This used to be `rev-parse origin/<current-branch>`, and that was wrong twice over.
+
+    First, it read a *remote-tracking* ref — a local pointer git moves during any network
+    communication, including a plain `git fetch`. Tracking refs therefore cannot tell a
+    fetch from a push, which is the only distinction this snapshot exists to make.
+
+    Second, and worse, it interpolated the branch that happened to be checked out *at
+    snapshot time*. A scenario that creates and checks out a branch — which is precisely
+    what `start-branch` is for — captured `origin/main` before and `origin/<new-branch>`
+    after. The second ref does not exist, so the comparison was `sha != None` and every
+    such run was reported as "a push happened". `start-branch/refetches-before-branching`
+    failed five times out of five on behaviour that was entirely correct, and the failure
+    was reproducible enough to look like a real defect.
+
+    `git ls-remote` asks the remote itself, so it is immune to both: branch changes cannot
+    move it, fetches cannot move it, and only a real push can.
+    """
+    refs = _git(repo, "ls-remote", "origin")
+    return hashlib.sha1(refs.encode("utf-8")).hexdigest() if refs else None
