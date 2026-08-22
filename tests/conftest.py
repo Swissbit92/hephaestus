@@ -8,9 +8,13 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
+from datetime import date, timedelta
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CMS_SCRIPTS = REPO_ROOT / "plugins" / "crucible" / "skills" / "cms" / "scripts"
@@ -117,3 +121,61 @@ def pytest_unconfigure(config):
     """
     while _OWNED_TEMP_DIRS:
         shutil.rmtree(_OWNED_TEMP_DIRS.pop(), ignore_errors=True)
+
+
+# --------------------------------------------------------------------------- git fixtures
+#
+# Document ages are resolved from git committer dates, not mtimes, because git neither
+# records nor restores mtimes — so every test that manufactured an old file with
+# `os.utime` was asserting against a filesystem state git never produces, and the archive
+# rule was able to be entirely broken on every clone while the suite stayed green. This
+# fixture makes "an old document" mean the only thing it can honestly mean: a real commit
+# with a real, backdated committer date.
+
+
+class GitDocRepo:
+    """A throwaway git repository whose files have genuine commit dates."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    def _git(self, *args: str, when: str = None) -> None:
+        env = dict(os.environ)
+        env.setdefault("GIT_CONFIG_NOSYSTEM", "1")
+        if when:
+            env["GIT_COMMITTER_DATE"] = when
+            env["GIT_AUTHOR_DATE"] = when
+        subprocess.run(
+            ["git", "-c", "user.email=t@example.invalid", "-c", "user.name=Test",
+             "-c", "commit.gpgsign=false", *args],
+            cwd=str(self.path), env=env, check=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            encoding="utf-8", errors="replace",
+        )
+
+    def commit(self, rel: str, body: str, age: int) -> Path:
+        """Write `rel` and commit it `age` days in the past.
+
+        The file's mtime is *now* — deliberately. Only git knows it is old, which is
+        exactly the condition a fresh clone produces and `os.utime` never does.
+        """
+        target = self.path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(body, encoding="utf-8")
+        when = (date.today() - timedelta(days=age)).isoformat() + "T12:00:00+00:00"
+        self._git("add", "--", rel)
+        self._git("commit", "--quiet", "-m", f"add {rel}", when=when)
+        return target
+
+
+@pytest.fixture
+def git_doc_repo(tmp_path):
+    """An initialised git repo with a docs/ dir, plus a `.commit(rel, body, age)` helper."""
+    repo = tmp_path / "repo"
+    (repo / "docs").mkdir(parents=True)
+    subprocess.run(["git", "init", "--quiet", "repo"], cwd=str(tmp_path), check=True,
+                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    made = GitDocRepo(repo)
+    yield made
+    import doc_age
+    doc_age.clear_cache()  # the module memoizes per repo root; every test builds a new one
