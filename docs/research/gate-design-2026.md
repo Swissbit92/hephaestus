@@ -5,6 +5,7 @@ created: 2026-08-01
 last_reviewed_on: 2026-08-01
 review_in: 6 months
 applies_to: hephaestus
+ai_summary: "Research note behind evidence-typed verification — why a gate must declare what counts as proof instead of assuming a test suite, and why the verdict is three-valued (pass / fail / could-not-check) rather than binary. Backs .crucible/evidence.json and evidence_gate.py. Read it before changing what the gate accepts, or before folding 'could not check' into either of the other two."
 ---
 
 # Gate Design — Evidence-Typed Verification

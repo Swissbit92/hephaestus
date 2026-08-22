@@ -5,6 +5,7 @@ created: 2026-06-28
 last_reviewed_on: 2026-08-01
 review_in: 3 months
 applies_to: hephaestus
+ai_summary: "Near-term dated items only — what is actually queued and what has shipped, phase by phase. Strategic direction lives in VISION.md and the architecture decisions in decisions/; this is the short horizon in between. Read it to find out what is already planned before proposing new work, or to see which phase a half-built capability belongs to."
 ---
 
 # Roadmap

@@ -137,6 +137,17 @@ FRONTMATTER_REQUIRED = {"title", "status", "created", "last_reviewed_on", "revie
 # cost it was added to avoid. 1500 bytes is roughly a short paragraph: enough to say what
 # the document is and when to open it, not enough to say what is in it.
 AI_SUMMARY_MAX_BYTES = 1500
+
+# The per-document cap bounds one row of the routing table. What a triage pass is actually
+# charged is the SUM of every row, and that grows with the corpus while each summary stays
+# comfortably legal — fifty documents at the cap is a table costing more than the reads it
+# was built to replace, with every individual check passing. So the aggregate is bounded
+# too, at roughly 5k tokens: past that, the table costs more than opening the two or three
+# documents it would have saved you from opening, which is the point where the mechanism
+# stops paying for itself. A Warning, never an Error — the corpus is not broken, it has
+# outgrown a flat table, and the fix is usually splitting it or archiving what should not
+# still be indexed rather than shaving bytes off every summary.
+AI_SUMMARY_AGGREGATE_WARN_BYTES = 20000
 FRONTMATTER_STATUSES = {"active", "completed", "deprecated", "Proposed", "Accepted", "Deprecated", "Superseded"}
 # Controlled vocabulary for the optional `threat_level` frontmatter field (CVSS-aligned).
 # Validated only when present, so docs that omit it are unaffected; used by docs/THREAT_LEVEL.md.

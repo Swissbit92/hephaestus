@@ -6,6 +6,7 @@ last_reviewed_on: 2026-06-28
 review_in: 6 months
 applies_to: hephaestus
 threat_level: Medium
+ai_summary: "The repo's security posture stated as CVSS-aligned threat levels per surface, and the reasoning behind each rating. Read it before adding anything that executes, writes outside the repo, or takes untrusted input — and before assuming a plugin's read-only claim is structural rather than merely intended."
 ---
 
 # Threat Level — hephaestus

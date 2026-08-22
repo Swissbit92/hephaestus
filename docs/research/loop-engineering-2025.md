@@ -5,6 +5,7 @@ created: 2026-06-28
 last_reviewed_on: 2026-06-28
 review_in: 6 months
 applies_to: hephaestus
+ai_summary: "Research note behind the loop-harness skill: how to run a bounded, single-threaded, read-only agent loop that cannot merge, push or touch production. Sources the turn and budget ceilings, the LOOP-STATE ledger, and worktree-only isolation behind a PreToolUse hook. Read it before building or loosening any semi-autonomous sweeper."
 ---
 
 # Loop Engineering — 2024/2025 State of the Art

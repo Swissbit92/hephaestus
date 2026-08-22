@@ -5,6 +5,7 @@ created: 2026-08-15
 last_reviewed_on: 2026-08-15
 review_in: 24 months
 applies_to: hephaestus
+ai_summary: "ADR-002. Retires VISION.md's 'public distribution is a non-goal' and makes this repository public — which makes the secret-guard rule stricter rather than looser, because publication cannot be walked back. Read it before assuming anything here is private, and before porting a pattern from a private source (patterns in, private content out; check-public-safe.sh is the gate)."
 ---
 
 # ADR-002: Publish hephaestus publicly, retiring the private-distribution non-goal
