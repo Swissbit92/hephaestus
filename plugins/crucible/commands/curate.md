@@ -79,6 +79,13 @@ informative, or of verification too generous to be a test. `predictions.py list`
 out loud when it has never recorded a miss. **Treat that message as a finding about this
 pass**, not as a compliment.
 
+`list` reports a second thing worth acting on: how many predictions carry **no baseline** —
+no record of what their check showed before the change. Those are the entries whose checks
+were never observed failing, and a check that has never failed cannot be shown to
+distinguish success from failure. Do not retro-fit a baseline; the tree it described is
+gone, and inventing one is the same falsification as editing a claim. Instead, weight those
+verdicts lower when reading the ledger's overall shape, and say so in the report.
+
 ## Phase 5 — The backlog
 
 Produce a ranked list, and rank it by *cost of leaving it* against *cost of fixing it* —

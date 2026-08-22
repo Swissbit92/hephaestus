@@ -20,7 +20,20 @@ Thanks for sharpening the workshop. A few rules keep the marketplace clean and r
 - **Skills make behavioral claims → add an eval.** When a skill gains a falsifiable
   behavior (e.g. "refuses X", "never writes without approval"), add a scenario to
   `evals/scenarios.json` (see [evals/README.md](evals/README.md)). The eval harness asserts
-  it against a real fixture rather than trusting the prose.
+  it against a real fixture rather than trusting the prose. If the edit *describes* behaviour
+  already implemented in scripts rather than *instructing* a model, name the deterministic
+  tests that pin it instead — and check that at least one of them fails when the description
+  stops being true. `.crucible/evidence.json` spells out both branches; pick one out loud.
+- **Never read `st_mtime` in shipped plugin code.** git neither records nor restores
+  modification times, so a clone stamps every file with the checkout time and anything
+  derived from mtime reports every file as brand new on someone else's machine — while
+  looking perfectly healthy. Use the git committer date
+  (`plugins/crucible/skills/cms/scripts/doc_age.py`) or a date carried in the file's content.
+  Enforced by `scripts/checks/mtime_is_never_a_clock.sh`.
+- **A check nobody has watched fail is not a check.** Before you trust a new gate, test or
+  prediction-check, reintroduce the defect and confirm it goes red. This repo settled three
+  predictions on instruments that could not have distinguished success from failure, so
+  `predictions.py record` now requires `--baseline` — what the check shows before the change.
 
 ## Adding a skill
 

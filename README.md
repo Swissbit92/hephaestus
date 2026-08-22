@@ -86,6 +86,13 @@ FULL work runs every phase; LIGHT skips Research/Architect; TRIVIAL skips isolat
 Isolate/Integrate call **start-branch**/**finish-branch**; the QA gate is **qa-gatekeeper**;
 docs go through **cms**; LLM-backed or behavior-changing steps slot in **eval-first**/**flag-gate**.
 
+FULL work also **records a prediction** before implementing — what the change should achieve,
+the check that would settle it, and what that check shows *right now*, before the change. The
+third part is not bookkeeping: three entries in this repo's own ledger were settled on checks
+that could not have failed, because a check written after you understand the problem is born
+green and never once observed failing. `predictions.py` refuses a prediction without a
+baseline for the same reason TDD makes you watch a test go red first.
+
 ## Install
 
 ### Claude Code
@@ -177,10 +184,12 @@ interpreters rather than failing obscurely. Everything else runs on the floor.
 hephaestus/
 ├── .claude-plugin/marketplace.json     # marketplace catalog (lists all plugins)
 ├── scripts/                            # release.sh · bump_version.py · validate_manifests.py
-│                                       # check-public-safe.sh · python_floor.py · install_skills.py
+│                                       # check-public-safe.sh · python_floor.py · mtime_guard.py
+│                                       # install_skills.py · checks/ (the executable invariants)
 ├── evals/                              # skill-eval harness (behavioral scenarios)
 ├── tests/                              # pytest suite
-├── docs/                               # ROADMAP · INVARIANTS · decisions/ (ADRs) · research/ — cms-managed
+├── docs/                               # ARCHITECTURE · ROADMAP · INVARIANTS · LESSONS_LEARNED
+│                                       # predictions.jsonl · decisions/ (ADRs) · research/ — cms-managed
 ├── VISION.md · CHANGELOG.md · CONTRIBUTING.md
 └── plugins/
     ├── crucible/                        # flagship craft tools (see plugins/crucible/README.md)

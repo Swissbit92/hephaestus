@@ -23,7 +23,7 @@
     },
     {
       "when": "a SKILL.md, a command or an agent - prose that instructs a model",
-      "evidence": "a behavioral eval scenario in evals/scenarios.json asserting the new falsifiable claim, plus skill_lint --strict clean. Where a claim cannot be falsified by the harness, say so explicitly rather than omitting it - an untested instruction is not the same as a tested one",
+      "evidence": "skill_lint --strict clean, PLUS one of two branches - pick one and name it, the choice is the evidence. (a) PROSE THAT INSTRUCTS: the edit tells a model to do, refuse or prefer something, so the claim lives only in the prose and nothing else can falsify it. Requires a behavioral eval scenario in evals/scenarios.json asserting that claim. (b) PROSE THAT DESCRIBES: the edit documents behaviour implemented in scripts, so the prose is a mirror and the script is the thing. Requires naming the deterministic tests that pin the described behaviour, and at least one of them must fail if the description stops being true - a test that passes either way does not pin anything. Branch (b) is not the easy way out: it is harder to satisfy honestly, because naming the test forces you to check it exists. If NEITHER fits - the claim is real and nothing available can falsify it - say that out loud and record could-not-check. An untested instruction is not the same as a tested one, and the point of naming the branch is that 'it did not need a scenario' stops being something anyone can assert without argument",
       "paths": [
         "plugins/*/skills/*/SKILL.md",
         "plugins/*/commands/*.md",
