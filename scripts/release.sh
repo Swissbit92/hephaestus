@@ -56,7 +56,12 @@ branch="$(git rev-parse --abbrev-ref HEAD)"
 # state: manifest bumped, tag created locally, nothing published, and a git error that
 # says nothing about which half happened. The same failure mode the "already at $NEW"
 # branch below was written to avoid.
-if [[ "$DRY_RUN" != "1" ]] && command -v gh >/dev/null 2>&1; then
+#
+# Only fires when a bump commit would actually be created. When the manifest already
+# carries the target version — the normal case after the bump has been merged through a
+# PR — nothing needs pushing to `main` and only the tag does, which is not protected.
+# Refusing there would block the very path this message tells people to use.
+if [[ "$DRY_RUN" != "1" && "$CUR" != "$NEW" ]] && command -v gh >/dev/null 2>&1; then
   _prot="$(gh api "repos/{owner}/{repo}/branches/main/protection" 2>/dev/null || true)"
   if [[ -n "$_prot" ]] \
      && grep -q '"enforce_admins"' <<<"$_prot" \
