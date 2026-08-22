@@ -5,7 +5,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterator
 
@@ -267,3 +267,102 @@ def repo_name(repo: Path) -> str:
 
 def today_iso() -> str:
     return date.today().isoformat()
+
+
+def requires_frontmatter(path) -> bool:
+    """Do the frontmatter rules bind this file?
+
+    One definition. There were four: three spellings inside `check.py` (the repo walk, the
+    `--file` path, the mechanical hook path) which omitted the archive exemption, and one
+    in `hook.py` which included it — so `check --file` on an archived document demanded
+    frontmatter that the write-blocking hook would have let through. The archive exemption
+    is the correct behaviour: an archived document is a historical record, not a live one,
+    and the repo walk already skips `archive/` via `iter_md_files`.
+    """
+    p = str(path).replace("\\", "/")
+    if Path(path).name in FRONTMATTER_EXEMPT:
+        return False
+    if "/archive/" in p:
+        return False
+    return "/docs/" in p
+
+
+def validate_frontmatter(text: str, path, required: bool = None) -> list:
+    """Every frontmatter rule, defined once, for both the linter and the write hook.
+
+    `check.py` and `hook.py` each carried a full copy of these rules. They had already
+    drifted in the direction that matters most: the hook — the thing that *blocks the
+    write* — knew nothing about an unterminated fence, so it reported "Missing frontmatter"
+    for a file whose frontmatter was present and merely missing its closing `---`. The
+    author was sent to add what was already there. A gate that misdiagnoses is worse than
+    one that stays quiet, because it spends the author's trust on a wrong answer.
+
+    Returns `Finding`s so callers choose severity policy rather than re-deriving rules:
+    `check.py` reports every level, the hook blocks on `error` only — a summary that is
+    forty bytes over budget should not stop someone saving a file.
+    """
+    rel = str(path)
+    if required is None:
+        required = requires_frontmatter(path)
+    fm, _ = parse_frontmatter(text)
+    findings: list = []
+
+    if not fm:
+        # An unterminated fence is a different fault from having no frontmatter, and it is
+        # an Error everywhere rather than only where frontmatter is required: the author
+        # plainly intended metadata, and every tool that reads this file is ignoring it.
+        if frontmatter_is_unterminated(text):
+            findings.append(Finding(
+                "error", rel,
+                "frontmatter opens with '---' but is never closed — every field in it is "
+                "being ignored by every tool that reads this file. Add the closing '---'."))
+        elif required:
+            findings.append(Finding(
+                "error", rel,
+                "missing frontmatter (required for files under docs/); expected fields: "
+                f"{sorted(FRONTMATTER_REQUIRED)}"))
+        return findings
+
+    if required:
+        missing = FRONTMATTER_REQUIRED - set(fm)
+        if missing:
+            findings.append(Finding("error", rel, f"frontmatter missing fields: {sorted(missing)}"))
+
+    status = fm.get("status")
+    if status and status not in FRONTMATTER_STATUSES:
+        findings.append(Finding("error", rel,
+                                f"invalid status '{status}'; expected one of {sorted(FRONTMATTER_STATUSES)}"))
+    threat_level = fm.get("threat_level")
+    if threat_level and threat_level not in FRONTMATTER_THREAT_LEVELS:
+        findings.append(Finding("error", rel,
+                                f"invalid threat_level '{threat_level}'; expected one of "
+                                f"{sorted(FRONTMATTER_THREAT_LEVELS)}"))
+    for fld in ("created", "last_reviewed_on"):
+        if fld in fm and parse_iso_date(fm[fld]) is None:
+            findings.append(Finding("error", rel,
+                                    f"frontmatter field '{fld}' is not YYYY-MM-DD: {fm[fld]!r}"))
+    if "review_in" in fm and parse_review_in(fm["review_in"]) is None:
+        findings.append(Finding("error", rel, f"frontmatter 'review_in' unparseable: {fm['review_in']!r}"))
+
+    summary = fm.get("ai_summary")
+    if summary is not None:
+        size = len(summary.encode("utf-8"))
+        if not summary.strip():
+            findings.append(Finding("warning", rel,
+                                    "frontmatter 'ai_summary' is empty — omit the field rather "
+                                    "than declaring an empty one"))
+        elif size > AI_SUMMARY_MAX_BYTES:
+            findings.append(Finding("warning", rel,
+                                    f"frontmatter 'ai_summary' is {size} bytes (>{AI_SUMMARY_MAX_BYTES}); "
+                                    f"it is read on every triage pass, so state what the doc is and "
+                                    f"when to open it, not what is in it"))
+
+    reviewed = parse_iso_date(fm.get("last_reviewed_on", ""))
+    review_days = parse_review_in(fm.get("review_in", ""))
+    if reviewed and review_days is not None:
+        review_by = reviewed + timedelta(days=review_days)
+        if review_by < date.today() and fm.get("status") == "active":
+            findings.append(Finding("warning", rel,
+                                    f"past review_by {review_by} (last_reviewed_on={reviewed}, "
+                                    f"review_in={fm['review_in']})"))
+    return findings

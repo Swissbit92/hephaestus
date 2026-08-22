@@ -366,3 +366,45 @@ def test_gitignore_gaps_without_a_file_list_keeps_the_old_behaviour(tmp_path):
 def test_gitignore_expected_is_derived_from_the_rules():
     """The compatibility alias must not drift from the table it mirrors."""
     assert rm.GITIGNORE_EXPECTED == tuple(f for f, _ in rm.GITIGNORE_RULES)
+
+
+def test_dotenv_is_not_hidden_by_a_venv_line(tmp_path):
+    """The false negative that hid a credential-publishing gap in every Python repo.
+
+    `.env` normalises to the needle `env`, and `.venv` contains `env`, so a substring test
+    reported `.env` as covered in any repo using a virtualenv. That is the worst possible
+    place for this check to be wrong: it hides the one entry whose absence can publish a
+    key, and it hides it in the most common possible repo shape. Found only by a full audit.
+    """
+    _write(tmp_path, ".gitignore", "__pycache__/\n.venv/\n")
+    files = ["main.py", "conftest.py"]
+
+    _present, gaps = rm._gitignore_gaps(tmp_path, files)
+
+    assert ".env" in gaps, "a .venv line must not be read as covering .env"
+
+
+def test_dotenv_is_cleared_when_actually_declared(tmp_path):
+    """The counterpart: fixing the false negative must not create a false positive."""
+    _write(tmp_path, ".gitignore", "__pycache__/\n.venv/\n.env\n.env.*\n!.env.example\n")
+    _present, gaps = rm._gitignore_gaps(tmp_path, ["main.py"])
+    assert ".env" not in gaps
+
+
+def test_a_negation_entry_is_not_coverage():
+    """`!.env.example` re-includes a file; it does not ignore anything."""
+    assert rm._covered_by(".env", {"!.env.example"}) is False
+    assert rm._covered_by(".env", {".env"}) is True
+
+
+def test_wildcard_entries_still_count_as_coverage():
+    assert rm._covered_by(".env", {".env*"}) is True
+    assert rm._covered_by("*.log", {"logs/*.log"}) is True
+    assert rm._covered_by("dist", {"dist"}) is True
+
+
+def test_a_merely_similar_entry_does_not_count():
+    """The general form of the .venv/.env bug — no substring shortcuts."""
+    assert rm._covered_by(".env", {".venv"}) is False
+    assert rm._covered_by("build", {"rebuilder"}) is False
+    assert rm._covered_by("dist", {"distribution_notes.md"}) is False

@@ -75,6 +75,12 @@ after a defect that was invisible from a POSIX machine:
   batching, shallow-clone detection and fallbacks) or a date carried in the file's content.
   Enforced by `scripts/mtime_guard.py`, which parses rather than greps — a textual search
   flags `doc_age.py`'s own docstring, and a rule that accuses its own fix gets switched off.
+- **A gate must never know less than the report it mirrors.** `hook.py` (which blocks a
+  write) and `check.py` (which only reports) each carried a copy of the frontmatter
+  rules, and the hook's had drifted *behind* — it answered "missing frontmatter" for a
+  file whose frontmatter was present and merely unterminated, sending the author to add
+  what was already there. Both now call `common.validate_frontmatter`; the hook blocks on
+  `error` only, so a warning never stops someone saving a file.
 - **A check that cannot fail is not a check, and silence is not success.** Three defects
   this month shared one shape: the code was present, plausible, and quiet when wrong. Age
   from mtime worked locally and was dead on every clone; `predictions.py`'s `--check`

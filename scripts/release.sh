@@ -49,6 +49,56 @@ branch="$(git rev-parse --abbrev-ref HEAD)"
 [[ "$branch" == "main" ]] || die "must be on 'main' (currently on '$branch')"
 [[ -z "$(git status --porcelain)" ]] || die "working tree not clean — commit or stash first"
 
+# --- Refuse early if main will reject the push --------------------------------
+# Checked BEFORE any mutation, on purpose. `main` requires status checks and enforces them
+# on admins, so a freshly-created commit — which by definition has no checks yet — cannot
+# be pushed directly. Discovering that after the bump and tag leaves the worst possible
+# state: manifest bumped, tag created locally, nothing published, and a git error that
+# says nothing about which half happened. The same failure mode the "already at $NEW"
+# branch below was written to avoid.
+if [[ "$DRY_RUN" != "1" ]] && command -v gh >/dev/null 2>&1; then
+  _prot="$(gh api "repos/{owner}/{repo}/branches/main/protection" 2>/dev/null || true)"
+  if [[ -n "$_prot" ]] \
+     && grep -q '"enforce_admins"' <<<"$_prot" \
+     && "$PY" -c "
+import json,sys
+d=json.loads(sys.stdin.read())
+ctx=(d.get('required_status_checks') or {}).get('contexts') or []
+adm=(d.get('enforce_admins') or {}).get('enabled')
+sys.exit(0 if (ctx and adm) else 1)" <<<"$_prot"; then
+    die "main requires status checks and enforces them on admins, so this script cannot
+  push a release commit directly. Use the PR route instead:
+
+    git switch -c release/${PLUGIN}-v\$NEW
+    # bump plugins/$PLUGIN/.claude-plugin/plugin.json by hand
+    git commit -am \"Release ${PLUGIN}-v\$NEW\" && git push -u origin HEAD
+    gh pr create --base main && gh pr merge --merge   # after CI is green
+    git switch main && git pull && scripts/release.sh $PLUGIN \$NEW   # tags the merged commit
+
+  Nothing has been changed. Re-running after the merge takes the already-at-version
+  branch below and tags HEAD."
+  fi
+fi
+
+# --- Release gates ------------------------------------------------------------
+# ADR-002 promoted check-public-safe.sh and test_seam.py from hygiene to *release gates*:
+# "they are what makes the clean-room claim true rather than remembered." This script ran
+# neither, so the claim was remembered. It also pushed and published seconds before CI
+# started, meaning the tag was public before anything had verified the commit under it.
+#
+# These run before the version bump, so a failure leaves the tree exactly as it was found.
+# --dry-run skips them deliberately: a preview that takes two minutes is a preview nobody
+# uses, and it changes nothing anyway.
+if [[ "$DRY_RUN" != "1" ]]; then
+  echo "running release gates…"
+  "$PY" -m pytest -q >/dev/null || die "test suite is red — no release"
+  bash "$REPO_ROOT/scripts/check-public-safe.sh" >/dev/null \
+    || die "check-public-safe.sh failed — a public repo must not publish private tokens"
+  "$PY" "$REPO_ROOT/scripts/validate_manifests.py" >/dev/null \
+    || die "manifest validation failed"
+  echo "✔ suite green · public-safe clean · manifests valid"
+fi
+
 # --- Compute next version (math lives in bump_version.py, unit-tested) --------
 CUR="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$MANIFEST")"
 NEW="$("$PY" "$REPO_ROOT/scripts/bump_version.py" "$CUR" "$BUMP")" || die "version bump failed"
@@ -142,5 +192,24 @@ if command -v gh >/dev/null 2>&1; then
   gh release create "$TAG" --title "$PLUGIN $NEW" --notes "$NOTES"
 else
   echo "note: gh CLI not found — tag pushed, but GitHub release not created"
+fi
+
+# --- Leave the integration branch level with main -----------------------------
+# The version bump lands on main only, so without this dev sits one commit behind the
+# moment a release completes. The next feature branch then forks from a dev with no bump,
+# and the following release either conflicts or double-bumps. Observed in the wild the
+# first time this script was used by a second session — a stale base manufactured by the
+# release process itself, which is the exact failure `start-branch` gained a guard for.
+TARGET="$(git config --get "branch.dev.integrationTarget" >/dev/null 2>&1 && echo dev || echo dev)"
+if git show-ref --verify --quiet "refs/heads/$TARGET"; then
+  if git merge-base --is-ancestor "$TARGET" main; then
+    git branch -f "$TARGET" main
+    git push -q origin "$TARGET" 2>/dev/null \
+      && echo "✔ $TARGET fast-forwarded to main and pushed" \
+      || echo "note: $TARGET fast-forwarded locally; push it when convenient"
+  else
+    # dev has commits main does not — fast-forwarding would silently discard them.
+    echo "note: '$TARGET' has commits not in main; left alone. Merge main into it yourself." >&2
+  fi
 fi
 echo "✔ released $TAG"

@@ -1,0 +1,644 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="source-sha256" content="94aa48f293d2a929b1432915ec5ec9e103d3d26545f2442a5007b4741a1cb903">
+<meta name="renderer-sha256" content="02a670560c6396520ebd46aaf404374f534a73660a85e5850e7ecd6eaad0279d">
+<title>hephaestus — Architecture</title>
+<script>
+/* Before first paint, deliberately. Setting the theme after the stylesheet has
+   painted shows the wrong one for a frame — the flash people notice and nobody
+   can un-see. Dark stays the default when nothing is stored. */
+(function(){
+  try{
+    var t=localStorage.getItem('arch-theme');
+    if(!t) t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
+    document.documentElement.setAttribute('data-theme',t);
+  }catch(e){document.documentElement.setAttribute('data-theme','dark');}
+})();
+</script>
+<style>
+:root{
+  /* Ink, not phosphor. The green-black CRT read as a costume — a terminal
+     pastiche worn by a document that is not a terminal. These are blue-biased
+     neutrals: the ground of a technical plate, which is what the page actually
+     is. --faint is lifted from the study's #6E7C8C, which measured 3.84:1 on
+     --panel2 and would have re-introduced exactly the contrast bug fixed two
+     versions ago. */
+  --void:#0B0F14; --panel:#121822; --panel2:#18202C;
+  --edge:#25303E; --edge2:#33414F;
+  /* Derived, not concatenated. This used to build the tints by appending hex
+     alpha to the frontmatter value ({accent}18), which silently assumes a
+     6-digit hex and produces garbage for any other notation. color-mix in oklch
+     takes whatever CSS accepts and keeps hue stable while it moves lightness,
+     which HSL does not. */
+  --accent:#F5A623;
+  --accent-dim:color-mix(in oklch, var(--accent) 12%, transparent);
+  --accent-glow:color-mix(in oklch, var(--accent) 40%, transparent);
+  --accent-soft:color-mix(in oklch, var(--accent) 22%, var(--panel));
+  --phos:#3DD68C; --phos-dim:color-mix(in oklch, var(--phos) 14%, transparent); --red:#FF6B5B;
+  /* Contrast, not taste. The old ramp put --faint at 2.85:1 on --void and --mid
+     at 5.62:1; the dimmest tier carries table headers, figure captions and the
+     8px sub-labels inside every diagram, so it failed WCAG AA exactly where the
+     type is smallest. Lifting --faint alone would have collapsed it into --mid,
+     so the whole ramp is re-spaced. Now 5.04 / 8.15 / 14.82 on --void, and the
+     tightest of the three still clears 4.5:1 against --panel2. */
+  --txt:#E8EAED; --mid:#A7B2C0; --faint:#7B8897;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  /* ui-serif resolves to New York on macOS and a real text face elsewhere. No
+     webfont, so nothing to block and nothing to wait for. It is here to give
+     headings and figures a voice the body text does not have — everything on
+     this page used to be one width, which is even and flat. */
+  --serif:ui-serif,"New York",Georgia,"Times New Roman",serif;
+}
+body{background:var(--void);color:var(--txt);font-family:var(--mono);
+  font-size:13px;line-height:1.65;-webkit-font-smoothing:antialiased;
+  /* Every digit the same width. This page is mostly numbers in columns, and
+     proportional figures make them fail to line up vertically. */
+  font-variant-numeric:tabular-nums}
+/* The scanline overlay is gone. It was the loudest part of the costume, it
+   printed badly, and it sat at z-index 99 over everything including focus
+   rings. */
+.rig{max-width:70rem;margin:0 auto;padding:0 clamp(.75rem,3vw,1.75rem) 4rem}
+.bar{border:1px solid var(--edge);background:linear-gradient(180deg,var(--panel2),var(--panel));
+  display:flex;flex-wrap:wrap;align-items:center;gap:.85rem;padding:.8rem 1.1rem;
+  position:sticky;top:0;z-index:50;margin-bottom:.4rem}
+.led{width:7px;height:7px;border-radius:50%;background:var(--phos);box-shadow:0 0 8px var(--phos)}
+@media (prefers-reduced-motion:no-preference){.led{animation:blip 2.4s ease-in-out infinite}}
+@keyframes blip{0%,100%{opacity:1}50%{opacity:.35}}
+h1{margin:0;font-size:1.05rem;font-weight:600;letter-spacing:.07em;color:var(--accent);
+  text-shadow:0 0 14px var(--accent-glow)}
+.tag{font-size:.58rem;letter-spacing:.15em;text-transform:uppercase;color:var(--faint);
+  border:1px solid var(--edge2);padding:.1rem .4rem}
+.spacer{flex:1}
+nav{display:flex;flex-wrap:wrap;gap:.65rem;font-size:.6rem;letter-spacing:.09em}
+nav a{color:var(--mid);text-decoration:none;text-transform:uppercase}
+nav a:hover{color:var(--accent)}
+/* Serif, sentence case, and bigger — not uppercase mono at .76rem. A heading
+   that is the same width and nearly the same size as the paragraph under it is
+   not doing the one job a heading has, which is to be findable while scanning. */
+h2{margin:2.4rem 0 0;font-family:var(--serif);font-size:1.5rem;font-weight:400;
+  letter-spacing:-.01em;text-transform:none;line-height:1.15;
+  color:var(--accent);border-bottom:1px solid var(--edge);padding-bottom:.5rem;
+  scroll-margin-top:4.5rem}
+h3{margin:1.6rem 0 0;font-family:var(--serif);font-size:1.08rem;font-weight:400;
+  letter-spacing:0;text-transform:none;color:var(--txt)}
+h1,h2,h3{text-wrap:balance}
+/* 68ch, not the 78ch this used to carry. The 45-75 character guidance assumes a
+   proportional face averaging ~0.5em; monospace runs ~0.6em, so the same ch
+   count is a materially longer line and the return sweep starts to miss. */
+p{margin:.75rem 0 0;max-width:68ch;color:var(--mid);text-wrap:pretty}
+p strong{color:var(--txt);font-weight:600}
+code{color:var(--phos);background:var(--phos-dim);padding:.06em .28em;font-size:.9em}
+a{color:var(--accent)}
+ul,ol{margin:.75rem 0 0;padding-left:1.35rem;color:var(--mid);display:flex;flex-direction:column;gap:.35rem}
+li{max-width:66ch;text-wrap:pretty}
+ol li::marker{color:var(--accent);font-size:.85em}
+hr{border:0;border-top:1px solid var(--edge);margin:1.8rem 0 0}
+blockquote{margin:.9rem 0 0;padding:.1rem 0 .1rem 1rem;border-left:2px solid var(--accent)}
+blockquote p{margin:.5rem 0 0;color:var(--mid)}
+blockquote p:first-child{margin-top:0}
+pre{margin:0;background:var(--panel);border:1px solid var(--edge);padding:.7rem .85rem;
+  overflow-x:auto;font-size:.76rem;color:var(--mid)}
+.cb{position:relative;margin:.85rem 0 0}
+.cpy{position:absolute;top:.4rem;right:.4rem;z-index:1;font-family:var(--mono);
+  font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;padding:.15rem .45rem;
+  background:var(--panel2);color:var(--faint);border:1px solid var(--edge2);
+  cursor:pointer;opacity:0;transition:opacity .12s}
+.cb:hover .cpy,.cpy:focus-visible{opacity:1}
+.cpy:hover{color:var(--accent);border-color:var(--accent)}
+.cpy[data-done]{opacity:1;color:var(--phos);border-color:var(--phos)}
+@media (prefers-reduced-motion:reduce){.cpy{transition:none}}
+/* Touch has no hover, so the affordance must not be hover-gated there. */
+@media (hover:none){.cpy{opacity:1}}
+/* ── gauge row ─────────────────────────────────────────────────────────
+   The handful of facts worth having before the prose. 1px gaps over a ruled
+   background so the cells read as one instrument rather than four cards. */
+.gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));
+  gap:1px;background:var(--edge);border:1px solid var(--edge);margin:1.1rem 0 0}
+.gauge{background:var(--panel);padding:.85rem 1rem;display:grid;gap:.25rem}
+.gauge dt{margin:0;font-size:.57rem;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--faint)}
+.gauge dd{margin:0;font-family:var(--serif);font-size:1.5rem;line-height:1.05;
+  color:var(--txt);letter-spacing:-.01em}
+.gauge dd small{font-family:var(--mono);font-size:.58rem;color:var(--faint);
+  letter-spacing:.04em;margin-left:.4rem;white-space:nowrap}
+.gauge[data-state=ok] dd{color:var(--phos)}
+.gauge[data-state=warn] dd{color:var(--accent)}
+.gauge[data-state=bad] dd{color:var(--red)}
+
+/* ── state pills ───────────────────────────────────────────────────────
+   Never colour alone: the label carries the meaning, so the pill still works
+   in greyscale, in print, and for anyone who cannot separate the hues. */
+.pill{display:inline-block;font-size:.58rem;letter-spacing:.1em;
+  text-transform:uppercase;padding:.1rem .42rem;border:1px solid currentColor;
+  border-radius:2px;white-space:nowrap;vertical-align:.08em}
+.pill-ok{color:var(--phos)}
+.pill-warn{color:var(--accent)}
+.pill-bad{color:var(--red)}
+.pill-mute{color:var(--faint)}
+
+.tw{overflow:auto;max-height:min(80vh,44rem);margin:.9rem 0 0;
+  border:1px solid var(--edge);background:var(--panel)}
+table{width:100%;min-width:30rem;border-collapse:separate;border-spacing:0;font-size:.75rem}
+th,td{text-align:left;padding:.45rem .7rem;border-bottom:1px solid var(--edge);vertical-align:top}
+/* Sticky header, because a reference table longer than a screen otherwise loses
+   its column names exactly when you start needing them. Needs an opaque
+   background or the rows show through. */
+thead th{position:sticky;top:0;z-index:2;background:var(--panel2);
+  font-size:.57rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+  font-weight:400;border-bottom:1px solid var(--edge2)}
+/* And a sticky first column, which matters more than the header once a table is
+   wide enough to scroll — the label column is what tells you which row you are
+   reading. Horizontal scroll, deliberately, not card-collapse: collapsing
+   destroys column-to-column comparison, which is the whole purpose of a
+   reference table. */
+tbody th:first-child,tbody td:first-child{position:sticky;left:0;z-index:1;
+  background:var(--panel);color:var(--txt)}
+thead th:first-child{z-index:3}
+tbody tr:hover td,tbody tr:hover th{background:var(--accent-dim)}
+tbody tr:last-child td{border-bottom:0}
+td{color:var(--mid)} td code{color:var(--phos)}
+.figwrap{margin:1.1rem 0 0;border:1px solid var(--edge);background:
+  radial-gradient(ellipse at 50% 40%,#151D28 0%,#0A0E13 82%);overflow-x:auto}
+.figwrap svg{display:block;margin:0 auto}
+.figcap{border-top:1px solid var(--edge);padding:.45rem .8rem;font-size:.66rem;color:var(--faint)}
+.schem{display:inline-block;border:1px solid var(--edge2);border-radius:2px;
+  padding:0 .3rem;margin-right:.35rem;font-size:.6rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--mid)}
+.nd{fill:var(--panel2);stroke:var(--edge2);stroke-width:1}
+.nd-store{stroke:var(--phos);fill:#0F1C1B}
+.nd-external{stroke:var(--edge2);stroke-dasharray:4 3;fill:#0E141C}
+.nd-service{stroke:var(--accent)}
+.nd-secret{stroke:var(--red);fill:#1E1114}
+.ndl{font-size:10.5px;fill:var(--txt);font-family:var(--mono)}
+.nds{font-size:8px;fill:var(--faint);font-family:var(--mono)}
+.ndt{font-size:7.5px;fill:var(--accent);font-family:var(--mono);opacity:.85;letter-spacing:.04em}
+.wire{fill:none;stroke:var(--edge2);stroke-width:1}
+.wire-a{fill:none;stroke:var(--accent);stroke-width:1.2;stroke-dasharray:3 5;opacity:.9}
+@media (prefers-reduced-motion:no-preference){
+  .wire-a{animation:mv .75s linear infinite} @keyframes mv{to{stroke-dashoffset:-8}}
+}
+.paused .wire-a,.paused .led{animation-play-state:paused}
+.wlab{font-size:8px;fill:var(--faint);font-family:var(--mono)}
+.grp{fill:none;stroke:var(--accent);stroke-dasharray:7 4;opacity:.4}
+.grpl{font-size:8px;fill:var(--accent);font-family:var(--mono);letter-spacing:.11em}
+footer{margin-top:3rem;border-top:1px solid var(--edge);padding-top:.9rem;display:flex;
+  flex-wrap:wrap;gap:1rem;align-items:center;font-size:.6rem;color:var(--faint);letter-spacing:.08em}
+button.pz{font-family:var(--mono);font-size:.6rem;background:transparent;color:var(--accent);
+  border:1px solid var(--edge2);padding:.2rem .55rem;cursor:pointer;letter-spacing:.08em}
+button.pz:hover{border-color:var(--accent)}
+button.pz[disabled]{opacity:.4;cursor:default;border-color:var(--edge)}
+:focus-visible{outline:1px solid var(--accent);outline-offset:2px}
+
+/* Visible to a screen reader, absent from the page. Not display:none, which
+   removes it from the accessibility tree along with everything else. */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+
+.legend{display:flex;flex-wrap:wrap;gap:.9rem;padding:.5rem .8rem;
+  border-top:1px solid var(--edge);font-size:.62rem;color:var(--faint)}
+.lgi{display:flex;align-items:center;gap:.35rem}
+.lgs{width:15px;height:10px;flex:none;border-radius:2px;
+  background:var(--panel2);border:1px solid var(--edge2)}
+.lgs-store{border-color:var(--phos);background:#0F1C1B}
+.lgs-external{border-style:dashed;background:#0E141C}
+.lgs-service{border-color:var(--accent)}
+.lgs-secret{border-color:var(--red);background:#1E1114}
+:root[data-theme="light"] .lgs{background:#FFFFFF}
+:root[data-theme="light"] .lgs-store{background:#F1F8F4}
+:root[data-theme="light"] .lgs-external{background:#F5F7F6}
+:root[data-theme="light"] .lgs-secret{background:#FDF3F1}
+
+/* ── node inspector ─────────────────────────────────────────────────────
+   Every box is selectable, on every diagram. Hover shows it is live; focus
+   shows it for the keyboard. */
+[data-node]{cursor:pointer}
+[data-node]:hover .nd{stroke:var(--accent)}
+[data-node]:focus{outline:none}
+[data-node]:focus-visible .nd{stroke:var(--accent);stroke-width:2}
+[data-node].picked .nd{stroke:var(--accent);stroke-width:2;
+  fill:color-mix(in oklch,var(--accent) 10%,var(--panel2))}
+[data-node].picked .ndl{fill:var(--accent)}
+/* The readout was one flex child holding three inline spans, so the label, the
+   kind and the subtitle ran together into "refuse — rung restscode in this
+   repo". The gap has to be on the element whose children they are. */
+.inspect{border-top:1px solid var(--edge);padding:.6rem .8rem;font-size:.72rem;
+  min-height:5.2rem}
+.ins-hint{color:var(--faint)}
+.ins-head{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;
+  margin-bottom:.3rem}
+.ins-t{font-family:var(--serif);font-size:1.05rem;font-weight:400;color:var(--txt)}
+.ins-k{font-size:.55rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);border:1px solid var(--edge2);padding:.08rem .38rem;border-radius:2px}
+.ins-tech{font-size:.6rem;color:var(--accent);letter-spacing:.04em}
+.ins-s{display:block;color:var(--mid);max-width:68ch;text-wrap:pretty}
+.ins-goto{display:inline-block;margin-top:.45rem;font-size:.7rem;
+  color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent)}
+.ins-goto[hidden]{display:none}
+.ins-links{display:block;margin-top:.3rem;font-size:.63rem;color:var(--faint);
+  font-family:var(--mono)}
+.ins-none{color:var(--faint);font-style:italic}
+.tour{display:flex;align-items:center;gap:.5rem;padding:.5rem .8rem;
+  border-top:1px solid var(--edge);background:var(--panel2);flex-wrap:wrap}
+.tourlbl{font-size:.57rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);min-width:9rem}
+.tourwhy{color:var(--edge2)}
+.tourpos{font-size:.6rem;color:var(--faint);letter-spacing:.08em;min-width:6rem}
+.tourclear{margin-left:auto}
+
+/* ── flow walker ───────────────────────────────────────────────────────── */
+.flowctl{margin:.9rem 0 0;border:1px solid var(--edge);background:var(--panel)}
+.flowhd{display:flex;align-items:baseline;gap:.8rem;padding:.5rem .8rem;
+  border-bottom:1px solid var(--edge)}
+.flowlbl{font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.flowjump{margin-left:auto;font-size:.6rem;color:var(--mid);text-decoration:none}
+.flowjump:hover{color:var(--accent)}
+.flowlist{list-style:none;margin:0;padding:.4rem;display:flex;flex-wrap:wrap;
+  gap:.35rem}
+.flowlist li{font-size:.66rem;padding:.2rem .55rem;border:1px solid var(--edge2);
+  color:var(--mid);cursor:pointer;max-width:none}
+.flowlist li:hover{border-color:var(--accent);color:var(--txt)}
+.flowlist li[aria-selected="true"]{border-color:var(--accent);color:var(--accent);
+  background:var(--accent-dim)}
+.flownav{display:flex;align-items:center;gap:.5rem;padding:0 .8rem .5rem}
+.flowpos{font-size:.6rem;color:var(--faint);letter-spacing:.08em;min-width:5rem}
+.flowclear{margin-left:auto}
+.flowcap{margin:0;padding:.5rem .8rem;border-top:1px solid var(--edge);
+  font-size:.7rem;color:var(--mid);min-height:1.2rem}
+
+/* Dim with fill-opacity/stroke-opacity rather than `opacity`: the composite
+   property promotes every element to its own compositing layer, which is real
+   jank once a diagram has thirty boxes. These two are paint-only. */
+svg.flowing .nd,svg.flowing .wire,svg.flowing .wire-a,
+svg.flowing .ndl,svg.flowing .nds,svg.flowing .ndt,svg.flowing .wlab{
+  fill-opacity:.18;stroke-opacity:.18;transition:fill-opacity .18s,stroke-opacity .18s}
+svg.flowing [data-node].on-path .nd,svg.flowing [data-node].on-path .ndl,
+svg.flowing [data-node].on-path .nds,svg.flowing [data-node].on-path .ndt,
+svg.flowing [data-edge].on-path .wire,svg.flowing [data-edge].on-path .wire-a,
+svg.flowing [data-edge].on-path .wlab{fill-opacity:1;stroke-opacity:1}
+/* The current step has to win against the node-kind colours, which already use
+   the accent. Border alone was ambiguous on a service node, so it also gets the
+   accent wash and a halo. */
+svg.flowing [data-node].at-step .nd{stroke:var(--accent);stroke-width:2;
+  fill:var(--accent-dim);filter:drop-shadow(0 0 6px var(--accent-glow))}
+svg.flowing [data-node].at-step .ndl{fill:var(--accent)}
+svg.flowing [data-edge].at-step .wire-a{stroke-width:2.6;
+  filter:drop-shadow(0 0 5px var(--accent-glow))}
+@media (prefers-reduced-motion:reduce){
+  svg.flowing [data-node].at-step .nd,
+  svg.flowing [data-edge].at-step .wire-a{filter:none}
+}
+
+@media (prefers-reduced-motion:reduce){
+  svg.flowing .nd,svg.flowing .wire,svg.flowing .wire-a,
+  svg.flowing .ndl,svg.flowing .nds,svg.flowing .ndt,svg.flowing .wlab{transition:none}
+}
+
+/* ── light theme ───────────────────────────────────────────────────────────
+   An attribute override, not light-dark(). The dark skin leans on glow —
+   text-shadow, box-shadow, a scanline overlay — and those have to be switched
+   off as a group, which a per-value colour function cannot express. */
+:root[data-theme="light"]{
+  --void:#F4F6F5; --panel:#FFFFFF; --panel2:#F9FBFA;
+  --edge:#D5DEDB; --edge2:#B9C6C2;
+  --phos:#0F7A44; --phos-dim:#0F7A4414; --red:#B3341C;
+  --txt:#12201C; --mid:#3F514C; --faint:#5A6B66;
+}
+:root[data-theme="light"] body::before{display:none}
+:root[data-theme="light"] h1{text-shadow:none}
+:root[data-theme="light"] .led{box-shadow:none}
+:root[data-theme="light"] .figwrap{background:#FFFFFF}
+:root[data-theme="light"] .nd{fill:#FFFFFF}
+:root[data-theme="light"] .nd-store{fill:#F1F8F4}
+:root[data-theme="light"] .nd-external{fill:#F5F7F6}
+:root[data-theme="light"] .nd-secret{fill:#FDF3F1}
+
+/* ── print ─────────────────────────────────────────────────────────────────
+   The scanline overlay and a near-black page background are a screen
+   affectation; on paper they are a toner bill and an unreadable page. */
+@media print{
+  :root{
+    --void:#FFFFFF; --panel:#FFFFFF; --panel2:#FFFFFF;
+    --edge:#9AA8A4; --edge2:#6E7D79;
+    --txt:#000000; --mid:#1C2A26; --faint:#3D4B47; --phos:#0A5C33;
+  }
+  @page{margin:14mm}
+  body{background:#fff;font-size:10pt}
+  body::before{display:none}
+  .bar{position:static;border-bottom:1px solid var(--edge)}
+  nav,button.pz,.flownav,.flowjump{display:none}
+  h1{text-shadow:none}
+  .led{box-shadow:none}
+  h2,h3{break-after:avoid}
+  pre,table,.figwrap,.flowctl,blockquote{break-inside:avoid}
+  .figwrap{background:#fff}
+  .nd{fill:#fff}
+  /* Every flow, spelled out — the picker is gone on paper, so the steps have to
+     be readable as a list or the section says nothing. */
+  .flowlist li{border-color:var(--edge2)}
+  a{color:inherit;text-decoration:underline}
+  a[href^="http"]::after{content:" (" attr(href) ")";font-size:.8em;color:var(--faint)}
+}
+
+/* ── site navigation ───────────────────────────────────────────────────────
+   Only present when the page is built as part of a site. A standalone page
+   renders with this slot empty and is byte-identical to before, which is what
+   keeps a single page publishable on its own. */
+.snav{border:1px solid var(--edge);border-bottom:0;background:var(--panel2);
+  padding:.5rem .8rem;display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:baseline}
+.snav .grp{display:flex;flex-wrap:wrap;gap:.15rem .7rem;align-items:baseline}
+.snav a{font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);text-decoration:none;border-bottom:1px solid transparent}
+.snav a:hover{color:var(--txt);border-bottom-color:var(--edge2)}
+.snav a.on{color:var(--accent);border-bottom-color:var(--accent)}
+.snav .home{color:var(--mid);font-weight:600}
+.snav .lbl{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--edge2);margin-right:.2rem}
+@media print{.snav{display:none}}
+</style>
+
+<div class="rig">
+<header class="bar">
+  <span class="led" aria-hidden="true"></span>
+  <h1>HEPHAESTUS</h1>
+
+  <span class="spacer"></span>
+  <nav><a href="#system-context">System context</a><a href="#components">Components</a><a href="#data">Data</a><a href="#key-invariants">Key invariants</a><a href="#evidence-contract">Evidence contract</a><a href="#cross-repo-contracts">Cross-repo contracts</a><a href="#glossary">Glossary</a><a href="#decisions">Decisions</a></nav>
+</header>
+<p>Reference-style: tables and diagrams, not prose narratives.</p>
+<h2 id="system-context">System context</h2>
+<p>hephaestus is a <strong>catalog</strong>, not a service. Nothing here runs continuously; every component is invoked by an agent or a developer and exits.</p>
+<div class="figwrap"><svg id="fig-f1" viewBox="0 0 755 492" width="755" height="492" role="img" aria-label="Who reads what, and why the two consumers get different amounts of a plugin."><rect class="grp" data-group="REPO" x="149" y="128" width="454" height="352" rx="3"/><text class="grpl" x="157" y="140">hephaestus</text><g data-edge-from="cc" data-edge-to="market"><path class="wire" d="M131.5 96.0 L131.5 126.0 L254.0 126.0 L254.0 151.0"/><path class="wire-a" d="M131.5 96.0 L131.5 126.0 L254.0 126.0 L254.0 151.0"/><text class="wlab" x="200" y="122">reads</text></g><g data-edge-from="market" data-edge-to="plugins"><path class="wire" d="M254.0 222.0 L254.0 252.0 L376.5 252.0 L376.5 277.0"/><text class="wlab" x="322" y="248">lists</text></g><g data-edge-from="plugins" data-edge-to="skills"><path class="wire" d="M376.5 348.0 L376.5 403.0"/></g><g data-edge-from="codex" data-edge-to="skills"><path class="wire" d="M376.5 96.0 L376.5 126.0 L12.0 126.0 L12.0 378.0 L376.5 378.0 L376.5 403.0"/><path class="wire-a" d="M376.5 96.0 L376.5 126.0 L12.0 126.0 L12.0 378.0 L376.5 378.0 L376.5 403.0"/><text class="wlab" x="17" y="219">reads only this</text></g><g data-edge-from="dev" data-edge-to="gates"><path class="wire" d="M621.5 96.0 L621.5 126.0 L478.2 126.0 L478.2 151.0"/><path class="wire-a" d="M621.5 96.0 L621.5 126.0 L478.2 126.0 L478.2 151.0"/><text class="wlab" x="557" y="122">runs</text></g><g data-edge-from="gates" data-edge-to="plugins"><path class="wire" d="M478.2 222.0 L478.2 252.0 L376.5 252.0 L376.5 277.0"/><text class="wlab" x="434" y="248">gates</text></g><g id="f1-nd-cc" data-node="cc" data-label="Claude Code" data-sub="loads a plugin whole" data-tech="skills · commands · agents · hooks · MCP" data-note="" data-goto="" data-links="→ marketplace.json" data-kind="something you do not control" tabindex="0" role="graphics-symbol" aria-label="Claude Code — loads a plugin whole — built with skills · commands · agents · hooks · MCP"><rect class="nd nd-external" x="24" y="30" width="215" height="66" rx="3"/><text class="ndl" x="35" y="51">Claude Code</text><text class="nds" x="35" y="65">loads a plugin whole</text><text class="ndt" x="35" y="79">[skills · commands · agents · hooks · MCP]</text></g><g id="f1-nd-codex" data-node="codex" data-label="Codex · Pi" data-sub="discovers skill directories only" data-tech="the portable subset" data-note="" data-goto="" data-links="→ skills/&lt;name&gt;/SKILL.md" data-kind="something you do not control" tabindex="0" role="graphics-symbol" aria-label="Codex · Pi — discovers skill directories only — built with the portable subset"><rect class="nd nd-external" x="269" y="30" width="215" height="66" rx="3"/><text class="ndl" x="280" y="51">Codex · Pi</text><text class="nds" x="280" y="65">discovers skill directories only</text><text class="ndt" x="280" y="79">[the portable subset]</text></g><g id="f1-nd-dev" data-node="dev" data-label="developer / agent" data-sub="runs the gates against the repo itself" data-tech="" data-note="" data-goto="" data-links="→ scripts/ + scripts/checks/" data-kind="something you do not control" tabindex="0" role="graphics-symbol" aria-label="developer / agent — runs the gates against the repo itself"><rect class="nd nd-external" x="514" y="30" width="215" height="66" rx="3"/><text class="ndl" x="525" y="51">developer / agent</text><text class="nds" x="525" y="65">runs the gates against the repo itself</text></g><g id="f1-nd-market" data-node="market" data-label="marketplace.json" data-sub="the catalog entry point" data-tech=".claude-plugin/" data-note="" data-goto="" data-links="← Claude Code   → plugins/&lt;name&gt;/" data-kind="a database, table, queue or bucket" tabindex="0" role="graphics-symbol" aria-label="marketplace.json — the catalog entry point — built with .claude-plugin/"><rect class="nd nd-store" x="167" y="156" width="174" height="66" rx="3"/><text class="ndl" x="178" y="177">marketplace.json</text><text class="nds" x="178" y="191">the catalog entry point</text><text class="ndt" x="178" y="205">[.claude-plugin/]</text></g><g id="f1-nd-gates" data-node="gates" data-label="scripts/ + scripts/checks/" data-sub="the executable invariants" data-tech="seam · floor · mtime · undetermined" data-note="" data-goto="" data-links="← developer / agent   → plugins/&lt;name&gt;/" data-kind="code in this repo" tabindex="0" role="graphics-symbol" aria-label="scripts/ + scripts/checks/ — the executable invariants — built with seam · floor · mtime · undetermined"><rect class="nd nd-module" x="371" y="156" width="215" height="66" rx="3"/><text class="ndl" x="382" y="177">scripts/ + scripts/checks/</text><text class="nds" x="382" y="191">the executable invariants</text><text class="ndt" x="382" y="205">[seam · floor · mtime · undetermined]</text></g><g id="f1-nd-plugins" data-node="plugins" data-label="plugins/&lt;name&gt;/" data-sub="six independently-versioned units" data-tech="crucible · forge-unity · 4 more" data-note="" data-goto="" data-links="← marketplace.json, scripts/ + scripts/checks/   → skills/&lt;name&gt;/SKILL.md" data-kind="code in this repo" tabindex="0" role="graphics-symbol" aria-label="plugins/&lt;name&gt;/ — six independently-versioned units — built with crucible · forge-unity · 4 more"><rect class="nd nd-module" x="269" y="282" width="215" height="66" rx="3"/><text class="ndl" x="280" y="303">plugins/&lt;name&gt;/</text><text class="nds" x="280" y="317">six independently-versioned units</text><text class="ndt" x="280" y="331">[crucible · forge-unity · 4 more]</text></g><g id="f1-nd-skills" data-node="skills" data-label="skills/&lt;name&gt;/SKILL.md" data-sub="the only part that travels" data-tech="" data-note="" data-goto="" data-links="← plugins/&lt;name&gt;/, Codex · Pi" data-kind="code in this repo" tabindex="0" role="graphics-symbol" aria-label="skills/&lt;name&gt;/SKILL.md — the only part that travels"><rect class="nd nd-module" x="280" y="408" width="193" height="54" rx="3"/><text class="ndl" x="291" y="429">skills/&lt;name&gt;/SKILL.md</text><text class="nds" x="291" y="443">the only part that travels</text></g></svg><div class="legend"><span class="lgi"><span class="lgs lgs-module" aria-hidden="true"></span>code in this repo</span><span class="lgi"><span class="lgs lgs-store" aria-hidden="true"></span>a database, table, queue or bucket</span><span class="lgi"><span class="lgs lgs-external" aria-hidden="true"></span>something you do not control</span></div><div class="inspect" data-inspect="fig-f1"><span class="ins-hint">Click a box to see what it is, what it does, and how it connects.</span><span class="ins-body" hidden aria-live="polite"><span class="ins-head"><b class="ins-t"></b><span class="ins-k"></span><span class="ins-tech"></span></span><span class="ins-s"></span><span class="ins-links"></span><a class="ins-goto" hidden></a></span></div><div class="tour" data-tour="fig-f1" data-order="cc,codex,dev,market,gates,plugins,skills"><span class="tourlbl" data-tour-lbl>Tour<span class="tourwhy"> &middot; layout order</span></span><button class="pz" type="button" data-tour-prev disabled>&#8592; prev</button><span class="tourpos" data-tour-pos>&#8212;</span><button class="pz" type="button" data-tour-next>next &#8594;</button><button class="pz tourclear" type="button" data-tour-clear>clear</button></div><table class="sr-only"><caption>Who reads what, and why the two consumers get different amounts of a plugin. — text alternative</caption><thead><tr><th>Component</th><th>Kind</th><th>Role</th><th>Connects to</th></tr></thead><tbody><tr><td>Claude Code</td><td>something you do not control</td><td>loads a plugin whole</td><td>marketplace.json (reads)</td></tr><tr><td>Codex · Pi</td><td>something you do not control</td><td>discovers skill directories only</td><td>skills/&lt;name&gt;/SKILL.md (reads only this)</td></tr><tr><td>developer / agent</td><td>something you do not control</td><td>runs the gates against the repo itself</td><td>scripts/ + scripts/checks/ (runs)</td></tr><tr><td>marketplace.json</td><td>a database, table, queue or bucket</td><td>the catalog entry point</td><td>plugins/&lt;name&gt;/ (lists)</td></tr><tr><td>scripts/ + scripts/checks/</td><td>code in this repo</td><td>the executable invariants</td><td>plugins/&lt;name&gt;/ (gates)</td></tr><tr><td>plugins/&lt;name&gt;/</td><td>code in this repo</td><td>six independently-versioned units</td><td>skills/&lt;name&gt;/SKILL.md</td></tr><tr><td>skills/&lt;name&gt;/SKILL.md</td><td>code in this repo</td><td>the only part that travels</td><td>—</td></tr></tbody></table><div class="figcap">Who reads what, and why the two consumers get different amounts of a plugin.</div></div>
+<p>Two consumers, deliberately unequal. Claude Code loads a plugin whole — skills, commands, agents, hooks, MCP servers. Codex and Pi discover <strong>skill directories only</strong>, so slash commands, subagents, hooks and MCP servers do not travel. <code>scripts/install_skills.py</code> prints that gap rather than letting a skill quietly lose its hook.</p>
+<h2 id="components">Components</h2>
+<div class="tw"><table><thead><tr><th>Component</th><th>Responsibility</th><th>Module</th></tr></thead><tbody><tr><td>Marketplace catalog</td><td>Lists every plugin; the entry point Claude Code reads</td><td><code>.claude-plugin/marketplace.json</code></td></tr><tr><td><strong>crucible</strong></td><td>Generic, vendor-neutral craft tools (17 skills, <code>develop</code> + <code>curate</code> commands, the QA agent)</td><td><code>plugins/crucible/</code></td></tr><tr><td><strong>forge-unity</strong></td><td>Unity evidence + the <code>.forge/adapter.json</code> contract. Engine-specific, operator-free</td><td><code>plugins/forge-unity/</code></td></tr><tr><td><strong>sqlite-readonly</strong></td><td>Read-only SQLite MCP server (3-layer read-only, NL→SQL)</td><td><code>plugins/sqlite-readonly/</code></td></tr><tr><td><strong>second-brain</strong></td><td>Obsidian inbox processor (suggest-then-confirm; skills only)</td><td><code>plugins/second-brain/</code></td></tr><tr><td><strong>deck-builder</strong></td><td>Code-backed <code>.pptx</code> builder (python-pptx; outline-approval gate)</td><td><code>plugins/deck-builder/</code></td></tr><tr><td><strong>mcp-starter</strong></td><td>Template for packaging a Python MCP server as a plugin</td><td><code>plugins/mcp-starter/</code></td></tr><tr><td>Release tooling</td><td>Per-plugin semver bump, tag, GitHub release</td><td><code>scripts/release.sh</code>, <code>scripts/bump_version.py</code></td></tr><tr><td>Gates</td><td>The executable half of the rules below</td><td><code>scripts/</code> + <code>scripts/checks/</code></td></tr><tr><td>Eval harness</td><td>Asserts skills behave as their <code>SKILL.md</code> claims</td><td><code>evals/</code></td></tr><tr><td>Test suite</td><td>Pure-stdlib pytest over the scripts and harness core</td><td><code>tests/</code></td></tr></tbody></table></div>
+<h3 id="the-seam">The seam</h3>
+<p>Plugins are tiered, and the boundary is enforced rather than intended:</p>
+<div class="tw"><table><thead><tr><th>Tier</th><th>May name</th><th>May not name</th><th>Enforced by</th></tr></thead><tbody><tr><td>Generic (<code>crucible</code>, <code>sqlite-readonly</code>, <code>mcp-starter</code>, <code>deck-builder</code>, <code>second-brain</code>)</td><td>nothing domain-specific</td><td>any engine, employer or product</td><td><code>tests/test_seam.py</code></td></tr><tr><td>Engine adapter (<code>forge-unity</code>)</td><td>Unity</td><td>any particular game or operator</td><td><code>tests/test_seam.py</code></td></tr><tr><td>Any file in the repo</td><td>—</td><td>employer/private-system tokens</td><td><code>scripts/check-public-safe.sh</code></td></tr></tbody></table></div>
+<p>See <a href="decisions/003-decompose-game-development-support-into-a-growing-crucible-and-one-thin-engine-adapter.md">ADR-003</a> for why the engine layer is one thin adapter rather than a plugin set.</p>
+<h2 id="data">Data</h2>
+<p>Three storage layers, and the split between the first two is load-bearing — writing runtime state into the plugin directory puts per-user content inside a versioned generic plugin, which is the seam violation <a href="decisions/001-consolidated-private-marketplace-and-restricted-agent-factory-architecture.md">ADR-001</a> forbids, and plugin updates overwrite that directory anyway.</p>
+<div class="tw"><table><thead><tr><th>Source</th><th>Format</th><th>Writer</th><th>Readers</th></tr></thead><tbody><tr><td><code>.claude-plugin/marketplace.json</code></td><td>JSON</td><td>maintainer</td><td>Claude Code, <code>validate_manifests.py</code></td></tr><tr><td><code>plugins/*/.claude-plugin/plugin.json</code></td><td>JSON</td><td><code>release.sh</code></td><td>Claude Code, <code>validate_manifests.py</code></td></tr><tr><td><strong>Shipped config</strong> (<code>skills/*/state/</code>)</td><td>JSON/YAML</td><td>versioned with the plugin; no runtime writes</td><td>the skill</td></tr><tr><td><strong>Runtime state</strong> (<code>$CMS_STATE_DIR</code>, <code>$CLAUDE_PLUGIN_DATA</code>, else <code>~/.claude/cms-state</code>)</td><td>JSON</td><td><code>cms</code>, <code>loop-harness</code> at run time</td><td>the same skill, later runs</td></tr><tr><td><code>docs/predictions.jsonl</code></td><td>JSONL, append-only</td><td><code>predictions.py</code></td><td><code>predictions.py list</code>, <code>curate</code></td></tr><tr><td><code>docs/INVARIANTS.md</code></td><td>Markdown + <code>Check:</code> lines</td><td>maintainer</td><td><code>invariants_run.py</code></td></tr><tr><td><code>.crucible/evidence.json</code></td><td>JSON</td><td>maintainer</td><td><code>evidence_gate.py</code>, <code>finish-branch</code></td></tr><tr><td><code>.forge/adapter.json</code></td><td>JSON</td><td>the <em>consuming project</em>, not this repo</td><td><code>forge-unity/scripts/adapter.py</code></td></tr></tbody></table></div>
+<p><strong>Dates never come from mtime.</strong> git neither records nor restores modification times, so anything derived from <code>st_mtime</code> reports every file as new the moment the repo is cloned. Document age resolves through <code>plugins/crucible/skills/cms/scripts/doc_age.py</code> — batched git committer dates, frontmatter fallback, and silence rather than a guess.</p>
+<h2 id="key-invariants">Key invariants</h2>
+<p>Standing constraints, each with an executable check. Full text and the <code>PROSE → FALSIFIABLE → CHECK → ENFORCED</code> pipeline: <a href="INVARIANTS.md">INVARIANTS.md</a>.</p>
+<div class="tw"><table><thead><tr><th>Invariant</th><th>Check</th></tr></thead><tbody><tr><td>Generic plugins stay domain-free</td><td><code>scripts/checks/seam_is_clean.sh</code></td></tr><tr><td>A check that could not run is never reported as a pass</td><td><code>scripts/checks/undetermined_is_not_a_pass.sh</code></td></tr><tr><td>Shipped Python parses on the version the README promises (3.9)</td><td><code>scripts/checks/python_floor_is_honoured.sh</code></td></tr><tr><td>mtime is never a clock in shipped plugin code</td><td><code>scripts/checks/mtime_is_never_a_clock.sh</code></td></tr></tbody></table></div>
+<p>Two rules shape all four. <strong>Three-valued outcomes</strong>: every gate distinguishes <code>pass</code>, <code>fail</code> and <code>could-not-check</code>, because folding the third into the first is how an unverified change acquires a green tick. And <strong>a check nobody has watched fail is not a check</strong> — each one above has been validated by reintroducing the defect and observing it go red.</p>
+<p>The exit-code convention is uniform across every script here, and load-bearing rather than stylistic:</p>
+<div class="tw"><table><thead><tr><th>Exit</th><th>Means</th><th>Example</th></tr></thead><tbody><tr><td><code>0</code></td><td>passed</td><td><code>invariants_run.py</code> with every check green</td></tr><tr><td><code>1</code></td><td>failed — the thing being checked is wrong</td><td><code>coverage_delta.py</code> when a test disappeared</td></tr><tr><td><code>2</code></td><td><strong>could not determine</strong> — NOT a pass</td><td><code>sync.py</code> on a facts file it cannot parse; <code>mtime_guard.py</code> on a file that will not parse</td></tr><tr><td><code>3</code></td><td>nothing enforceable — a SKIP, not a pass</td><td><code>invariants_run.py</code> with no wired checks</td></tr></tbody></table></div>
+<h2 id="evidence-contract">Evidence contract</h2>
+<p>What counts as proof here is declared, not assumed. <code>.crucible/evidence.json</code> maps changed paths to the evidence that change requires; <code>evidence_gate.py</code> reports the classes a diff triggers and <strong>never decides whether the evidence exists</strong>. Without it, a repo falls through to the implied class — "the test suite passes" — which is exactly right in a repo with a suite and meaningless in one without.</p>
+<h2 id="cross-repo-contracts">Cross-repo contracts</h2>
+<p>Link any shared/canonical contracts this repo depends on (plain links, never <code>@path</code>).</p>
+<p>hephaestus has none: it is a single repository with no root-level <code>docs/shared/</code>, so every contract it depends on is internal. The scaffolded placeholder that used to sit here pointed at a file that has never existed — caught by the link check added with ADR-003, which is exactly the rot that check is for.</p>
+<h2 id="glossary">Glossary</h2>
+<p>The vocabulary this document assumes. Added because <code>cms check</code> noticed the document was using eight acronyms it never defined — a check earning its place on its own source file.</p>
+<div class="tw"><table><thead><tr><th>Term</th><th>Means</th></tr></thead><tbody><tr><td><strong>Anchor score</strong></td><td>The deterministic repo-health number from <code>repo_metrics.py</code>. Trend it; never read a single run as a grade</td></tr><tr><td><strong>archview</strong></td><td>A fenced JSON block inside <code>ARCHITECTURE.md</code> that renders to a diagram, so there is one file to edit and one linter to satisfy</td></tr><tr><td><strong>CHECK</strong></td><td>The executable line on an invariant — what turns a written rule into an enforced one</td></tr><tr><td><strong>Evidence class</strong></td><td>An entry in <code>.crucible/evidence.json</code> mapping changed paths to the proof that change requires</td></tr><tr><td><strong>JSONL</strong></td><td>Newline-delimited JSON; the append-only format of <code>docs/predictions.jsonl</code></td></tr><tr><td><strong>MCP</strong></td><td>Model Context Protocol — the server interface <code>sqlite-readonly</code> and <code>mcp-starter</code> implement</td></tr><tr><td><strong>PROSE → FALSIFIABLE → CHECK → ENFORCED</strong></td><td>The pipeline an invariant walks from a sentence someone wrote to a script that fails the build</td></tr><tr><td><strong>Seam</strong></td><td>The enforced boundary stopping a generic plugin naming a specific engine, employer or product</td></tr><tr><td><strong>Tier A / Tier B</strong></td><td>Generic (domain-free) versus engine-adapter plugins; the distinction the seam enforces</td></tr></tbody></table></div>
+<h2 id="decisions">Decisions</h2>
+<p>Architectural decisions affecting this repo live in <a href="decisions/">decisions/</a>.</p>
+<footer>
+  <span>GENERATED FROM DOCS/ARCHITECTURE.MD — DO NOT EDIT THIS FILE</span>
+  <span>STRUCTURE ONLY, NO RUNTIME STATE</span>
+
+  <span class="spacer"></span>
+  <button class="pz" id="th" type="button">&#9681; LIGHT</button>
+  <button class="pz" id="pz" type="button" aria-pressed="false">&#9208; PAUSE</button>
+</footer>
+</div>
+<script>
+(function(){
+  var doc=document.documentElement;
+  /* One iteration helper. NodeList.forEach and Array.prototype.forEach.call were
+     both in use here; picking one keeps the intent obvious. */
+  function each(xs,fn){Array.prototype.forEach.call(xs,fn);}
+
+  /* theme toggle */
+  var t=document.getElementById('th');
+  function paint(){
+    var light=doc.getAttribute('data-theme')==='light';
+    t.textContent=light?'\u25D1 DARK':'\u25D1 LIGHT';
+    t.setAttribute('aria-label',light?'Switch to dark theme':'Switch to light theme');
+  }
+  paint();
+  t.addEventListener('click',function(){
+    var next=doc.getAttribute('data-theme')==='light'?'dark':'light';
+    doc.setAttribute('data-theme',next);
+    try{localStorage.setItem('arch-theme',next);}catch(e){}
+    paint();
+  });
+
+  /* pause. The animation is CSS keyframes, so a class is the whole mechanism.
+     The SVG animation-pause API this used to call drives SMIL, which no diagram
+     on this page uses — it was a no-op dressed up as a feature. */
+  var b=document.getElementById('pz'),p=false;
+  b.addEventListener('click',function(){
+    p=!p;document.body.classList.toggle('paused',p);
+    b.setAttribute('aria-pressed',String(p));
+    b.textContent=p?'\u25B6 RESUME':'\u23F8 PAUSE';
+  });
+
+  /* copy buttons */
+  each(document.querySelectorAll('[data-copy]'),function(btn){
+    btn.addEventListener('click',function(){
+      var code=btn.parentNode.querySelector('code');
+      if(!code) return;
+      var done=function(){
+        btn.textContent='copied';btn.setAttribute('data-done','');
+        setTimeout(function(){btn.textContent='copy';btn.removeAttribute('data-done');},1400);
+      };
+      /* navigator.clipboard needs a secure context, and this page is opened
+         from file:// as often as over https. Fall back rather than fail. */
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(code.textContent).then(done,function(){});
+      }else{
+        var r=document.createRange();r.selectNodeContents(code);
+        var s=getSelection();s.removeAllRanges();s.addRange(r);
+        try{document.execCommand('copy');done();}catch(e){}
+        s.removeAllRanges();
+      }
+    });
+  });
+
+  /* node inspector + tour — on every diagram, flow or not */
+  each(document.querySelectorAll('.inspect'),function(box){
+    var svg=document.getElementById(box.getAttribute('data-inspect'));
+    if(!svg) return;
+    var hint=box.querySelector('.ins-hint'), body=box.querySelector('.ins-body'),
+        t=box.querySelector('.ins-t'), k=box.querySelector('.ins-k'),
+        tech=box.querySelector('.ins-tech'), s=box.querySelector('.ins-s'),
+        links=box.querySelector('.ins-links'),
+        gotoEl=box.querySelector('.ins-goto'),
+        tour=document.querySelector('.tour[data-tour="'+svg.id+'"]'),
+        order=tour?tour.getAttribute('data-order').split(','):[],
+        at=-1;
+
+    function show(g,quiet){
+      each(svg.querySelectorAll('[data-node].picked'),function(o){o.classList.remove('picked');});
+      g.classList.add('picked');
+      t.textContent=g.getAttribute('data-label')||'';
+      k.textContent=g.getAttribute('data-kind')||'';
+      var tv=g.getAttribute('data-tech'); tech.textContent=tv?'['+tv+']':'';
+      /* Purpose first. A node with no authored note says so rather than
+         showing a sentence assembled out of its own metadata. */
+      var note=g.getAttribute('data-note'), sub=g.getAttribute('data-sub');
+      if(note){ s.textContent=note; s.className='ins-s'; }
+      else if(sub){ s.textContent=sub; s.className='ins-s'; }
+      else { s.textContent='No description written for this one yet.';
+              s.className='ins-s ins-none'; }
+      links.textContent=g.getAttribute('data-links')||'';
+      /* A node that stands for another repo is a dead end without this: the
+         diagram names the neighbour and then offers no way to reach it. */
+      var goto_=g.getAttribute('data-goto')||'';
+      if(goto_){gotoEl.href=goto_;
+        gotoEl.textContent='→ open '+(g.getAttribute('data-label')||'');
+        gotoEl.hidden=false;}
+      else{gotoEl.hidden=true;}
+      hint.hidden=true; body.hidden=false;
+      if(!quiet){
+        var idx=order.indexOf(g.getAttribute('data-node'));
+        if(idx>=0) at=idx;
+        pos();
+      }
+      var ctl=document.querySelector('.flowctl[data-view="'+svg.id+'"]');
+      if(ctl&&ctl.__jump) ctl.__jump(g.getAttribute('data-node'));
+    }
+    function nodeAt(i){
+      return svg.querySelector('[data-node="'+
+        (typeof CSS!=='undefined'&&CSS.escape?CSS.escape(order[i]):order[i])+'"]');
+    }
+    function pos(){
+      if(!tour) return;
+      tour.querySelector('[data-tour-pos]').textContent =
+        at<0 ? '—' : (at+1)+' / '+order.length;
+      tour.querySelector('[data-tour-prev]').disabled = at<=0;
+      tour.querySelector('[data-tour-next]').disabled = at>=order.length-1;
+    }
+    each(svg.querySelectorAll('[data-node]'),function(g){
+      g.addEventListener('click',function(){show(g);});
+      g.addEventListener('keydown',function(e){
+        if(e.key==='Enter'||e.key===' '){e.preventDefault();show(g);}
+      });
+    });
+    if(tour){
+      tour.querySelector('[data-tour-next]').addEventListener('click',function(){
+        if(at<order.length-1){at++;var g=nodeAt(at); if(g) show(g,true); pos();}
+      });
+      tour.querySelector('[data-tour-prev]').addEventListener('click',function(){
+        if(at>0){at--;var g=nodeAt(at); if(g) show(g,true); pos();}
+      });
+      tour.querySelector('[data-tour-clear]').addEventListener('click',function(){
+        each(svg.querySelectorAll('[data-node].picked'),function(o){o.classList.remove('picked');});
+        at=-1; hint.hidden=false; body.hidden=true; pos();
+      });
+      /* If a flow walks this view, the tour is that flow — say so. */
+      var ctl=document.querySelector('.flowctl[data-view="'+svg.id+'"]');
+      if(ctl) tour.querySelector('[data-tour-lbl]').innerHTML=
+        'Tour<span class="tourwhy"> &middot; or pick a flow below</span>';
+      pos();
+    }
+  });
+
+  /* flow walker */
+  each(document.querySelectorAll('.flowctl'),function(ctl){
+    var svg=document.getElementById(ctl.getAttribute('data-view'));
+    if(!svg) return;
+    var flows;
+    try{flows=JSON.parse(ctl.getAttribute('data-flows'));}catch(e){return;}
+    if(!flows||!flows.length) return;
+
+    var list=ctl.querySelector('.flowlist'),
+        cap=ctl.querySelector('[data-flow-cap]'),
+        pos=ctl.querySelector('[data-flow-pos]'),
+        prev=ctl.querySelector('[data-flow-prev]'),
+        next=ctl.querySelector('[data-flow-next]'),
+        clear=ctl.querySelector('[data-flow-clear]'),
+        cur=-1,step=0;
+
+    function marks(){
+      each(svg.querySelectorAll('.on-path,.at-step'),function(el){
+        el.classList.remove('on-path','at-step');
+        el.removeAttribute('aria-current');
+      });
+    }
+    function q(v){return typeof CSS!=='undefined'&&CSS.escape?CSS.escape(v):v;}
+    function find(s){
+      return s.t==='node'
+        ? svg.querySelector('[data-node="'+q(s.k)+'"]')
+        : svg.querySelector('[data-edge-from="'+q(s.f)+'"][data-edge-to="'+q(s.to)+'"]');
+    }
+    function draw(){
+      marks();
+      if(cur<0){
+        svg.classList.remove('flowing');
+        each(list.querySelectorAll('li'),function(li){li.setAttribute('aria-selected','false');});
+        cap.textContent='Select a flow to trace it through the diagram.';
+        pos.textContent='\u2014';
+        prev.disabled=next.disabled=true;
+        return;
+      }
+      var f=flows[cur];
+      svg.classList.add('flowing');
+      each(list.querySelectorAll('li'),function(li,k){
+        li.setAttribute('aria-selected',String(k===cur));
+      });
+      each(f.steps,function(s){
+        var el=find(s); if(el) el.classList.add('on-path');
+      });
+      var at=f.steps[step],el=at&&find(at);
+      if(el){el.classList.add('at-step');el.setAttribute('aria-current','step');}
+      pos.textContent='step '+(step+1)+' / '+f.steps.length;
+      /* One whole-text write, not an append — partial updates get dropped. */
+      cap.textContent=(at&&at.note)?at.note:f.label;
+      prev.disabled=step<=0;
+      next.disabled=step>=f.steps.length-1;
+      try{
+        history.replaceState(null,'','#flow='+encodeURIComponent(f.id)+'&step='+(step+1));
+      }catch(e){}
+    }
+    function pick(k,s){cur=k;step=s||0;draw();}
+
+    /* Clicking a box on the diagram jumps the walk to the step that uses it.
+       Searches the selected flow first so an id appearing in two flows does not
+       yank you out of the one you are reading. */
+    ctl.__jump=function(nodeId){
+      var order=[]; if(cur>=0) order.push(cur);
+      flows.forEach(function(_,j){ if(j!==cur) order.push(j); });
+      for(var a=0;a<order.length;a++){
+        var j=order[a], st=flows[j].steps;
+        for(var i=0;i<st.length;i++){
+          if(st[i].t==='node'&&st[i].k===nodeId){ pick(j,i); return true; }
+        }
+      }
+      return false;                          /* not on any flow: inspect only */
+    };
+
+    list.addEventListener('click',function(e){
+      var li=e.target.closest('li'); if(!li) return;
+      pick(Array.prototype.indexOf.call(list.children,li),0);
+    });
+    list.addEventListener('keydown',function(e){
+      var k=e.key;
+      if(k==='ArrowDown'||k==='ArrowRight'){e.preventDefault();pick(Math.min((cur<0?-1:cur)+1,flows.length-1),0);}
+      else if(k==='ArrowUp'||k==='ArrowLeft'){e.preventDefault();pick(Math.max((cur<0?flows.length:cur)-1,0),0);}
+      else if(k==='Home'){e.preventDefault();pick(0,0);}
+      else if(k==='End'){e.preventDefault();pick(flows.length-1,0);}
+      else if(k==='Escape'){e.preventDefault();cur=-1;draw();}
+    });
+    prev.addEventListener('click',function(){if(step>0){step--;draw();}});
+    next.addEventListener('click',function(){if(cur>=0&&step<flows[cur].steps.length-1){step++;draw();}});
+    clear.addEventListener('click',function(){cur=-1;draw();});
+
+    function fromHash(){
+      var m=/flow=([^&]+)(?:&step=(\d+))?/.exec(location.hash||'');
+      if(!m) return false;
+      var id=decodeURIComponent(m[1]),k=-1;
+      each(flows,function(f,j){if(f.id===id)k=j;});
+      if(k<0) return false;                       /* unknown id: stay neutral */
+      var s=Math.max(0,Math.min((parseInt(m[2],10)||1)-1,flows[k].steps.length-1));
+      pick(k,s);
+      return true;
+    }
+    window.addEventListener('hashchange',fromHash);
+    if(!fromHash()) draw();
+  });
+})();
+</script>
