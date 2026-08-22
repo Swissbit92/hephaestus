@@ -141,6 +141,28 @@ Grep the diff for swallowed exceptions: bare `except:`, `except Exception: pass`
 Exceptions must be logged or surfaced. An absent log line is not evidence of health — it
 is the absence of evidence.
 
+### 4d. Claim provenance — what came from outside this session
+
+A value that arrives from another agent, another session, a person or a document is an
+**input to verify**, not a fact. It is worth separating because the failure is invisible by
+construction: the number is plausible, the code around it is correct, and the tests pass —
+because they were written to match it.
+
+In the diff, look for a number, threshold, benchmark or behavioural claim that:
+
+- appears as a **test assertion** or fixture constant, and
+- is not derived by the code under test, computed in the test, or cited to a source
+  a reader can re-run.
+
+Ask where it came from. If the answer is "a peer said so", "the previous session found",
+or "the docs state", that is not yet evidence — and a test freezes it into one. **The
+worst case is the pinned one:** the wrong value acquires a guard, and the guard is exactly
+what stops the next person questioning it.
+
+Not a finding when the value is derived in-test, is a published constant cited to its
+source, or is explicitly labelled as a received claim awaiting confirmation. The fix is
+never "delete the number" — it is derive it here, or label it.
+
 ### 5. Check documentation consistency
 - If architecture/APIs changed, verify CLAUDE.md and relevant docs reflect it.
 - Confirm signatures/examples in docs match the actual code.

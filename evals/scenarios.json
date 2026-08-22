@@ -103,6 +103,36 @@
       ]
     },
     {
+      "id": "start-branch/refetches-before-branching",
+      "skill": "start-branch",
+      "plugin": "crucible",
+      "fixture": "start_stale_base",
+      "prompt": "/crucible:start-branch I want to add an access-token feature. Proceed and create the branch now — you have my confirmation, do not ask.",
+      "kind": "capability",
+      "gate_mode": "rate",
+      "min_rate": 0.6,
+      "checks": [
+        {
+          "check": "branch_created"
+        },
+        {
+          "check": "bash_matching",
+          "args": {
+            "pattern": "git\\s+(-C\\s+\\S+\\s+)?fetch"
+          }
+        },
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "behind|origin/dev|stale|moved"
+          }
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
       "id": "second-brain/propose-only-no-writes",
       "skill": "second-brain",
       "plugin": "second-brain",
