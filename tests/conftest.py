@@ -6,6 +6,8 @@ scripts directory must be importable. We also redirect cms state to a temp dir s
 """
 from __future__ import annotations
 
+import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -23,12 +25,31 @@ SECOND_BRAIN_SCRIPTS = (REPO_ROOT / "plugins" / "second-brain" / "skills"
                         / "second-brain" / "scripts")
 CRUCIBLE_SCRIPTS = REPO_ROOT / "plugins" / "crucible" / "scripts"
 
-# Isolate cms state writes (common.py creates STATE_DIR at import time).
-import os
+# Isolate cms + loop-harness state writes. Both `common.py` and `loop_common.py` resolve
+# *and* mkdir their STATE_DIR at module import, and test modules import them during
+# collection — so this has to run here, at import time and above the sys.path inserts.
+# A fixture would be far too late.
+_OWNED_TEMP_DIRS: list[str] = []
 
-os.environ.setdefault("CMS_STATE_DIR", tempfile.mkdtemp(prefix="hephaestus-cms-state-"))
-# Isolate loop-harness state writes (loop_common resolves STATE_DIR at import time).
-os.environ.setdefault("LOOP_HARNESS_STATE_DIR", tempfile.mkdtemp(prefix="hephaestus-loop-state-"))
+
+def _isolate_state_dir(var: str, prefix: str) -> None:
+    """Point `var` at a throwaway temp dir, but only when it isn't already set.
+
+    `os.environ.setdefault(var, tempfile.mkdtemp(...))` reads correctly and behaves
+    wrongly: Python evaluates the argument *before* setdefault can decline it, so a
+    directory got created on every run — including every run that then threw it away.
+    Two per pytest process, never removed, which is how ~490 empty dirs accumulated in
+    %TEMP% on this machine between 2026-07-17 and 2026-08-16.
+    """
+    if os.environ.get(var):
+        return
+    path = tempfile.mkdtemp(prefix=prefix)
+    os.environ[var] = path
+    _OWNED_TEMP_DIRS.append(path)
+
+
+_isolate_state_dir("CMS_STATE_DIR", "hephaestus-cms-state-")
+_isolate_state_dir("LOOP_HARNESS_STATE_DIR", "hephaestus-loop-state-")
 
 # Make the cms scripts importable as top-level modules (common, check, hook, ...).
 if str(CMS_SCRIPTS) not in sys.path:
@@ -85,3 +106,14 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "requires_claude" in item.keywords:
             item.add_marker(skip)
+
+
+def pytest_unconfigure(config):
+    """Remove only the temp dirs *this* process created — never a caller-supplied one.
+
+    `ignore_errors=True` is load-bearing rather than defensive: the Windows CI leg
+    occasionally still holds a handle on `size_history.json` as the session ends, and a
+    cleanup failure must not turn a green run red.
+    """
+    while _OWNED_TEMP_DIRS:
+        shutil.rmtree(_OWNED_TEMP_DIRS.pop(), ignore_errors=True)
