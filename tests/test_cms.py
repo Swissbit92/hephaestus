@@ -901,3 +901,125 @@ def test_this_repository_has_no_broken_links():
     for md in common.iter_md_files(repo, include_archive=False):
         findings.extend(check.check_relative_links(md))
     assert findings == [], [f.message for f in findings]
+
+
+# --------------------------------------------------------------------------- ai_summary aggregate
+#
+# The per-document cap bounds one row of the routing table. What a triage pass is charged
+# is the sum of every row, and that grows with the corpus while each summary stays
+# comfortably legal — so the two checks are not one check at two thresholds, and only the
+# aggregate one can grow while nobody edits anything.
+
+
+def _doc_with_summary(root, name: str, summary: str) -> Path:
+    return write(root / "docs" / name,
+                 "---\ntitle: T\nstatus: active\ncreated: 2026-01-01\n"
+                 "last_reviewed_on: 2026-08-01\nreview_in: 6 months\napplies_to: t\n"
+                 f'ai_summary: "{summary}"\n---\n\n# T\n')
+
+
+def test_aggregate_warns_when_every_summary_is_individually_legal(tmp_path):
+    """The case the per-row cap structurally cannot see."""
+    for n in range(40):
+        _doc_with_summary(tmp_path, f"doc{n:02d}.md", "x" * 1200)
+
+    findings = check.check_ai_summary_aggregate(tmp_path)
+
+    assert len(findings) == 1
+    assert findings[0].level == "warning"
+    assert "aggregate" in findings[0].message
+    assert "40 document(s)" in findings[0].message
+
+
+def test_aggregate_warning_does_not_also_fire_per_summary(tmp_path):
+    """If the per-row check fires too, the threshold is wrong rather than the design."""
+    for n in range(40):
+        _doc_with_summary(tmp_path, f"doc{n:02d}.md", "x" * 1200)
+
+    per_row = [f for md in sorted((tmp_path / "docs").glob("*.md"))
+               for f in check.check_frontmatter(md, required=True)
+               if "ai_summary" in f.message]
+
+    assert per_row == [], "a summary under the cap must not be flagged individually"
+
+
+def test_aggregate_is_silent_for_a_small_corpus(tmp_path):
+    for n in range(3):
+        _doc_with_summary(tmp_path, f"doc{n}.md", "a short, useful summary")
+    assert check.check_ai_summary_aggregate(tmp_path) == []
+
+
+def test_aggregate_ignores_documents_without_a_summary(tmp_path):
+    """Unsummarised documents cost nothing to route on and must not inflate the total."""
+    for n in range(40):
+        write(tmp_path / "docs" / f"bare{n:02d}.md",
+              "---\ntitle: T\nstatus: active\ncreated: 2026-01-01\n"
+              "last_reviewed_on: 2026-08-01\nreview_in: 6 months\napplies_to: t\n---\n\n# T\n")
+    assert check.check_ai_summary_aggregate(tmp_path) == []
+
+
+def test_aggregate_counts_bytes_not_characters(tmp_path):
+    """A summary of non-ASCII prose costs what it costs on the wire, not in characters.
+
+    The expected total is 30 x 1402, not 30 x 1400: `parse_frontmatter` captures the raw
+    value including its surrounding YAML quotes, so a quoted summary measures two bytes
+    more than the same text unquoted. That is pre-existing behaviour shared with the
+    per-document cap rather than anything this check introduced, and two bytes in 1500 is
+    not worth changing a published contract over — but it is pinned here so the next person
+    to see an off-by-60 total finds the reason instead of the arithmetic.
+    """
+    for n in range(30):
+        _doc_with_summary(tmp_path, f"doc{n:02d}.md", "é" * 700)  # 700 chars, 1400 bytes
+
+    findings = check.check_ai_summary_aggregate(tmp_path)
+
+    assert len(findings) == 1, "30 x ~1400 bytes should trip a 20000-byte cap"
+    assert str(30 * 1402) in findings[0].message
+
+
+# --------------------------------------------------------------------------- unterminated frontmatter
+#
+# parse_frontmatter returns ({}, 0) for BOTH an unclosed fence and no frontmatter at all,
+# so all nine of its callers treated "you typo'd the closing fence" and "this file has no
+# frontmatter" as the same condition. On a docs/ file that surfaced as a misleading
+# "missing frontmatter"; on an exempt file it surfaced as nothing, and the document's real
+# metadata was silently ignored by every tool that reads it.
+
+
+def test_parse_frontmatter_still_returns_empty_for_an_unclosed_fence():
+    """The return contract is deliberately unchanged — half-read frontmatter is worse than
+    none, and no caller should have to handle a partial dict."""
+    assert common.parse_frontmatter("---\ntitle: x\nno closing fence\n") == ({}, 0)
+
+
+def test_unterminated_is_distinguishable_from_absent():
+    assert common.frontmatter_is_unterminated("---\ntitle: x\nno closing fence\n") is True
+    assert common.frontmatter_is_unterminated("no frontmatter here\n") is False
+    assert common.frontmatter_is_unterminated("---\ntitle: x\n---\n\nbody\n") is False
+    assert common.frontmatter_is_unterminated("") is False
+
+
+def test_a_body_dash_rule_does_not_count_as_a_closing_fence():
+    """`---` on line 1 with a horizontal rule later still closes the block as far as YAML
+    is concerned, so this must NOT be reported as unterminated."""
+    assert common.frontmatter_is_unterminated("---\ntitle: x\n---\n\ntext\n\n---\n") is False
+
+
+def test_unclosed_fence_is_an_error_even_where_frontmatter_is_not_required(tmp_path):
+    """The case that previously produced silence. The author plainly intended metadata."""
+    f = write(tmp_path / "README.md", "---\ntitle: x\nstatus: active\nno fence\n")
+
+    findings = check.check_frontmatter(f, required=False)
+
+    assert [x for x in findings if x.level == "error"], "an unclosed fence must not be silent"
+    assert "never closed" in findings[0].message
+
+
+def test_unclosed_fence_reports_the_real_fault_not_missing_frontmatter(tmp_path):
+    f = write(tmp_path / "doc.md", "---\ntitle: x\nno fence\n")
+
+    messages = [x.message for x in check.check_frontmatter(f, required=True)]
+
+    assert any("never closed" in m for m in messages)
+    assert not any("missing frontmatter" in m for m in messages), \
+        "reporting 'missing' for a typo'd fence sends the author to the wrong fix"

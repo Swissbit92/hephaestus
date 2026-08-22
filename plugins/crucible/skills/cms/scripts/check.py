@@ -26,6 +26,7 @@ from common import (
     ARCHIVE_PATTERNS,
     FRONTMATTER_EXEMPT,
     AI_SUMMARY_MAX_BYTES,
+    AI_SUMMARY_AGGREGATE_WARN_BYTES,
     FRONTMATTER_REQUIRED,
     FRONTMATTER_STATUSES,
     FRONTMATTER_THREAT_LEVELS,
@@ -33,6 +34,7 @@ from common import (
     REQUIRED_FILES,
     Finding,
     find_atpath_imports,
+    frontmatter_is_unterminated,
     iter_md_files,
     load_state,
     parse_frontmatter,
@@ -64,7 +66,16 @@ def check_frontmatter(path: Path, required: bool) -> list[Finding]:
     findings: list[Finding] = []
     rel = str(path)
     if not fm:
-        if required:
+        # An unterminated fence is a different fault from having no frontmatter, and they
+        # used to be reported as the same thing (or, on an exempt file, as nothing at all).
+        # It is an Error everywhere, not only where frontmatter is required: the author
+        # plainly intended metadata, and every consumer is silently ignoring all of it.
+        if frontmatter_is_unterminated(text):
+            findings.append(Finding(
+                "error", rel,
+                "frontmatter opens with '---' but is never closed — every field in it is "
+                "being ignored by every tool that reads this file. Add the closing '---'."))
+        elif required:
             findings.append(Finding("error", rel, "missing frontmatter (required for files under docs/)"))
         return findings
     # Required-field completeness only applies where frontmatter is required. But any
@@ -157,6 +168,41 @@ def check_relative_links(path: Path) -> list[Finding]:
                 f"link target does not exist: {file_part} "
                 f"(resolved to {resolved.as_posix()})"))
     return findings
+
+
+def check_ai_summary_aggregate(repo: Path) -> list[Finding]:
+    """The routing table's total cost, which no per-document check can see.
+
+    `check_frontmatter` bounds one summary at a time, and every summary in a corpus can
+    pass that check while the table they form costs more than the reads it was built to
+    replace. The per-row cap and this one are not the same check at two thresholds: one
+    bounds a document's contribution, the other bounds the mechanism's own overhead, and
+    only the second grows when nobody edits anything.
+
+    Warning, never Error. Nothing here is malformed — the corpus has outgrown a flat table,
+    and the fix is usually to split it by directory or to archive documents that should not
+    still be indexed, not to shave bytes off every summary.
+    """
+    total = 0
+    counted = 0
+    for md in iter_md_files(repo, include_archive=False):
+        try:
+            fm, _ = parse_frontmatter(md.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+        summary = fm.get("ai_summary")
+        if summary:
+            total += len(summary.encode("utf-8"))
+            counted += 1
+    if total <= AI_SUMMARY_AGGREGATE_WARN_BYTES:
+        return []
+    return [Finding("warning", str(repo),
+                    f"ai_summary aggregate is {total} bytes across {counted} document(s) "
+                    f"(>{AI_SUMMARY_AGGREGATE_WARN_BYTES}); the routing table is re-read on "
+                    f"every triage pass, so past this it costs more than the reads it "
+                    f"replaces. Split the table by directory, or archive documents that "
+                    f"should no longer be indexed — trimming every summary is treating the "
+                    f"symptom.")]
 
 
 def check_doc_age_source(repo: Path) -> list[Finding]:
@@ -606,6 +652,7 @@ def run_repo_check(repo: Path) -> list[Finding]:
     findings.extend(check_missing_glossary(repo))
     findings.extend(check_invariants_have_checks(repo))
     findings.extend(check_doc_age_source(repo))
+    findings.extend(check_ai_summary_aggregate(repo))
     # Per-file checks
     for md in iter_md_files(repo, include_archive=False):
         required_fm = "/docs/" in str(md).replace("\\", "/") and md.name not in FRONTMATTER_EXEMPT

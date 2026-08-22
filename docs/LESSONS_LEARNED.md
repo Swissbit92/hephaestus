@@ -5,6 +5,7 @@ created: 2026-06-28
 last_reviewed_on: 2026-06-28
 review_in: 12 months
 applies_to: hephaestus
+ai_summary: "Dated, append-only record of what this repo measured and got wrong, newest first — including the two results that most constrain how work is done here: the qa-gatekeeper agent scoring 40/40 against a no-agent control that also scored 40/40, and 'placement beats wording' failing to reproduce when applied as a reordering. Read it before citing a skill's scenarios as evidence it earns its cost, before assuming a fix that sounds right will measure right, and before recording a lesson in the module that learned it rather than as a check."
 ---
 
 # Lessons Learned

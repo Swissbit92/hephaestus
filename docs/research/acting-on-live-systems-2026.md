@@ -5,6 +5,7 @@ created: 2026-07-17
 last_reviewed_on: 2026-07-17
 review_in: 6 months
 applies_to: hephaestus
+ai_summary: "Research note behind the act-for-real skill: the 2025/2026 literature on taking irreversible actions on live systems you do not own. Sources the verify-before-retry rule and the deterministic-idempotency-key requirement, with the numbers — blind retry decaying 92% to 64% task success while gated retry held, and an ablation showing verification rather than retrying carried the gain. Produced at REDUCED RIGOR (2-vote); read the Caveats before citing it."
 ---
 
 # Acting on Live External Systems — 2025/2026 State of the Art

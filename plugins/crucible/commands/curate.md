@@ -33,7 +33,7 @@ clean.
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/skill_lint.py" --strict --show-duplicates
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/cms/scripts/triage.py" --repo .
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/cms/scripts/check.py" .
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/repo-audit/scripts/repo_metrics.py" . --json
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/repo-audit/scripts/repo_metrics.py" .
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/predictions.py" list
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/invariants_run.py"
 ```

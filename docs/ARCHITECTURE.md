@@ -99,6 +99,16 @@ Two rules shape all four. **Three-valued outcomes**: every gate distinguishes `p
 change acquires a green tick. And **a check nobody has watched fail is not a check** — each
 one above has been validated by reintroducing the defect and observing it go red.
 
+The exit-code convention is uniform across every script here, and load-bearing rather than
+stylistic:
+
+| Exit | Means | Example |
+|------|-------|---------|
+| `0` | passed | `invariants_run.py` with every check green |
+| `1` | failed — the thing being checked is wrong | `coverage_delta.py` when a test disappeared |
+| `2` | **could not determine** — NOT a pass | `sync.py` on a facts file it cannot parse; `mtime_guard.py` on a file that will not parse |
+| `3` | nothing enforceable — a SKIP, not a pass | `invariants_run.py` with no wired checks |
+
 ## Evidence contract
 
 What counts as proof here is declared, not assumed. `.crucible/evidence.json` maps changed
