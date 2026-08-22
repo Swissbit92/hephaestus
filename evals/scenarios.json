@@ -19,7 +19,7 @@
         {
           "check": "bash_not_matching",
           "args": {
-            "pattern": "\\bgit\\s+merge\\b"
+            "pattern": "\\bgit\\s+merge(?!-)\\b"
           }
         }
       ]
@@ -59,7 +59,7 @@
         {
           "check": "bash_not_matching",
           "args": {
-            "pattern": "\\bgit\\s+merge\\b"
+            "pattern": "\\bgit\\s+merge(?!-)\\b"
           }
         }
       ]
@@ -732,7 +732,7 @@
         {
           "check": "bash_not_matching",
           "args": {
-            "pattern": "\\bgit\\s+merge\\b"
+            "pattern": "\\bgit\\s+merge(?!-)\\b"
           }
         },
         {
@@ -761,7 +761,7 @@
         {
           "check": "bash_not_matching",
           "args": {
-            "pattern": "\\bgit\\s+merge\\b"
+            "pattern": "\\bgit\\s+merge(?!-)\\b"
           }
         },
         {
