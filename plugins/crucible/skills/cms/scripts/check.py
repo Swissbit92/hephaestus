@@ -20,6 +20,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import unquote
 
+import doc_age
 from common import (
     ARCHIVE_ALLOWLIST,
     ARCHIVE_PATTERNS,
@@ -158,25 +159,52 @@ def check_relative_links(path: Path) -> list[Finding]:
     return findings
 
 
+def check_doc_age_source(repo: Path) -> list[Finding]:
+    """Say out loud when the age half of the archive rule cannot run.
+
+    A rule that cannot evaluate must announce itself rather than return no findings —
+    "no findings" is indistinguishable from a clean repo, which is precisely how the
+    mtime bug survived: on every clone the rule silently stopped firing and looked fine.
+    """
+    usable, reason = doc_age.age_source_status(repo)
+    if usable:
+        return []
+    return [Finding("info", str(repo),
+                    f"archive-candidate age checks are degraded: {reason}")]
+
+
 def check_archive_candidate(path: Path) -> list[Finding]:
     name = path.name
     if name in ARCHIVE_ALLOWLIST:
         return []
     if "/archive/" in str(path).replace("\\", "/"):
         return []  # already archived
-    matches_pattern = any(p.match(name) for p in ARCHIVE_PATTERNS)
-    if not matches_pattern:
-        return []
-    # Check age
     try:
-        mtime = date.fromtimestamp(path.stat().st_mtime)
-    except Exception:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
         return []
-    age_days = (date.today() - mtime).days
-    if age_days > 60:
-        return [Finding("warning", str(path),
-                        f"archive-candidate filename + mtime {mtime} ({age_days} days old); consider moving to docs/archive/YYYY-MM/")]
-    return []
+    fm, _ = parse_frontmatter(text)
+
+    # The rule as documented in SKILL.md is `status: completed` OR filename-match, AND
+    # older than the threshold. Only the filename half was ever implemented, even though
+    # migrate.py writes `status: completed` itself — the tool produced a clone-stable
+    # signal and then never read it.
+    by_status = fm.get("status") == "completed"
+    by_filename = any(p.match(name) for p in ARCHIVE_PATTERNS)
+    if not (by_status or by_filename):
+        return []
+
+    days, changed, source = doc_age.age_days(path, text)
+    if days is None:
+        # No clone-stable answer. Staying silent is the point: guessing from mtime is the
+        # bug, and guessing "old" would archive documents on the strength of nothing.
+        return []
+    if days <= doc_age.ARCHIVE_AGE_DAYS:
+        return []
+    trigger = "status: completed" if by_status else "archive-candidate filename"
+    return [Finding("warning", str(path),
+                    f"{trigger} + last changed {changed} per {source} ({days} days ago); "
+                    f"consider moving to docs/archive/YYYY-MM/")]
 
 
 def check_required_files(repo: Path) -> list[Finding]:
@@ -577,6 +605,7 @@ def run_repo_check(repo: Path) -> list[Finding]:
     findings.extend(check_named_section_shape(repo))
     findings.extend(check_missing_glossary(repo))
     findings.extend(check_invariants_have_checks(repo))
+    findings.extend(check_doc_age_source(repo))
     # Per-file checks
     for md in iter_md_files(repo, include_archive=False):
         required_fm = "/docs/" in str(md).replace("\\", "/") and md.name not in FRONTMATTER_EXEMPT

@@ -65,6 +65,16 @@ after a defect that was invisible from a POSIX machine:
   `encoding="utf-8", errors="replace"` to subprocess, and call `_utf8_stdio()` in `main()`.
 - **Emit paths with `as_posix()`.** A path that lands in JSON, in a gate command or in a
   test comparison must use forward slashes; a backslash is also a shell escape.
+- **Never decide anything from a file's mtime in shipped plugin code.** git neither records
+  nor restores modification times, so a clone stamps every file with the checkout time and
+  any such rule reports every file as brand new the moment the repo moves machines — while
+  looking healthy, because "no findings" is also what a clean repo looks like. `render.py`
+  learned this, wrote it in its own docstring, and the archive rule then repeated it at four
+  sites, one of which *persisted* a wrong date into frontmatter. Use the git committer date
+  (`plugins/crucible/skills/cms/scripts/doc_age.py` is importable and already does the
+  batching, shallow-clone detection and fallbacks) or a date carried in the file's content.
+  Enforced by `scripts/mtime_guard.py`, which parses rather than greps — a textual search
+  flags `doc_age.py`'s own docstring, and a rule that accuses its own fix gets switched off.
 - **Do not exceed the Python floor the README promises (3.9).** A file that will not parse
   does not degrade one feature — it stops `pytest` collecting, so the suite is unavailable
   on that interpreter. Note that `ast.parse(feature_version=…)` **cannot** catch this alone:
@@ -140,6 +150,7 @@ hephaestus/
 │   ├── validate_manifests.py         # marketplace + plugin manifest agreement (CI gate)
 │   ├── check-public-safe.sh          # private-token guard (employer + third-party project)
 │   ├── python_floor.py               # the declared floor, enforced (grammar + f-strings + stdlib)
+│   ├── mtime_guard.py                # no shipped plugin code decides from st_mtime (AST, not grep)
 │   ├── install_skills.py             # link skills into ~/.claude, ~/.codex, ~/.pi
 │   └── checks/                       # the executable half of docs/INVARIANTS.md
 │       └── _python.sh                # sourced: resolves a Python that actually runs

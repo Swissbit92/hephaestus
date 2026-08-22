@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -162,38 +161,51 @@ def test_archive_candidate_allowlisted_is_ignored(tmp_path):
     assert check.check_archive_candidate(f) == []
 
 
-def test_archive_candidate_old_pattern_match_warns(tmp_path):
-    f = write(tmp_path / "MIGRATION_PLAN.md", "x")
-    old = time.time() - 90 * 86400  # 90 days ago
-    os.utime(f, (old, old))
+def test_archive_candidate_old_pattern_match_warns(git_doc_repo):
+    """Backdated by a real commit, not by os.utime.
+
+    This test used to manufacture its old file with `os.utime`, and so kept passing
+    through the entire period the archive rule was broken for everyone who obtained the
+    repository by cloning it — git does not restore mtimes, so on a clone every document
+    read as zero days old and the rule quietly stopped firing.
+    """
+    f = git_doc_repo.commit("docs/MIGRATION_PLAN.md", "x", age=90)
     findings = check.check_archive_candidate(f)
     assert any(x.level == "warning" for x in findings)
 
 
-def test_archive_candidate_recent_pattern_match_silent(tmp_path):
-    f = write(tmp_path / "MIGRATION_PLAN.md", "x")  # fresh mtime
+def test_archive_candidate_recent_pattern_match_silent(git_doc_repo):
+    """Committed recently, so the age half of the rule declines it.
+
+    Backed by a real commit for the same reason as its old-file counterpart: against a
+    file git has never heard of, the age is *unknown* rather than recent, and this
+    assertion would hold for a reason it is not trying to test.
+    """
+    f = git_doc_repo.commit("docs/MIGRATION_PLAN.md", "x", age=3)
     assert check.check_archive_candidate(f) == []
 
 
-def test_a_business_plan_is_not_a_transient_plan(tmp_path):
+def test_a_business_plan_is_not_a_transient_plan(git_doc_repo):
     """The `*_PLAN.md` pattern targets plans that stop mattering once executed. A
     BUSINESS_PLAN is the opposite: a standing statement of what the product is, which
     gets more load-bearing with age. Found in the wild flagging a repo's primary
     founder document as archive-fodder purely for ending in "_PLAN"."""
-    f = write(tmp_path / "BUSINESS_PLAN.md", "x")
-    old = time.time() - 400 * 86400
-    os.utime(f, (old, old))
+    f = git_doc_repo.commit("docs/BUSINESS_PLAN.md", "x", age=400)
     assert check.check_archive_candidate(f) == []
 
 
-def test_transient_plans_are_still_flagged(tmp_path):
+def test_transient_plans_are_still_flagged(git_doc_repo):
     """The counterpart guard: exempting BUSINESS_PLAN must not blunt the rule itself,
-    or the pattern stops earning its place."""
-    for name in ("MIGRATION_PLAN.md", "PHASE2_PLAN.md", "ROLLOUT_PLAN.md"):
-        f = write(tmp_path / name, "x")
-        old = time.time() - 400 * 86400
-        os.utime(f, (old, old))
-        assert any(x.level == "warning" for x in check.check_archive_candidate(f)), name
+    or the pattern stops earning its place.
+
+    Everything is committed before anything is checked, which is also how the linter
+    actually runs: `doc_age` reads the whole repository's history in one `git log` on
+    first use, so the tree it reports on is the tree as it stood when the pass began.
+    """
+    names = ("MIGRATION_PLAN.md", "PHASE2_PLAN.md", "ROLLOUT_PLAN.md")
+    files = [git_doc_repo.commit(f"docs/{name}", "x", age=400) for name in names]
+    for f in files:
+        assert any(x.level == "warning" for x in check.check_archive_candidate(f)), f.name
 
 
 # --------------------------------------------------------------------------- Phase 1A: frontmatter-exempt split

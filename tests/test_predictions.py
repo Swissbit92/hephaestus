@@ -6,6 +6,9 @@ in the `wrong` verdicts, so the tests below are mostly about the ways a record l
 quietly turns into self-congratulation:
 
 - a claim with no check can never be falsified, so it must be refused at the door;
+- a check that was never observed failing cannot distinguish success from failure, so a
+  prediction must state its baseline — the ledger settled three entries on invalid
+  instruments before this was enforced;
 - a recorded claim must be immutable, because editing it to match the outcome is both the
   natural move and the one that destroys the record;
 - "unclear" must be a first-class verdict, since forcing a binary answer onto an ambiguous
@@ -32,9 +35,10 @@ def _run(repo: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 def _record(repo: Path, ident: str = "p1", claim: str = "x will get faster",
-            check: str = "run the benchmark") -> subprocess.CompletedProcess:
+            check: str = "run the benchmark",
+            baseline: str = "the benchmark currently reports 4.2s") -> subprocess.CompletedProcess:
     return _run(repo, "record", ident, "--claim", claim, "--check", check,
-                "--date", "2026-08-16")
+                "--baseline", baseline, "--date", "2026-08-16")
 
 
 # --------------------------------------------------------------------------- falsifiability
@@ -133,3 +137,73 @@ def test_a_missing_repo_is_could_not_determine():
                        capture_output=True, text=True, encoding="utf-8",
                        errors="replace", timeout=60)
     assert r.returncode == 2
+
+
+# --------------------------------------------------------------------------- baseline validity
+#
+# The claim-side rules (a check is required, a recorded claim is immutable) guard against a
+# prediction being *rewritten*. They say nothing about whether its check could ever have
+# failed — and that is a separate defect with the same result: a settled entry that looks
+# rigorous and measured nothing. Three entries in this repo's own ledger were settled on
+# instruments that could not have distinguished success from failure.
+
+
+def test_record_refuses_a_prediction_with_no_baseline(tmp_path):
+    r = _run(tmp_path, "record", "p1", "--claim", "x will get faster",
+             "--check", "run the benchmark", "--date", "2026-08-16")
+    assert r.returncode == 1
+    assert "baseline" in r.stderr.lower()
+    assert not (tmp_path / "docs" / "predictions.jsonl").exists()
+
+
+def test_record_refuses_an_empty_baseline(tmp_path):
+    r = _record(tmp_path, baseline="   ")
+    assert r.returncode == 1
+    assert "baseline" in r.stderr.lower()
+
+
+def test_a_missing_flag_is_refused_not_reported_as_undetermined(tmp_path):
+    """Exit 1 (refused) and exit 2 (could not determine) mean different things here, and
+    argparse's own `required=True` squats on 2.
+
+    Written as `required=True`, the carefully-worded refusal text was unreachable except by
+    passing an empty string — so a missing --check exited 2, which this script documents as
+    "the store is unreadable or malformed", and a caller scripting it could not tell a
+    forgotten flag from a corrupt ledger. The repo invariant that a check which could not
+    run is never reported as a pass depends on those codes staying distinct.
+    """
+    for missing in ("--check", "--baseline"):
+        args = ["record", "p1", "--claim", "c", "--date", "2026-08-16"]
+        for flag, value in (("--check", "k"), ("--baseline", "b")):
+            if flag != missing:
+                args += [flag, value]
+        r = _run(tmp_path, *args)
+        assert r.returncode == 1, f"{missing} omitted gave exit {r.returncode}, not 1"
+        assert "refused:" in r.stderr, f"{missing} omitted did not reach the refusal message"
+
+
+def test_the_baseline_is_stored_and_shown(tmp_path):
+    _record(tmp_path, baseline="grep finds zero matches today")
+    store = tmp_path / "docs" / "predictions.jsonl"
+    rec = json.loads(store.read_text(encoding="utf-8").splitlines()[0])
+    assert rec["baseline"] == "grep finds zero matches today"
+
+    listing = _run(tmp_path, "list")
+    assert listing.returncode == 0
+    assert "grep finds zero matches today" in listing.stdout
+
+
+def test_a_prediction_without_a_baseline_is_flagged_in_the_listing(tmp_path):
+    """Entries predating the rule stay readable, but must not pass as equivalent."""
+    store = tmp_path / "docs" / "predictions.jsonl"
+    store.parent.mkdir(parents=True, exist_ok=True)
+    store.write_text(json.dumps({
+        "kind": "prediction", "id": "legacy", "date": "2026-01-01",
+        "claim": "an old claim", "check": "an old check",
+    }) + "\n", encoding="utf-8")
+
+    listing = _run(tmp_path, "list")
+
+    assert listing.returncode == 0
+    assert "NOT RECORDED" in listing.stdout
+    assert "carry no baseline" in listing.stdout

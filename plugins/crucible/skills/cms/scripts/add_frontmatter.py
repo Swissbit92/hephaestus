@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """One-shot script: add CMS frontmatter to all docs/*.md files that lack it.
 
-Infers: title (H1 or filename), status (heuristic), created (mtime),
+Infers: title (H1 or filename), status (heuristic), created (first commit date),
 last_reviewed_on (today), review_in (by status/path), applies_to (repo).
 """
 from __future__ import annotations
 
 import re
 import sys
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
+
+import doc_age
 
 # Repo root to scan. Pass as the first non-flag CLI arg; defaults to cwd.
 _pos = [a for a in sys.argv[1:] if not a.startswith("-")]
@@ -76,10 +78,22 @@ def infer_review_in(path: Path, status: str) -> str:
 
 
 def infer_created(path: Path) -> str:
-    try:
-        return datetime.fromtimestamp(path.stat().st_mtime).date().isoformat()
-    except Exception:
-        return TODAY
+    """The date this document entered the repository, from history rather than mtime.
+
+    This is the worst of the four sites the mtime bug touched, because it is the only one
+    that *writes*. A missed archive finding is recomputed correctly the next time the
+    linter runs; a wrong `created:` is persisted into the file, and from there it feeds
+    `review_in` staleness forever — the document reports itself as freshly created for
+    the rest of its life, on every machine, long after the clone that caused it.
+
+    Falls back to today, never to mtime: an honest "I do not know, so: now" is strictly
+    better than a confident wrong date, because the wrong date is indistinguishable from
+    a real one once it is in the file.
+    """
+    first, _source = doc_age.first_committed(path)
+    if first is not None:
+        return first.isoformat()
+    return TODAY
 
 
 def make_frontmatter(path: Path, content: str) -> str:

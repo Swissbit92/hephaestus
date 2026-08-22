@@ -12,20 +12,37 @@ change lands, in a falsifiable form, with the check that would settle it; later,
 is run and the outcome recorded against the original words. The value is entirely in the
 `wrong` verdicts — a mechanism that only ever confirms itself is measuring nothing.
 
-Two rules the format enforces rather than requests:
+Three rules the format enforces rather than requests:
 
 - **A prediction needs a `--check`** — the command or observation that would settle it. A
   prediction with no check is a hope, and hopes are always graded as correct in hindsight.
+- **A prediction needs a `--baseline`** — what that check shows *right now*, on the
+  unchanged tree, before the work lands. This is the rule this ledger earned the hard way:
+  three separate entries were settled `partial` or worse not because the claim was wrong
+  but because **the check was invalid** — it could not have distinguished success from
+  failure, and nobody noticed, because a check is normally written after the author already
+  understands the problem and so is never once observed failing. It is the same defect
+  test-driven development names in its first step: a test that has never been red proves
+  nothing when it turns green, and the discipline exists precisely because writing the test
+  after the code means you never watch it fail. Research methodology says it in its own
+  vocabulary — a pre-registration that cannot fail is not a pre-registration. Stating the
+  baseline forces the check to be *run* against the unfixed tree, which is the only moment
+  its validity is observable.
 - **`verify` will not accept a rewritten prediction.** The recorded text is immutable; the
   outcome is appended beside it. Editing the claim to match the result is the exact failure
   this exists to prevent, and it is the natural thing to do when the result is embarrassing.
+
+The first and third rules guard the *claim*. The second guards the *instrument*, and that
+is a genuinely different failure: an immutable claim measured by a check that cannot fail
+records a result with the full appearance of rigour and none of the content.
 
 Storage is an append-only JSONL file, `docs/predictions.jsonl` by default — text, diffable,
 reviewable, and carried by the repo rather than by a service.
 
 Exit codes:
     0 — the operation succeeded
-    1 — record refused (missing check), or verify found no matching open prediction
+    1 — record refused (missing check or baseline), or verify found no matching open
+        prediction
     2 — could not determine: the store is unreadable or malformed. NOT a pass.
 """
 from __future__ import annotations
@@ -95,6 +112,19 @@ def cmd_record(a: argparse.Namespace, store: Path) -> int:
               "settle it. Without one it cannot be wrong, and a claim that cannot be wrong\n"
               "is not a prediction.", file=sys.stderr)
         return 1
+    if not a.baseline or not a.baseline.strip():
+        print("refused: a prediction needs --baseline — what --check shows RIGHT NOW, on the\n"
+              "unchanged tree, before the work lands.\n"
+              "\n"
+              "Run the check first. If it already passes, it is not a check: it cannot tell\n"
+              "success from failure, and it will report success either way. This is the\n"
+              "failure this ledger hit three times — the claim was fine, the instrument was\n"
+              "not — and it is invisible from the writing chair, because a check written\n"
+              "after you understand the problem is never once observed failing.\n"
+              "\n"
+              "Cost: one command. It is the same discipline as watching a test go red before\n"
+              "you make it green.", file=sys.stderr)
+        return 1
     try:
         records = load(store)
     except ValueError as e:
@@ -105,7 +135,7 @@ def cmd_record(a: argparse.Namespace, store: Path) -> int:
               f"cannot be attached to a rewritten claim.", file=sys.stderr)
         return 1
     append(store, {"kind": "prediction", "id": a.id, "date": a.date,
-                   "claim": a.claim, "check": a.check})
+                   "claim": a.claim, "check": a.check, "baseline": a.baseline})
     print(f"recorded {a.id}")
     return 0
 
@@ -152,11 +182,23 @@ def cmd_list(a: argparse.Namespace, store: Path) -> int:
         print(f"[{state:<7}] {p['id']}  ({p['date']})")
         print(f"           {p['claim']}")
         print(f"           check: {p['check']}")
+        if p.get("baseline"):
+            print(f"           baseline: {p['baseline']}")
+        else:
+            # Recorded before --baseline was required. Worth naming per entry rather than
+            # only in the tally: it is the specific reason such an entry's verdict carries
+            # less weight, and that context is lost if it is only counted.
+            print("           baseline: NOT RECORDED — predates the rule; this prediction's "
+                  "check was never observed failing, so a 'right' here is weaker evidence")
         if o and o.get("evidence"):
             print(f"           outcome: {o['evidence']}")
 
     tally = {v: sum(1 for o in outcomes.values() if o["verdict"] == v) for v in VERDICTS}
     print(f"\n{len(openp)} open · " + " · ".join(f"{v} {tally[v]}" for v in VERDICTS))
+    unbaselined = sum(1 for p in preds if not p.get("baseline"))
+    if unbaselined:
+        print(f"{unbaselined} prediction(s) carry no baseline — their checks were never "
+              f"observed failing, which is how three of them turned out to be invalid.")
     if tally["wrong"] == 0 and outcomes:
         # Not an error — but worth saying out loud, because a ledger that never records a
         # miss is far more likely to be measuring nothing than to be describing perfection.
@@ -176,7 +218,15 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("record", help="record a prediction before the change lands")
     r.add_argument("id", help="stable id, e.g. the branch name or a short slug")
     r.add_argument("--claim", required=True, help="what this change is expected to do")
-    r.add_argument("--check", required=True,
+    # Deliberately NOT required=True. argparse rejects a missing required flag itself,
+    # with exit 2 and a one-line usage dump — which both squats on the exit code this
+    # script reserves for "could not determine" and throws away the explanation, and the
+    # explanation is the entire point of refusing. Written as required=True, the guards
+    # below were unreachable except by passing an empty string, so the --check refusal
+    # text had never once been displayed to anyone.
+    r.add_argument("--baseline", default="",
+                   help="what --check shows RIGHT NOW, before the change — run it first")
+    r.add_argument("--check", default="",
                    help="the command or observation that would settle it")
     r.add_argument("--date", required=True, help="ISO date (passed in, never guessed)")
 
