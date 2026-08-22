@@ -12,6 +12,46 @@ ai_summary: "Dated, append-only record of what this repo measured and got wrong,
 
 Append-only, dated entries. Newest first. Each entry: what happened, what we learned, how to apply going forward.
 
+## 2026-08-23 — The eval suite's first full run, and what k=1 could not have told us
+
+- **What:** The harness had never been run end-to-end and `evals/baselines/` had never held a
+  frozen baseline. Running all 32 scenarios produced 26/32, then 28/32 after a harness bug
+  was fixed. Re-running the 8 rate-gated scenarios at **k=3** changed the reading of three
+  of them completely.
+
+  | Scenario | k=1 | k=3 | Reading |
+  |---|---|---|---|
+  | `start-branch/refetches-before-branching` | FAIL | **0.0** (0/3) | Real defect — 5 failures from 5 runs |
+  | `spar-with-me/asks-when-...-a-fact-it-cannot-have` | FAIL | **0.0** (0/3) | Reproducible weakness |
+  | `qa-gatekeeper/no-false-alarm-on-wired-guard` | FAIL | **0.333** (1/3) | Sits *on* its 0.6 threshold |
+  | `qa-gatekeeper/no-false-alarm-on-pinned-assertion` | PASS | **0.667** (2/3) | Same — squeaked over |
+
+- **Learned:** **A rate-gated scenario cannot be measured at k=1.** With `min_rate: 0.6`, a
+  single run scores only 0.0 or 1.0, so a scenario that genuinely passes 70% of the time is
+  recorded as failing about three times in ten. Eight of the 32 scenarios are rate-gated.
+  At k=1 the four above read as *two failures and one pass* — indistinguishable from noise.
+  At k=3 they read as one hard defect, one reproducible weakness, and a skill whose
+  reliability is roughly a coin-flip. Same suite, same code, opposite conclusions.
+
+  The binary-gated failures moved between runs too — `rejects-vacuous-assertion` and
+  `rejects-swallowed-exception` failed run 1 and passed run 2; `rejects-invented-mock` did
+  the reverse. Three different scenarios, no overlap. That is not three broken scenarios,
+  it is **one flaky agent** (`qa-gatekeeper` intermittently emits no `QA-VERDICT` line) and
+  which scenario catches it is luck. `pass^k` cannot absorb that: one failure in three is
+  still a fail, so a ~90%-reliable agent makes roughly a quarter of full runs red somewhere.
+
+- **Apply:** Freeze baselines at **k=3 minimum**, and never trend a rate-gated scenario from
+  a single sample. When a run and a re-run disagree about *which* scenario failed, suspect
+  the thing under test rather than the scenarios. Record the avg, not just pass/fail — 0.667
+  and 0.333 against a 0.6 bar say something a green tick and a red cross do not.
+
+- **Also found:** the harness itself had a false positive. `bash_not_matching` forbade
+  `\bgit\s+merge\b`, and `\b` after "merge" is satisfied by a hyphen — so the read-only
+  `git merge-base` and `git merge-tree` were flagged as merges. `sync-branch`'s own SKILL.md
+  **prescribes** `git merge-tree --write-tree` for dry-running a merge, so the gate punished
+  the behaviour the skill instructs. Five scenarios carried it. A false alarm teaches people
+  a gate is noise, and then its true alarms are ignored too.
+
 ## 2026-08-22 — A check you have never watched fail is not a check
 
 - **What:** Three prediction-ledger entries were settled `partial` or worse, and in all

@@ -249,7 +249,8 @@ S5 — and neither is something `cms check` can see, because both are semantic.
 | #5 `release.sh` gates | ✅ fixed | pytest + public-safe + manifests at line 62, push at 157; `dev` fast-forwarded after |
 | #6 Shared frontmatter validator | ✅ fixed | `common.validate_frontmatter` + `requires_frontmatter`; 4 predicate spellings → 1 |
 | #8 Renderer dogfooded | ✅ done | 1 `archview` block in `ARCHITECTURE.md`, renders + passes `check_arch` |
-| #9 Eval baseline | ⚠️ partial | 1 of 32 scenarios frozen — exercises the path, not yet a ruler |
+| #9 Eval baseline | ✅ done | All 32 frozen (28 pass). Baselines are gitignored by design, so the durable output is the findings, not the file |
+| #7 `render.py` split | ✅ done | 2,136 → 1,407 lines; `_gen_hash` widened over the whole renderer in the same commit |
 | S1, S2 (disclosure) | ⏸ deferred | Wave B — the maintainer's judgement, not a code question |
 | #7 `render.py` split | ⏸ deferred | Wave F — its own session |
 

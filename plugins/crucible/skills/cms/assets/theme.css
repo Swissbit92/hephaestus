@@ -1,0 +1,338 @@
+:root{
+  /* Ink, not phosphor. The green-black CRT read as a costume — a terminal
+     pastiche worn by a document that is not a terminal. These are blue-biased
+     neutrals: the ground of a technical plate, which is what the page actually
+     is. --faint is lifted from the study's #6E7C8C, which measured 3.84:1 on
+     --panel2 and would have re-introduced exactly the contrast bug fixed two
+     versions ago. */
+  --void:#0B0F14; --panel:#121822; --panel2:#18202C;
+  --edge:#25303E; --edge2:#33414F;
+  /* Derived, not concatenated. This used to build the tints by appending hex
+     alpha to the frontmatter value ({accent}18), which silently assumes a
+     6-digit hex and produces garbage for any other notation. color-mix in oklch
+     takes whatever CSS accepts and keeps hue stable while it moves lightness,
+     which HSL does not. */
+  --accent:__ACCENT__;
+  --accent-dim:color-mix(in oklch, var(--accent) 12%, transparent);
+  --accent-glow:color-mix(in oklch, var(--accent) 40%, transparent);
+  --accent-soft:color-mix(in oklch, var(--accent) 22%, var(--panel));
+  --phos:#3DD68C; --phos-dim:color-mix(in oklch, var(--phos) 14%, transparent); --red:#FF6B5B;
+  /* Contrast, not taste. The old ramp put --faint at 2.85:1 on --void and --mid
+     at 5.62:1; the dimmest tier carries table headers, figure captions and the
+     8px sub-labels inside every diagram, so it failed WCAG AA exactly where the
+     type is smallest. Lifting --faint alone would have collapsed it into --mid,
+     so the whole ramp is re-spaced. Now 5.04 / 8.15 / 14.82 on --void, and the
+     tightest of the three still clears 4.5:1 against --panel2. */
+  --txt:#E8EAED; --mid:#A7B2C0; --faint:#7B8897;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  /* ui-serif resolves to New York on macOS and a real text face elsewhere. No
+     webfont, so nothing to block and nothing to wait for. It is here to give
+     headings and figures a voice the body text does not have — everything on
+     this page used to be one width, which is even and flat. */
+  --serif:ui-serif,"New York",Georgia,"Times New Roman",serif;
+}
+body{background:var(--void);color:var(--txt);font-family:var(--mono);
+  font-size:13px;line-height:1.65;-webkit-font-smoothing:antialiased;
+  /* Every digit the same width. This page is mostly numbers in columns, and
+     proportional figures make them fail to line up vertically. */
+  font-variant-numeric:tabular-nums}
+/* The scanline overlay is gone. It was the loudest part of the costume, it
+   printed badly, and it sat at z-index 99 over everything including focus
+   rings. */
+.rig{max-width:70rem;margin:0 auto;padding:0 clamp(.75rem,3vw,1.75rem) 4rem}
+.bar{border:1px solid var(--edge);background:linear-gradient(180deg,var(--panel2),var(--panel));
+  display:flex;flex-wrap:wrap;align-items:center;gap:.85rem;padding:.8rem 1.1rem;
+  position:sticky;top:0;z-index:50;margin-bottom:.4rem}
+.led{width:7px;height:7px;border-radius:50%;background:var(--phos);box-shadow:0 0 8px var(--phos)}
+@media (prefers-reduced-motion:no-preference){.led{animation:blip 2.4s ease-in-out infinite}}
+@keyframes blip{0%,100%{opacity:1}50%{opacity:.35}}
+h1{margin:0;font-size:1.05rem;font-weight:600;letter-spacing:.07em;color:var(--accent);
+  text-shadow:0 0 14px var(--accent-glow)}
+.tag{font-size:.58rem;letter-spacing:.15em;text-transform:uppercase;color:var(--faint);
+  border:1px solid var(--edge2);padding:.1rem .4rem}
+.spacer{flex:1}
+nav{display:flex;flex-wrap:wrap;gap:.65rem;font-size:.6rem;letter-spacing:.09em}
+nav a{color:var(--mid);text-decoration:none;text-transform:uppercase}
+nav a:hover{color:var(--accent)}
+/* Serif, sentence case, and bigger — not uppercase mono at .76rem. A heading
+   that is the same width and nearly the same size as the paragraph under it is
+   not doing the one job a heading has, which is to be findable while scanning. */
+h2{margin:2.4rem 0 0;font-family:var(--serif);font-size:1.5rem;font-weight:400;
+  letter-spacing:-.01em;text-transform:none;line-height:1.15;
+  color:var(--accent);border-bottom:1px solid var(--edge);padding-bottom:.5rem;
+  scroll-margin-top:4.5rem}
+h3{margin:1.6rem 0 0;font-family:var(--serif);font-size:1.08rem;font-weight:400;
+  letter-spacing:0;text-transform:none;color:var(--txt)}
+h1,h2,h3{text-wrap:balance}
+/* 68ch, not the 78ch this used to carry. The 45-75 character guidance assumes a
+   proportional face averaging ~0.5em; monospace runs ~0.6em, so the same ch
+   count is a materially longer line and the return sweep starts to miss. */
+p{margin:.75rem 0 0;max-width:68ch;color:var(--mid);text-wrap:pretty}
+p strong{color:var(--txt);font-weight:600}
+code{color:var(--phos);background:var(--phos-dim);padding:.06em .28em;font-size:.9em}
+a{color:var(--accent)}
+ul,ol{margin:.75rem 0 0;padding-left:1.35rem;color:var(--mid);display:flex;flex-direction:column;gap:.35rem}
+li{max-width:66ch;text-wrap:pretty}
+ol li::marker{color:var(--accent);font-size:.85em}
+hr{border:0;border-top:1px solid var(--edge);margin:1.8rem 0 0}
+blockquote{margin:.9rem 0 0;padding:.1rem 0 .1rem 1rem;border-left:2px solid var(--accent)}
+blockquote p{margin:.5rem 0 0;color:var(--mid)}
+blockquote p:first-child{margin-top:0}
+pre{margin:0;background:var(--panel);border:1px solid var(--edge);padding:.7rem .85rem;
+  overflow-x:auto;font-size:.76rem;color:var(--mid)}
+.cb{position:relative;margin:.85rem 0 0}
+.cpy{position:absolute;top:.4rem;right:.4rem;z-index:1;font-family:var(--mono);
+  font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;padding:.15rem .45rem;
+  background:var(--panel2);color:var(--faint);border:1px solid var(--edge2);
+  cursor:pointer;opacity:0;transition:opacity .12s}
+.cb:hover .cpy,.cpy:focus-visible{opacity:1}
+.cpy:hover{color:var(--accent);border-color:var(--accent)}
+.cpy[data-done]{opacity:1;color:var(--phos);border-color:var(--phos)}
+@media (prefers-reduced-motion:reduce){.cpy{transition:none}}
+/* Touch has no hover, so the affordance must not be hover-gated there. */
+@media (hover:none){.cpy{opacity:1}}
+/* ── gauge row ─────────────────────────────────────────────────────────
+   The handful of facts worth having before the prose. 1px gaps over a ruled
+   background so the cells read as one instrument rather than four cards. */
+.gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));
+  gap:1px;background:var(--edge);border:1px solid var(--edge);margin:1.1rem 0 0}
+.gauge{background:var(--panel);padding:.85rem 1rem;display:grid;gap:.25rem}
+.gauge dt{margin:0;font-size:.57rem;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--faint)}
+.gauge dd{margin:0;font-family:var(--serif);font-size:1.5rem;line-height:1.05;
+  color:var(--txt);letter-spacing:-.01em}
+.gauge dd small{font-family:var(--mono);font-size:.58rem;color:var(--faint);
+  letter-spacing:.04em;margin-left:.4rem;white-space:nowrap}
+.gauge[data-state=ok] dd{color:var(--phos)}
+.gauge[data-state=warn] dd{color:var(--accent)}
+.gauge[data-state=bad] dd{color:var(--red)}
+
+/* ── state pills ───────────────────────────────────────────────────────
+   Never colour alone: the label carries the meaning, so the pill still works
+   in greyscale, in print, and for anyone who cannot separate the hues. */
+.pill{display:inline-block;font-size:.58rem;letter-spacing:.1em;
+  text-transform:uppercase;padding:.1rem .42rem;border:1px solid currentColor;
+  border-radius:2px;white-space:nowrap;vertical-align:.08em}
+.pill-ok{color:var(--phos)}
+.pill-warn{color:var(--accent)}
+.pill-bad{color:var(--red)}
+.pill-mute{color:var(--faint)}
+
+.tw{overflow:auto;max-height:min(80vh,44rem);margin:.9rem 0 0;
+  border:1px solid var(--edge);background:var(--panel)}
+table{width:100%;min-width:30rem;border-collapse:separate;border-spacing:0;font-size:.75rem}
+th,td{text-align:left;padding:.45rem .7rem;border-bottom:1px solid var(--edge);vertical-align:top}
+/* Sticky header, because a reference table longer than a screen otherwise loses
+   its column names exactly when you start needing them. Needs an opaque
+   background or the rows show through. */
+thead th{position:sticky;top:0;z-index:2;background:var(--panel2);
+  font-size:.57rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+  font-weight:400;border-bottom:1px solid var(--edge2)}
+/* And a sticky first column, which matters more than the header once a table is
+   wide enough to scroll — the label column is what tells you which row you are
+   reading. Horizontal scroll, deliberately, not card-collapse: collapsing
+   destroys column-to-column comparison, which is the whole purpose of a
+   reference table. */
+tbody th:first-child,tbody td:first-child{position:sticky;left:0;z-index:1;
+  background:var(--panel);color:var(--txt)}
+thead th:first-child{z-index:3}
+tbody tr:hover td,tbody tr:hover th{background:var(--accent-dim)}
+tbody tr:last-child td{border-bottom:0}
+td{color:var(--mid)} td code{color:var(--phos)}
+.figwrap{margin:1.1rem 0 0;border:1px solid var(--edge);background:
+  radial-gradient(ellipse at 50% 40%,#151D28 0%,#0A0E13 82%);overflow-x:auto}
+.figwrap svg{display:block;margin:0 auto}
+.figcap{border-top:1px solid var(--edge);padding:.45rem .8rem;font-size:.66rem;color:var(--faint)}
+.schem{display:inline-block;border:1px solid var(--edge2);border-radius:2px;
+  padding:0 .3rem;margin-right:.35rem;font-size:.6rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--mid)}
+.nd{fill:var(--panel2);stroke:var(--edge2);stroke-width:1}
+.nd-store{stroke:var(--phos);fill:#0F1C1B}
+.nd-external{stroke:var(--edge2);stroke-dasharray:4 3;fill:#0E141C}
+.nd-service{stroke:var(--accent)}
+.nd-secret{stroke:var(--red);fill:#1E1114}
+.ndl{font-size:10.5px;fill:var(--txt);font-family:var(--mono)}
+.nds{font-size:8px;fill:var(--faint);font-family:var(--mono)}
+.ndt{font-size:7.5px;fill:var(--accent);font-family:var(--mono);opacity:.85;letter-spacing:.04em}
+.wire{fill:none;stroke:var(--edge2);stroke-width:1}
+.wire-a{fill:none;stroke:var(--accent);stroke-width:1.2;stroke-dasharray:3 5;opacity:.9}
+@media (prefers-reduced-motion:no-preference){
+  .wire-a{animation:mv .75s linear infinite} @keyframes mv{to{stroke-dashoffset:-8}}
+}
+.paused .wire-a,.paused .led{animation-play-state:paused}
+.wlab{font-size:8px;fill:var(--faint);font-family:var(--mono)}
+.grp{fill:none;stroke:var(--accent);stroke-dasharray:7 4;opacity:.4}
+.grpl{font-size:8px;fill:var(--accent);font-family:var(--mono);letter-spacing:.11em}
+footer{margin-top:3rem;border-top:1px solid var(--edge);padding-top:.9rem;display:flex;
+  flex-wrap:wrap;gap:1rem;align-items:center;font-size:.6rem;color:var(--faint);letter-spacing:.08em}
+button.pz{font-family:var(--mono);font-size:.6rem;background:transparent;color:var(--accent);
+  border:1px solid var(--edge2);padding:.2rem .55rem;cursor:pointer;letter-spacing:.08em}
+button.pz:hover{border-color:var(--accent)}
+button.pz[disabled]{opacity:.4;cursor:default;border-color:var(--edge)}
+:focus-visible{outline:1px solid var(--accent);outline-offset:2px}
+
+/* Visible to a screen reader, absent from the page. Not display:none, which
+   removes it from the accessibility tree along with everything else. */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+
+.legend{display:flex;flex-wrap:wrap;gap:.9rem;padding:.5rem .8rem;
+  border-top:1px solid var(--edge);font-size:.62rem;color:var(--faint)}
+.lgi{display:flex;align-items:center;gap:.35rem}
+.lgs{width:15px;height:10px;flex:none;border-radius:2px;
+  background:var(--panel2);border:1px solid var(--edge2)}
+.lgs-store{border-color:var(--phos);background:#0F1C1B}
+.lgs-external{border-style:dashed;background:#0E141C}
+.lgs-service{border-color:var(--accent)}
+.lgs-secret{border-color:var(--red);background:#1E1114}
+:root[data-theme="light"] .lgs{background:#FFFFFF}
+:root[data-theme="light"] .lgs-store{background:#F1F8F4}
+:root[data-theme="light"] .lgs-external{background:#F5F7F6}
+:root[data-theme="light"] .lgs-secret{background:#FDF3F1}
+
+/* ── node inspector ─────────────────────────────────────────────────────
+   Every box is selectable, on every diagram. Hover shows it is live; focus
+   shows it for the keyboard. */
+[data-node]{cursor:pointer}
+[data-node]:hover .nd{stroke:var(--accent)}
+[data-node]:focus{outline:none}
+[data-node]:focus-visible .nd{stroke:var(--accent);stroke-width:2}
+[data-node].picked .nd{stroke:var(--accent);stroke-width:2;
+  fill:color-mix(in oklch,var(--accent) 10%,var(--panel2))}
+[data-node].picked .ndl{fill:var(--accent)}
+/* The readout was one flex child holding three inline spans, so the label, the
+   kind and the subtitle ran together into "refuse — rung restscode in this
+   repo". The gap has to be on the element whose children they are. */
+.inspect{border-top:1px solid var(--edge);padding:.6rem .8rem;font-size:.72rem;
+  min-height:5.2rem}
+.ins-hint{color:var(--faint)}
+.ins-head{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;
+  margin-bottom:.3rem}
+.ins-t{font-family:var(--serif);font-size:1.05rem;font-weight:400;color:var(--txt)}
+.ins-k{font-size:.55rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);border:1px solid var(--edge2);padding:.08rem .38rem;border-radius:2px}
+.ins-tech{font-size:.6rem;color:var(--accent);letter-spacing:.04em}
+.ins-s{display:block;color:var(--mid);max-width:68ch;text-wrap:pretty}
+.ins-goto{display:inline-block;margin-top:.45rem;font-size:.7rem;
+  color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent)}
+.ins-goto[hidden]{display:none}
+.ins-links{display:block;margin-top:.3rem;font-size:.63rem;color:var(--faint);
+  font-family:var(--mono)}
+.ins-none{color:var(--faint);font-style:italic}
+.tour{display:flex;align-items:center;gap:.5rem;padding:.5rem .8rem;
+  border-top:1px solid var(--edge);background:var(--panel2);flex-wrap:wrap}
+.tourlbl{font-size:.57rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);min-width:9rem}
+.tourwhy{color:var(--edge2)}
+.tourpos{font-size:.6rem;color:var(--faint);letter-spacing:.08em;min-width:6rem}
+.tourclear{margin-left:auto}
+
+/* ── flow walker ───────────────────────────────────────────────────────── */
+.flowctl{margin:.9rem 0 0;border:1px solid var(--edge);background:var(--panel)}
+.flowhd{display:flex;align-items:baseline;gap:.8rem;padding:.5rem .8rem;
+  border-bottom:1px solid var(--edge)}
+.flowlbl{font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.flowjump{margin-left:auto;font-size:.6rem;color:var(--mid);text-decoration:none}
+.flowjump:hover{color:var(--accent)}
+.flowlist{list-style:none;margin:0;padding:.4rem;display:flex;flex-wrap:wrap;
+  gap:.35rem}
+.flowlist li{font-size:.66rem;padding:.2rem .55rem;border:1px solid var(--edge2);
+  color:var(--mid);cursor:pointer;max-width:none}
+.flowlist li:hover{border-color:var(--accent);color:var(--txt)}
+.flowlist li[aria-selected="true"]{border-color:var(--accent);color:var(--accent);
+  background:var(--accent-dim)}
+.flownav{display:flex;align-items:center;gap:.5rem;padding:0 .8rem .5rem}
+.flowpos{font-size:.6rem;color:var(--faint);letter-spacing:.08em;min-width:5rem}
+.flowclear{margin-left:auto}
+.flowcap{margin:0;padding:.5rem .8rem;border-top:1px solid var(--edge);
+  font-size:.7rem;color:var(--mid);min-height:1.2rem}
+
+/* Dim with fill-opacity/stroke-opacity rather than `opacity`: the composite
+   property promotes every element to its own compositing layer, which is real
+   jank once a diagram has thirty boxes. These two are paint-only. */
+svg.flowing .nd,svg.flowing .wire,svg.flowing .wire-a,
+svg.flowing .ndl,svg.flowing .nds,svg.flowing .ndt,svg.flowing .wlab{
+  fill-opacity:.18;stroke-opacity:.18;transition:fill-opacity .18s,stroke-opacity .18s}
+svg.flowing [data-node].on-path .nd,svg.flowing [data-node].on-path .ndl,
+svg.flowing [data-node].on-path .nds,svg.flowing [data-node].on-path .ndt,
+svg.flowing [data-edge].on-path .wire,svg.flowing [data-edge].on-path .wire-a,
+svg.flowing [data-edge].on-path .wlab{fill-opacity:1;stroke-opacity:1}
+/* The current step has to win against the node-kind colours, which already use
+   the accent. Border alone was ambiguous on a service node, so it also gets the
+   accent wash and a halo. */
+svg.flowing [data-node].at-step .nd{stroke:var(--accent);stroke-width:2;
+  fill:var(--accent-dim);filter:drop-shadow(0 0 6px var(--accent-glow))}
+svg.flowing [data-node].at-step .ndl{fill:var(--accent)}
+svg.flowing [data-edge].at-step .wire-a{stroke-width:2.6;
+  filter:drop-shadow(0 0 5px var(--accent-glow))}
+@media (prefers-reduced-motion:reduce){
+  svg.flowing [data-node].at-step .nd,
+  svg.flowing [data-edge].at-step .wire-a{filter:none}
+}
+
+@media (prefers-reduced-motion:reduce){
+  svg.flowing .nd,svg.flowing .wire,svg.flowing .wire-a,
+  svg.flowing .ndl,svg.flowing .nds,svg.flowing .ndt,svg.flowing .wlab{transition:none}
+}
+
+/* ── light theme ───────────────────────────────────────────────────────────
+   An attribute override, not light-dark(). The dark skin leans on glow —
+   text-shadow, box-shadow, a scanline overlay — and those have to be switched
+   off as a group, which a per-value colour function cannot express. */
+:root[data-theme="light"]{
+  --void:#F4F6F5; --panel:#FFFFFF; --panel2:#F9FBFA;
+  --edge:#D5DEDB; --edge2:#B9C6C2;
+  --phos:#0F7A44; --phos-dim:#0F7A4414; --red:#B3341C;
+  --txt:#12201C; --mid:#3F514C; --faint:#5A6B66;
+}
+:root[data-theme="light"] body::before{display:none}
+:root[data-theme="light"] h1{text-shadow:none}
+:root[data-theme="light"] .led{box-shadow:none}
+:root[data-theme="light"] .figwrap{background:#FFFFFF}
+:root[data-theme="light"] .nd{fill:#FFFFFF}
+:root[data-theme="light"] .nd-store{fill:#F1F8F4}
+:root[data-theme="light"] .nd-external{fill:#F5F7F6}
+:root[data-theme="light"] .nd-secret{fill:#FDF3F1}
+
+/* ── print ─────────────────────────────────────────────────────────────────
+   The scanline overlay and a near-black page background are a screen
+   affectation; on paper they are a toner bill and an unreadable page. */
+@media print{
+  :root{
+    --void:#FFFFFF; --panel:#FFFFFF; --panel2:#FFFFFF;
+    --edge:#9AA8A4; --edge2:#6E7D79;
+    --txt:#000000; --mid:#1C2A26; --faint:#3D4B47; --phos:#0A5C33;
+  }
+  @page{margin:14mm}
+  body{background:#fff;font-size:10pt}
+  body::before{display:none}
+  .bar{position:static;border-bottom:1px solid var(--edge)}
+  nav,button.pz,.flownav,.flowjump{display:none}
+  h1{text-shadow:none}
+  .led{box-shadow:none}
+  h2,h3{break-after:avoid}
+  pre,table,.figwrap,.flowctl,blockquote{break-inside:avoid}
+  .figwrap{background:#fff}
+  .nd{fill:#fff}
+  /* Every flow, spelled out — the picker is gone on paper, so the steps have to
+     be readable as a list or the section says nothing. */
+  .flowlist li{border-color:var(--edge2)}
+  a{color:inherit;text-decoration:underline}
+  a[href^="http"]::after{content:" (" attr(href) ")";font-size:.8em;color:var(--faint)}
+}
+
+/* ── site navigation ───────────────────────────────────────────────────────
+   Only present when the page is built as part of a site. A standalone page
+   renders with this slot empty and is byte-identical to before, which is what
+   keeps a single page publishable on its own. */
+.snav{border:1px solid var(--edge);border-bottom:0;background:var(--panel2);
+  padding:.5rem .8rem;display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:baseline}
+.snav .grp{display:flex;flex-wrap:wrap;gap:.15rem .7rem;align-items:baseline}
+.snav a{font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);text-decoration:none;border-bottom:1px solid transparent}
+.snav a:hover{color:var(--txt);border-bottom-color:var(--edge2)}
+.snav a.on{color:var(--accent);border-bottom-color:var(--accent)}
+.snav .home{color:var(--mid);font-weight:600}
+.snav .lbl{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--edge2);margin-right:.2rem}
+@media print{.snav{display:none}}

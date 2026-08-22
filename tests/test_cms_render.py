@@ -14,6 +14,7 @@ confidence it has not earned. So it is mutation-tested — defects are planted a
 it must find them.
 """
 
+import hashlib
 import html
 import json
 import re
@@ -1408,3 +1409,110 @@ def test_a_slug_collision_fails_the_build_rather_than_losing_a_page(tmp_path):
 
     with pytest.raises(cms_site.SiteError, match="overwrite"):
         cms_site.discover(tmp_path, cfg)
+
+
+class TestRendererHashCoversAssets:
+    """The staleness gate must follow the whole renderer, not just its Python.
+
+    `_gen_hash()` used to be `sha256(render.py)`. That was correct only while the
+    stylesheet and scripts lived inside `render.py` as a 614-line string. Extracting them
+    to `assets/` made it the quietest possible bug: edit the CSS, and every generated page
+    keeps reporting itself current while looking different — and the entire suite still
+    passes, because nothing tested what the hash *covered*.
+
+    These tests are the thing that would have failed.
+    """
+
+    ASSETS = (Path(render_arch.__file__).resolve().parent.parent / "assets")
+
+    def _mutate(self, name, suffix=b"\n/* drift */\n"):
+        """Append to an asset, yield the new digest, always restore."""
+        path = self.ASSETS / name
+        original = path.read_bytes()
+        try:
+            path.write_bytes(original + suffix)
+            return render_arch._gen_hash()
+        finally:
+            path.write_bytes(original)
+
+    def test_hash_is_not_merely_the_module(self):
+        """The precise regression: if this passes, the split narrowed the gate."""
+        module_only = hashlib.sha256(
+            Path(render_arch.__file__).read_bytes()).hexdigest()
+        assert render_arch._gen_hash() != module_only
+
+    @pytest.mark.parametrize("asset", ["theme.css", "app.js", "prepaint.js", "page.html"])
+    def test_editing_any_asset_changes_the_hash(self, asset):
+        before = render_arch._gen_hash()
+        assert self._mutate(asset) != before, f"{asset} is outside the staleness gate"
+
+    def test_restoring_an_asset_restores_the_hash(self):
+        """Deterministic: the digest is a function of content, not of edit history."""
+        before = render_arch._gen_hash()
+        self._mutate("theme.css")
+        assert render_arch._gen_hash() == before
+
+    def test_editing_the_module_still_changes_the_hash(self):
+        """The original guarantee must survive the widening."""
+        path = Path(render_arch.__file__)
+        original = path.read_bytes()
+        before = render_arch._gen_hash()
+        try:
+            path.write_bytes(original + b"\n# drift\n")
+            assert render_arch._gen_hash() != before
+        finally:
+            path.write_bytes(original)
+
+
+    def test_every_renderer_module_is_in_the_hash(self):
+        """A new renderer module must not be able to slip outside the gate.
+
+        `_renderer_parts` is enumerated by hand — that is the one manual step the split
+        introduced. This walks the scripts directory instead, so a module written and
+        forgotten fails here rather than silently stopping pages from going stale.
+        """
+        here = Path(render_arch.__file__).resolve().parent
+        on_disk = {p.name for p in here.glob("render*.py")}
+        hashed = {p.name for p in render_arch._renderer_parts()}
+        assert on_disk <= hashed, f"outside the staleness gate: {sorted(on_disk - hashed)}"
+
+    def test_every_asset_is_in_the_hash(self):
+        on_disk = {p.name for p in self.ASSETS.iterdir() if p.is_file()}
+        hashed = {p.name for p in render_arch._renderer_parts()}
+        assert on_disk <= hashed, f"asset outside the gate: {sorted(on_disk - hashed)}"
+
+    def test_editing_the_layout_module_changes_the_hash(self):
+        """The layout split is the second place the gate could have narrowed."""
+        lay = Path(render_arch.__file__).resolve().parent / "render_layout.py"
+        before = render_arch._gen_hash()
+        original = lay.read_bytes()
+        try:
+            lay.write_bytes(original + b"\n# drift\n")
+            assert render_arch._gen_hash() != before
+        finally:
+            lay.write_bytes(original)
+
+    def test_a_rendered_page_goes_stale_when_an_asset_changes(self, tmp_path):
+        """End to end through the real gate, not just the digest.
+
+        `is_current` takes two *paths* and compares the hashes embedded in the built page
+        against the current source and renderer — so this writes a page, confirms the gate
+        calls it current, then edits the stylesheet and confirms the same page is now
+        reported stale. That transition is the whole guarantee.
+        """
+        md = tmp_path / "A.md"
+        md.write_text("---\ntitle: A\n---\n\n# A\n\nbody\n", encoding="utf-8")
+        page = tmp_path / "A.html"
+        page.write_text(render_arch.build(md, tmp_path), encoding="utf-8")
+
+        assert render_arch.is_current(md, page), "a freshly built page must read as current"
+
+        original = (self.ASSETS / "theme.css").read_bytes()
+        try:
+            (self.ASSETS / "theme.css").write_bytes(original + b"\n/* drift */\n")
+            assert not render_arch.is_current(md, page), \
+                "editing the stylesheet must make every generated page stale"
+        finally:
+            (self.ASSETS / "theme.css").write_bytes(original)
+
+        assert render_arch.is_current(md, page), "restoring the asset restores currency"

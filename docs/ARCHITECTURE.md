@@ -145,6 +145,7 @@ hook.
 | Release tooling | Per-plugin semver bump, tag, GitHub release | `scripts/release.sh`, `scripts/bump_version.py` |
 | Gates | The executable half of the rules below | `scripts/` + `scripts/checks/` |
 | Eval harness | Asserts skills behave as their `SKILL.md` claims | `evals/` |
+| Renderer | `ARCHITECTURE.md` → `.html`. Geometry, theme assets and the page builder are separate | `cms/scripts/render*.py`, `cms/assets/` |
 | Test suite | Pure-stdlib pytest over the scripts and harness core | `tests/` |
 
 ### The seam
