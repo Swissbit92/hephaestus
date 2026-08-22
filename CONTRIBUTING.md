@@ -107,6 +107,15 @@ It refuses to run unless you're on `main` with a clean tree, validates the plugi
 commits, tags `<plugin>-v<x.y.z>`, pushes, and creates a GitHub release with notes from the
 commits since that plugin's last tag.
 
+**Notes are scoped by excluding sibling plugins, not by including the plugin's directory.**
+A release routinely lands work outside its own tree — a gate in `scripts/`, tests in
+`tests/`, an ADR in `docs/` — and the old `-- plugins/<name>` filter could see none of it:
+5 of 11 non-merge commits were dropped across three releases before this was fixed. Merge
+subjects and `Co-Authored-By` / `Claude-Session` trailers are stripped. A commit touching
+*only* another plugin is excluded; one touching another plugin *and* shared tooling is
+included, because it genuinely did work this release contains. When no commits match at
+all, the script says so on stderr rather than quietly emitting "Maintenance release".
+
 ## Docs
 
 Markdown under any `docs/` directory carries cms frontmatter (the `cms` skill scaffolds and
