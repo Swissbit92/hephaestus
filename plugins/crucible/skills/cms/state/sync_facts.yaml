@@ -16,5 +16,31 @@
 #
 # This starter ships empty — `sync` will report "no facts defined" until you
 # add some.
+#
+# WHERE YOUR FACTS GO. This file is shipped config inside a generic plugin, so it
+# must stay free of project-specific tokens; `tests/test_seam.py` fails the build
+# if one appears. Keep your own facts in your repo and point at them:
+#
+#     sync.py <root> --facts .claude/cms_sync_facts.yaml
+#
+# Same format, same loader — only the location differs.
+#
+# ── Choosing a pattern: the failure worth knowing before you hit it ──────────
+#
+# A pattern that is *correct* can still be unusable, and the trap is specific:
+# `sync` has no per-file scoping, so a pattern matching a current value will also
+# match every superseded value of the same shape. CHANGELOG and ROADMAP tables
+# record old versions, old percentages and old counts **correctly** — that is what
+# a changelog is — and a fact keyed on the bare number cannot tell "the current
+# value, stated in two places" from "the history of that value, stated accurately".
+#
+# Two facts were tried on version-shaped and percentage-shaped values and withdrawn
+# on 2026-08-22 for exactly this reason. Both found real drift; both also lit up
+# every dated history row. A checker that reports drift on lines that are right is
+# one people learn to ignore, and an ignored checker is worse than an absent one.
+#
+# So prefer a pattern anchored to prose that only the CURRENT statement uses — a
+# surrounding phrase, a label, a sentence fragment — over one that matches the
+# value alone. Re-visit if per-file scoping ever lands.
 
-facts:
+facts: []
