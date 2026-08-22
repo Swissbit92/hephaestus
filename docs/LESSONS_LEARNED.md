@@ -11,6 +11,69 @@ applies_to: hephaestus
 
 Append-only, dated entries. Newest first. Each entry: what happened, what we learned, how to apply going forward.
 
+## 2026-08-22 — A check you have never watched fail is not a check
+
+- **What:** Three prediction-ledger entries were settled `partial` or worse, and in all
+  three the *claim* was fine — the **instrument** was broken. The clearest case: a
+  prediction that a fresh clone and the working copy would report identical archive
+  findings, whose check was "run `check.py` on both and diff". hephaestus contains zero
+  files matching `ARCHIVE_PATTERNS`, so the check returns `0 == 0` before the fix and
+  `0 == 0` after. It could not have distinguished a working implementation from a broken
+  one, and nobody noticed, because it was never run against the unfixed tree. The two
+  earlier cases both turned on `ast.parse(feature_version=…)` silently not measuring what
+  the author assumed.
+- **Learned:** `predictions.py` already enforced the two rules that guard the *claim* —
+  a check is mandatory, and a recorded claim is immutable. Neither says anything about
+  whether the check could ever fail, which is a separate defect with an identical result:
+  a settled entry carrying the full appearance of rigour and none of the content. The
+  reason it is invisible from the writing chair is structural, not careless — a check is
+  written *after* the author understands the problem, so it is born green and is never
+  once observed failing. This is exactly the defect TDD's first step exists to prevent
+  ("a test that has never been red proves nothing when it turns green"), and exactly what
+  research methodology means by "a pre-registration that cannot fail is not a
+  pre-registration". Two fields independently derived the same rule; this repo derived it
+  a third time, the expensive way.
+- **Apply:** `record` now refuses without `--baseline` — what the check shows *right now*,
+  on the unchanged tree. Stating it forces the check to be run at the one moment its
+  validity is observable. Entries predating the rule are listed as `baseline: NOT
+  RECORDED` rather than quietly counted as equivalent. Generalise beyond the ledger: when
+  you add any gate, reintroduce the defect and watch it fail before you trust it green —
+  that is how the mtime guard below was validated, and it is why `test_mtime_guard.py`
+  carries an explicit mutation test.
+- **Found while fixing it:** the `--check` refusal message had been **unreachable since it
+  was written**. `required=True` means argparse rejects a missing flag first, with exit 2
+  — the code this script documents as "the store is unreadable or malformed" — so a
+  forgotten flag was indistinguishable from a corrupt ledger, and the carefully-worded
+  explanation had never been displayed to anyone. A guard behind `required=True` is not a
+  guard. Found only because the new baseline rule was tested by running it.
+
+## 2026-08-22 — A lesson recorded where it was learned does not travel
+
+- **What:** `render.py` discovered that git does not preserve mtimes ("which fired on the
+  first merge of this tool") and wrote that into its own docstring. The lesson stayed
+  there. The cms archive rule then made the identical mistake at **four** further sites:
+  `check.py` (candidacy), `migrate.py` twice (candidacy again, independently
+  re-implemented, and the `YYYY-MM` archive folder name), and `add_frontmatter.py` — which
+  *wrote* an mtime-derived `created:` date into frontmatter, where it then fed `review_in`
+  staleness forever. The rule was completely non-functional on every clone for an unknown
+  period, and the suite stayed green throughout because all three tests of the age branch
+  faked age with `os.utime`, asserting against a filesystem state git never produces.
+- **Learned:** The failure was not that the lesson was unrecorded — it was recorded, in
+  prose, accurately, next to the code that learned it. It was that prose in one module has
+  no mechanism for reaching the author of another. Note also that this was never a matter
+  of local cleverness: the reproducible-builds specification states the same constraint and
+  prescribes the same remedy (use the last git commit timestamp, because individual file
+  timestamps cannot survive a checkout). The information was available in two places and
+  reached neither of the four sites.
+- **Apply:** The rule is now an invariant with an executable check
+  (`scripts/checks/mtime_is_never_a_clock.sh`), so it is enforced rather than remembered.
+  It parses rather than greps, deliberately: `doc_age.py` — the module that *fixed* the
+  bug — discusses `st_mtime` throughout its docstring, and a rule whose first action is to
+  accuse its own remedy is one people switch off. The allowlist requires a stated reason
+  per entry, because an allowlist without reasons is just a place to put inconvenient
+  findings. The general form: when a lesson is worth a docstring, ask whether it is worth
+  a check — the ones that recur are the ones no one will read the docstring for.
+
 ## 2026-08-10 — The review half of the QA gate is unproven; the deterministic half isn't
 
 - **What:** `qa-gatekeeper` measured against a no-agent control on its own four defect

@@ -106,10 +106,13 @@ It should produce: implementation milestones (ordered), files to create/modify (
 Once the plan is approved and before implementing, write down what this change is expected
 to do and what would settle it:
 
+**Run the check first, against the tree as it stands.** Then record what it showed:
+
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/predictions.py" record <branch-slug> \
   --claim "<what this change should achieve, in falsifiable terms>" \
   --check "<the command or observation that would settle it>" \
+  --baseline "<what that check shows RIGHT NOW, before the change>" \
   --date <YYYY-MM-DD>
 ```
 
@@ -124,6 +127,22 @@ is graded correct in hindsight, every time. "The hook will block frontmatter err
 would otherwise catch a day later, and I expect at least one in the next ten skill edits"
 can be wrong, which is the only reason to record it. The script refuses a prediction with
 no `--check` for exactly this reason.
+
+**And run the check before you record it — a check you have never watched fail is not a
+check.** This is the rule the ledger paid for: three entries were settled `partial` or
+worse where the *claim* was fine and the **instrument** was broken. The clearest case
+predicted that a fresh clone and the working copy would report different findings, and
+specified "run the linter on both and diff" — in a repo containing no file the rule could
+ever match, so the check returned `0 == 0` before the fix and `0 == 0` after. It could not
+have told success from failure.
+
+The reason this is structural rather than careless: a check is written *after* you
+understand the problem, so it is born green and is never once observed failing. Test-driven
+development has the same first step for the same reason — a test that has never been red
+proves nothing when it turns green — and research methodology says it as "a pre-registration
+that cannot fail is not a pre-registration". `--baseline` is refused when empty precisely so
+the check gets run at the one moment its validity is observable. If the check already passes
+on the unchanged tree, you do not have a baseline — you have a different check to write.
 
 ---
 
