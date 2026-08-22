@@ -1,12 +1,6 @@
----
-title: Architecture
-status: active
-created: 2026-06-28
-last_reviewed_on: 2026-08-22
-review_in: 6 months
-applies_to: hephaestus
-ai_summary: "How hephaestus is put together as a multi-plugin Claude Code marketplace: the six plugins and what each is for, the seam rule that keeps generic plugins domain-free, the three layers that hold state (shipped config in the plugin, runtime state outside it, repo-carried ledgers in docs/), and the four executable invariants plus the evidence contract that decide what counts as proof here. Read it before adding a plugin, before adding anything that writes state, or when deciding whether a rule belongs in prose, a test, or an invariant."
----
+# hephaestus — Architecture
+
+Generated from docs/ARCHITECTURE.md. The rendered page is the same content with diagrams; this is the text of it.
 
 # Architecture
 
@@ -17,113 +11,20 @@ Reference-style: tables and diagrams, not prose narratives.
 hephaestus is a **catalog**, not a service. Nothing here runs continuously; every component
 is invoked by an agent or a developer and exits.
 
-```archview
-{
-  "caption": "Who reads what, and why the two consumers get different amounts of a plugin.",
-  "nodes": [
-    {
-      "id": "cc",
-      "label": "Claude Code",
-      "sub": "loads a plugin whole",
-      "tech": "skills · commands · agents · hooks · MCP",
-      "kind": "external"
-    },
-    {
-      "id": "codex",
-      "label": "Codex · Pi",
-      "sub": "discovers skill directories only",
-      "tech": "the portable subset",
-      "kind": "external"
-    },
-    {
-      "id": "dev",
-      "label": "developer / agent",
-      "sub": "runs the gates against the repo itself",
-      "kind": "external"
-    },
-    {
-      "id": "market",
-      "label": "marketplace.json",
-      "sub": "the catalog entry point",
-      "tech": ".claude-plugin/",
-      "kind": "store",
-      "group": "REPO"
-    },
-    {
-      "id": "gates",
-      "label": "scripts/ + scripts/checks/",
-      "sub": "the executable invariants",
-      "tech": "seam · floor · mtime · undetermined",
-      "kind": "module",
-      "group": "REPO"
-    },
-    {
-      "id": "plugins",
-      "label": "plugins/<name>/",
-      "sub": "six independently-versioned units",
-      "tech": "crucible · forge-unity · 4 more",
-      "kind": "module",
-      "group": "REPO"
-    },
-    {
-      "id": "skills",
-      "label": "skills/<name>/SKILL.md",
-      "sub": "the only part that travels",
-      "kind": "module",
-      "group": "REPO"
-    }
-  ],
-  "edges": [
-    {
-      "from": "cc",
-      "to": "market",
-      "label": "reads",
-      "style": "flow"
-    },
-    {
-      "from": "market",
-      "to": "plugins",
-      "label": "lists",
-      "style": "static"
-    },
-    {
-      "from": "plugins",
-      "to": "skills",
-      "style": "static"
-    },
-    {
-      "from": "codex",
-      "to": "skills",
-      "label": "reads only this",
-      "style": "flow"
-    },
-    {
-      "from": "dev",
-      "to": "gates",
-      "label": "runs",
-      "style": "flow"
-    },
-    {
-      "from": "gates",
-      "to": "plugins",
-      "label": "gates",
-      "style": "static"
-    }
-  ],
-  "groups": [
-    {
-      "id": "REPO",
-      "label": "hephaestus",
-      "members": [
-        "market",
-        "plugins",
-        "skills",
-        "gates"
-      ]
-    }
-  ]
-}
-```
+[diagram] Who reads what, and why the two consumers get different amounts of a plugin.
+  - Claude Code — loads a plugin whole (something you do not control)
+  - Codex · Pi — discovers skill directories only (something you do not control)
+  - developer / agent — runs the gates against the repo itself (something you do not control)
+  - marketplace.json — the catalog entry point (a database, table, queue or bucket)
+  - scripts/ + scripts/checks/ — the executable invariants (code in this repo)
+  - plugins/<name>/ — six independently-versioned units (code in this repo)
+  - skills/<name>/SKILL.md — the only part that travels (code in this repo)
+  - Claude Code -> marketplace.json [reads]
+  - marketplace.json -> plugins/<name>/ [lists]
+  - plugins/<name>/ -> skills/<name>/SKILL.md
+  - Codex · Pi -> skills/<name>/SKILL.md [reads only this]
+  - developer / agent -> scripts/ + scripts/checks/ [runs]
+  - scripts/ + scripts/checks/ -> plugins/<name>/ [gates]
 
 Two consumers, deliberately unequal. Claude Code loads a plugin whole — skills, commands,
 agents, hooks, MCP servers. Codex and Pi discover **skill directories only**, so slash

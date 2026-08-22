@@ -13,3 +13,13 @@ plugins/crucible/skills/loop-harness/state/
 
 # eval baseline reports (frozen on demand; keep the dir, not the run artifacts)
 evals/baselines/*.json
+
+# Raw per-lens audit output. Only the synthesized report in docs/audits/ is versioned —
+# repeated audits would otherwise accrete MBs of committed agent dumps.
+docs/audits/.raw/
+
+# Secrets. Never tracked. This repo is public and its CI docs tell contributors to hold an
+# ANTHROPIC_API_KEY, so an untracked-but-unignored .env is one `git add -A` from publication.
+.env
+.env.*
+!.env.example
