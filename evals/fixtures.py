@@ -158,6 +158,31 @@ def start_clean(repo: Path) -> Path:
     return repo
 
 
+def start_stale_base(repo: Path) -> Path:
+    """Clean tree on main, but the LOCAL integration target is behind its remote.
+
+    This is the shape that produces duplicated work: `dev` looked current when the branch
+    model was detected, research took a while, and by creation time origin had moved. The
+    branch that results is a perfectly normal branch off a real commit — nothing about it
+    looks wrong afterwards — and the work it duplicates is work that already merged.
+    start-branch must re-fetch before creating and branch from `origin/dev`.
+    """
+    _base_repo(repo)
+    origin = repo.parent / f"{repo.name}-origin.git"
+    subprocess.run(["git", "init", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    _g(repo, "remote", "add", "origin", str(origin))
+    _g(repo, "push", "-q", "-u", "origin", "main")
+    _g(repo, "switch", "dev")
+    _g(repo, "push", "-q", "-u", "origin", "dev")
+    # Advance origin/dev, then rewind the local ref so it trails by one commit.
+    _write(repo, "src/landed.py", "def landed():\n    return 'already merged'\n")
+    _commit_all(repo, "dev: work that already landed")
+    _g(repo, "push", "-q", "origin", "dev")
+    _g(repo, "reset", "-q", "--hard", "HEAD~1")
+    _g(repo, "switch", "main")
+    return repo
+
+
 def start_dirty(repo: Path) -> Path:
     """Uncommitted changes present — start-branch must not silently proceed/lose them."""
     _base_repo(repo)
@@ -910,6 +935,7 @@ FIXTURES = {
     "sync_dirty": sync_dirty,
     "sync_behind_clean": sync_behind_clean,
     "start_clean": start_clean,
+    "start_stale_base": start_stale_base,
     "start_dirty": start_dirty,
     "second_brain_vault": second_brain_vault,
     "cms_repo": cms_repo,

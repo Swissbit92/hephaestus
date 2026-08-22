@@ -95,9 +95,28 @@ starting from a broken tree before they build on it.
 
 ## Phase 5 — Confirm, then act
 
-Propose the whole plan in one line and wait for confirmation before creating anything:
+**First, re-check that the target has not moved.** Phase 1 found the integration target;
+minutes or hours of research may have passed since, and a local ref is only as fresh as
+the last fetch:
 
-> Isolate on `feature/short-access-token` (plain branch) · integrate to `dev` · baseline: 142 tests passing — proceed?
+```bash
+git fetch origin --quiet
+git rev-list --count <target>..origin/<target>   # 0 = current
+```
+
+Branch from `origin/<target>`, not the local ref, whenever they differ — and say so, with
+the count, rather than silently taking the newer one. If the local ref is behind, the
+Phase 4 baseline was measured on the wrong tree and must be re-taken after branching.
+
+This is not the same problem as recording the target in git config, which fixes *recovery*
+— knowing where to merge back. This fixes *staleness* — starting from what is actually
+there. A base that was current when you looked is not current when you branch, and nothing
+about the branch will look wrong afterwards: it is a normal branch off a real commit, and
+the work you duplicate was work that already merged.
+
+Then propose the whole plan in one line and wait for confirmation before creating anything:
+
+> Isolate on `feature/short-access-token` (plain branch) · integrate to `dev` (origin/dev, 0 behind) · baseline: 142 tests passing — proceed?
 
 On confirm, create the branch/worktree and hand off to implementation.
 
@@ -110,3 +129,6 @@ On confirm, create the branch/worktree and hand off to implementation.
   exists.
 - **Detect, don't assume.** If you find yourself hardcoding `main` or `dev`, stop and
   read the repo instead.
+- **Never branch from a ref you have not fetched in this phase.** Detection and creation
+  are separated by however long the work in between took, and a stale base fails silently:
+  you rebuild what already landed, and the merge is clean because the commits are real.

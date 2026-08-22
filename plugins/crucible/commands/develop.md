@@ -260,6 +260,7 @@ the Phase 4.0 results. Checks (all projects):
 6. No security issues (no hardcoded secrets, no injection).
 7. Conventions followed (see the repo's CLAUDE.md).
 8. Performance check — no new serial loop over independent expensive work where parallelism is feasible.
+9. Claim provenance — no number, benchmark or behavioural claim that arrived from *outside this session* (another agent, another session, a person, a doc) has been written into a test, a constant or a docstring as fact. Received values stay marked as received until derived here, from the source. Pinning one in a test is the worst case: the wrong value acquires a guard, and the guard is what stops the next person questioning it.
 
 **Verdicts:** PASS → proceed to docs, then next milestone. CONDITIONAL PASS → fix minor issues, proceed. REJECT → fix critical issues, re-run QA; do not proceed until PASS.
 
