@@ -35,6 +35,8 @@ from common import (
     Finding,
     find_atpath_imports,
     frontmatter_is_unterminated,
+    requires_frontmatter,
+    validate_frontmatter,
     iter_md_files,
     load_state,
     parse_frontmatter,
@@ -60,63 +62,15 @@ def _utf8_stdio() -> None:
             pass  # a detached or captured stream (pytest); nothing to reconfigure
 
 
-def check_frontmatter(path: Path, required: bool) -> list[Finding]:
+def check_frontmatter(path: Path, required: bool = None) -> list[Finding]:
+    """Thin wrapper over the shared validator in `common`.
+
+    The rules used to live here in full and be re-implemented in `hook.py`. The copies had
+    drifted, and the drift ran the wrong way: the hook, which blocks the write, knew less
+    than the linter, which only reports.
+    """
     text = path.read_text(encoding="utf-8", errors="replace")
-    fm, _ = parse_frontmatter(text)
-    findings: list[Finding] = []
-    rel = str(path)
-    if not fm:
-        # An unterminated fence is a different fault from having no frontmatter, and they
-        # used to be reported as the same thing (or, on an exempt file, as nothing at all).
-        # It is an Error everywhere, not only where frontmatter is required: the author
-        # plainly intended metadata, and every consumer is silently ignoring all of it.
-        if frontmatter_is_unterminated(text):
-            findings.append(Finding(
-                "error", rel,
-                "frontmatter opens with '---' but is never closed — every field in it is "
-                "being ignored by every tool that reads this file. Add the closing '---'."))
-        elif required:
-            findings.append(Finding("error", rel, "missing frontmatter (required for files under docs/)"))
-        return findings
-    # Required-field completeness only applies where frontmatter is required. But any
-    # frontmatter that IS present is validated for controlled-vocab + field validity even
-    # on exempt files — a bad status/date on README should still be caught.
-    if required:
-        missing = FRONTMATTER_REQUIRED - set(fm)
-        if missing:
-            findings.append(Finding("error", rel, f"frontmatter missing fields: {sorted(missing)}"))
-    status = fm.get("status")
-    if status and status not in FRONTMATTER_STATUSES:
-        findings.append(Finding("error", rel, f"invalid status '{status}'; expected one of {sorted(FRONTMATTER_STATUSES)}"))
-    # threat_level controlled vocabulary (only validated when present)
-    threat_level = fm.get("threat_level")
-    if threat_level and threat_level not in FRONTMATTER_THREAT_LEVELS:
-        findings.append(Finding("error", rel, f"invalid threat_level '{threat_level}'; expected one of {sorted(FRONTMATTER_THREAT_LEVELS)}"))
-    # Date validity
-    for fld in ("created", "last_reviewed_on"):
-        if fld in fm and parse_iso_date(fm[fld]) is None:
-            findings.append(Finding("error", rel, f"frontmatter field '{fld}' is not YYYY-MM-DD: {fm[fld]!r}"))
-    if "review_in" in fm and parse_review_in(fm["review_in"]) is None:
-        findings.append(Finding("error", rel, f"frontmatter 'review_in' unparseable: {fm['review_in']!r}"))
-    # ai_summary is optional, but an unbounded one defeats its own purpose: it is re-read
-    # on every triage pass, so past a certain length it costs more than opening the body
-    # it was meant to save you from opening. A Warning, not an Error — the document is
-    # still valid, it is just no longer earning its place in the index.
-    summary = fm.get("ai_summary")
-    if summary is not None:
-        size = len(summary.encode("utf-8"))
-        if not summary.strip():
-            findings.append(Finding("warning", rel, "frontmatter 'ai_summary' is empty — omit the field rather than declaring an empty one"))
-        elif size > AI_SUMMARY_MAX_BYTES:
-            findings.append(Finding("warning", rel, f"frontmatter 'ai_summary' is {size} bytes (>{AI_SUMMARY_MAX_BYTES}); it is read on every triage pass, so state what the doc is and when to open it, not what is in it"))
-    # review_by expiry
-    reviewed = parse_iso_date(fm.get("last_reviewed_on", ""))
-    review_days = parse_review_in(fm.get("review_in", ""))
-    if reviewed and review_days is not None:
-        review_by = reviewed + timedelta(days=review_days)
-        if review_by < date.today() and fm.get("status") == "active":
-            findings.append(Finding("warning", rel, f"past review_by {review_by} (last_reviewed_on={reviewed}, review_in={fm['review_in']})"))
-    return findings
+    return validate_frontmatter(text, path, required)
 
 
 def check_atpath_imports(path: Path) -> list[Finding]:
@@ -655,7 +609,7 @@ def run_repo_check(repo: Path) -> list[Finding]:
     findings.extend(check_ai_summary_aggregate(repo))
     # Per-file checks
     for md in iter_md_files(repo, include_archive=False):
-        required_fm = "/docs/" in str(md).replace("\\", "/") and md.name not in FRONTMATTER_EXEMPT
+        required_fm = requires_frontmatter(md)
         findings.extend(check_frontmatter(md, required=required_fm))
         findings.extend(check_atpath_imports(md))
         findings.extend(check_relative_links(md))
@@ -668,7 +622,7 @@ def run_mechanical_check(file: Path) -> list[Finding]:
     findings: list[Finding] = []
     if not file.exists():
         return []  # new file; other rules caught at save time
-    required_fm = "/docs/" in str(file).replace("\\", "/") and file.name not in FRONTMATTER_EXEMPT
+    required_fm = requires_frontmatter(file)
     findings.extend(check_frontmatter(file, required=required_fm))
     findings.extend(check_atpath_imports(file))
     return findings
@@ -685,7 +639,7 @@ def main() -> int:
         findings = run_mechanical_check(Path(args.mechanical))
     elif args.file:
         f = Path(args.file)
-        required_fm = "/docs/" in str(f).replace("\\", "/") and f.name not in FRONTMATTER_EXEMPT
+        required_fm = requires_frontmatter(f)
         findings = check_frontmatter(f, required=required_fm) + check_atpath_imports(f) + check_archive_candidate(f)
     else:
         repo = Path(args.path).resolve()

@@ -249,16 +249,22 @@ def test_present_frontmatter_validated_even_when_not_required(tmp_path):
 
 # --------------------------------------------------------------------------- hook.check_content
 def test_hook_blocks_docs_file_without_frontmatter(tmp_path):
+    """Wording is now the linter's, because both run one shared validator.
+
+    The hook used to carry its own sentence-cased copy of every frontmatter rule; the
+    linter's was lowercase. Unifying them meant one spelling had to win, and the shared
+    message is the more useful one — it names the expected fields.
+    """
     f = tmp_path / "docs" / "GUIDE.md"
     errors = hook.check_content(f, "no frontmatter\n")
-    assert any("Missing frontmatter" in e for e in errors)
+    assert any("missing frontmatter" in e for e in errors)
 
 
 def test_hook_validates_present_frontmatter_on_exempt_file(tmp_path):
     # README is frontmatter-exempt, but a bad status it DOES carry is still flagged.
     f = tmp_path / "README.md"
     errors = hook.check_content(f, "---\nstatus: bogus\n---\nbody\n")
-    assert any("Invalid status" in e for e in errors)
+    assert any("invalid status" in e for e in errors)
 
 
 def test_hook_allows_clean_docs_file(tmp_path):
@@ -296,7 +302,7 @@ def test_threat_level_omitted_is_fine(tmp_path):
 def test_hook_validates_threat_level(tmp_path):
     f = tmp_path / "docs" / "T.md"
     errors = hook.check_content(f, THREAT_FM.format(level="Severe"))
-    assert any("Invalid threat_level" in e for e in errors)
+    assert any("invalid threat_level" in e for e in errors)
 
 
 # --------------------------------------------------------------------------- Phase 1C: init round-trip
@@ -1023,3 +1029,57 @@ def test_unclosed_fence_reports_the_real_fault_not_missing_frontmatter(tmp_path)
     assert any("never closed" in m for m in messages)
     assert not any("missing frontmatter" in m for m in messages), \
         "reporting 'missing' for a typo'd fence sends the author to the wrong fix"
+
+
+# --------------------------------------------------------------------------- one validator
+#
+# check.py and hook.py each carried a full copy of the frontmatter rules, and they had
+# drifted in the direction that matters most: the hook — the thing that BLOCKS the write —
+# knew less than the linter, which only reports. Both now delegate to
+# common.validate_frontmatter.
+
+
+def test_hook_names_an_unterminated_fence_instead_of_blaming_missing_frontmatter(tmp_path):
+    """The drift, pinned. Both conditions used to yield the identical hook message."""
+    f = tmp_path / "docs" / "doc.md"
+    unterminated = hook.check_content(f, "---\ntitle: x\nstatus: active\nno fence\n")
+    absent = hook.check_content(f, "plain text\n")
+
+    assert unterminated != absent, "the gate must not give one answer for two faults"
+    assert any("never closed" in e for e in unterminated)
+    assert not any("missing frontmatter" in e for e in unterminated), \
+        "telling the author to add frontmatter that is already there sends them to the wrong fix"
+
+
+def test_hook_and_linter_agree_on_the_same_content(tmp_path):
+    """One validator means the gate can no longer know less than the report."""
+    f = write(tmp_path / "docs" / "doc.md", "---\nstatus: bogus\n---\nbody\n")
+
+    hook_errors = hook.check_content(f, f.read_text(encoding="utf-8"))
+    lint_errors = [x.message for x in check.check_frontmatter(f) if x.level == "error"]
+
+    assert any("invalid status" in e for e in hook_errors)
+    assert any("invalid status" in m for m in lint_errors)
+
+
+def test_a_warning_does_not_block_a_write(tmp_path):
+    """An oversized ai_summary is a real finding and must not stop someone saving a file.
+    A gate that fires mid-thought is one people switch off."""
+    body = ("---\ntitle: x\nstatus: active\ncreated: 2026-01-01\n"
+            "last_reviewed_on: 2026-06-01\nreview_in: 6 months\napplies_to: t\n"
+            f'ai_summary: "{"x" * 2000}"\n---\n\nbody\n')
+    f = tmp_path / "docs" / "doc.md"
+
+    assert hook.check_content(f, body) == [], "a warning must not block"
+    findings = common.validate_frontmatter(body, f)
+    assert any(x.level == "warning" and "ai_summary" in x.message for x in findings), \
+        "but it must still be reported"
+
+
+def test_requires_frontmatter_has_one_definition(tmp_path):
+    """There were four spellings; three omitted the archive exemption, so `check --file`
+    on an archived doc demanded frontmatter the hook would have allowed."""
+    assert common.requires_frontmatter(tmp_path / "docs" / "a.md") is True
+    assert common.requires_frontmatter(tmp_path / "docs" / "archive" / "2026-01" / "a.md") is False
+    assert common.requires_frontmatter(tmp_path / "docs" / "README.md") is False
+    assert common.requires_frontmatter(tmp_path / "src" / "a.md") is False

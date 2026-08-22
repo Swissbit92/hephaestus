@@ -31,14 +31,8 @@ SKILL_SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SKILL_SCRIPTS))
 
 from common import (  # noqa: E402
-    FRONTMATTER_EXEMPT,
-    FRONTMATTER_REQUIRED,
-    FRONTMATTER_STATUSES,
-    FRONTMATTER_THREAT_LEVELS,
     find_atpath_imports,
-    parse_frontmatter,
-    parse_iso_date,
-    parse_review_in,
+    validate_frontmatter,
 )
 
 # Roots whose docs/*.md files are gated. Configurable via CMS_ROOTS
@@ -83,15 +77,6 @@ def is_archive(path: Path) -> bool:
     return "/archive/" in str(path).replace("\\", "/")
 
 
-def requires_frontmatter(path: Path) -> bool:
-    if path.name in FRONTMATTER_EXEMPT:
-        return False
-    if is_archive(path):
-        return False
-    p = str(path).replace("\\", "/")
-    return "/docs/" in p
-
-
 def simulate_write(tool_name: str, tool_input: dict, existing: str) -> str | None:
     if tool_name == "Write":
         return tool_input.get("content", "")
@@ -108,35 +93,18 @@ def simulate_write(tool_name: str, tool_input: dict, existing: str) -> str | Non
 
 
 def check_content(path: Path, content: str) -> list[str]:
-    errors: list[str] = []
-    fm, _ = parse_frontmatter(content)
-    # Missing-frontmatter is only an error where frontmatter is required (docs/, not
-    # exempted). But any frontmatter that IS present is validated regardless — so
-    # controlled-vocab fields like status on an exempt file still get checked.
-    if not fm:
-        if requires_frontmatter(path):
-            errors.append(
-                f"Missing frontmatter in {path.name}. "
-                f"Files under docs/ must start with --- ... --- block containing: "
-                f"{sorted(FRONTMATTER_REQUIRED)}."
-            )
-    else:
-        if requires_frontmatter(path):
-            missing = FRONTMATTER_REQUIRED - set(fm)
-            if missing:
-                errors.append(f"Frontmatter missing fields: {sorted(missing)}")
-        status = fm.get("status")
-        if status and status not in FRONTMATTER_STATUSES:
-            errors.append(f"Invalid status {status!r}; expected one of {sorted(FRONTMATTER_STATUSES)}")
-        threat_level = fm.get("threat_level")
-        if threat_level and threat_level not in FRONTMATTER_THREAT_LEVELS:
-            errors.append(f"Invalid threat_level {threat_level!r}; expected one of {sorted(FRONTMATTER_THREAT_LEVELS)}")
-        for fld in ("created", "last_reviewed_on"):
-            if fld in fm and parse_iso_date(fm[fld]) is None:
-                errors.append(f"Frontmatter {fld!r} must be YYYY-MM-DD (got {fm[fld]!r})")
-        if "review_in" in fm and parse_review_in(fm["review_in"]) is None:
-            errors.append(f"Frontmatter 'review_in' unparseable: {fm['review_in']!r} (try '6 months', '12 months', '24 months')")
-    # @path validity
+    """Errors that should block this write.
+
+    Delegates to `common.validate_frontmatter` — the same rules the linter runs — so the
+    gate can no longer know *less* than the report. It previously carried its own copy and
+    had drifted: an unterminated fence was reported as "Missing frontmatter", sending the
+    author to add metadata that was already there.
+
+    Only `error` findings block. A warning (an oversized `ai_summary`, a lapsed review
+    date) is real but must not stop someone saving a file — a gate that fires mid-thought
+    is one people switch off.
+    """
+    errors = [f.message for f in validate_frontmatter(content, path) if f.level == "error"]
     for raw, target in find_atpath_imports(content, path.parent):
         if not target.exists():
             errors.append(f"@{raw} points to missing file: {target}")

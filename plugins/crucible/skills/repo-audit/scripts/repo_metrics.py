@@ -270,12 +270,39 @@ def _gitignore_gaps(root: Path, files: list = None) -> tuple[bool, list[str]]:
         return True, relevant
     present_lines = {ln.strip().rstrip("/") for ln in body.splitlines()
                      if ln.strip() and not ln.strip().startswith("#")}
-    gaps = []
-    for expected in relevant:
-        needle = expected.rstrip("/*").lstrip("*").lstrip(".")
-        if not any(needle in ln for ln in present_lines):
-            gaps.append(expected)
+    gaps = [expected for expected in relevant
+            if not _covered_by(expected, present_lines)]
     return True, gaps
+
+
+def _covered_by(fragment: str, entries: set) -> bool:
+    """Is `fragment` actually ignored by one of these .gitignore entries?
+
+    Matched against whole normalised entries, never as a substring. The substring version
+    silently reported `.env` as covered in any repo containing a `.venv/` line, because
+    stripping the leading dot leaves the needle `env`, which `.venv` contains. That is the
+    worst possible false negative for this check to have: it hides the one entry whose
+    absence can publish a credential, and it hid it in every Python repo using a virtualenv
+    — including this one, where it went unnoticed until a full audit went looking.
+
+    A negation (`!.env.example`) is not coverage; it is an explicit re-inclusion, so it is
+    skipped rather than counted as a match.
+    """
+    target = fragment.strip().lstrip("*").rstrip("/")
+    for raw in entries:
+        entry = raw.strip()
+        if not entry or entry.startswith("!"):
+            continue
+        entry = entry.lstrip("/").rstrip("/")
+        if entry == fragment or entry == target:
+            return True
+        # `.env` is covered by `.env*` / `.env.*`; `dist` by `dist/` (already stripped).
+        if entry.endswith("*") and target.startswith(entry.rstrip("*").rstrip(".")):
+            return True
+        # `*.log` is covered by an entry that ends the same way.
+        if fragment.startswith("*.") and entry.endswith(fragment[1:]):
+            return True
+    return False
 
 
 def _python_dead_module_candidates(records: list[tuple[str, Path]]) -> list[str]:

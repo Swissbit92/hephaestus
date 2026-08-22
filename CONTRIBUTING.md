@@ -103,9 +103,16 @@ scripts/release.sh <plugin> 1.2.3            # explicit version
 scripts/release.sh <plugin> patch --dry-run  # preview, change nothing
 ```
 
-It refuses to run unless you're on `main` with a clean tree, validates the plugin, then
-commits, tags `<plugin>-v<x.y.z>`, pushes, and creates a GitHub release with notes from the
-commits since that plugin's last tag.
+It refuses to run unless you're on `main` with a clean tree, **runs the release gates**
+(`pytest`, `check-public-safe.sh`, `validate_manifests.py` — ADR-002 promoted the middle
+one to a release gate and the script did not run it), validates the plugin, then commits,
+tags `<plugin>-v<x.y.z>`, pushes, creates a GitHub release, and **fast-forwards `dev` to
+`main`** so the next feature branch does not fork from a base missing the version bump.
+
+**`main` requires status checks and enforces them on admins**, so a release commit cannot
+be pushed directly — a fresh commit has no checks yet. The script detects this *before*
+touching anything and prints the PR route, rather than bumping the manifest and tagging
+locally and then failing, which is the half-completed release its own comments warn about.
 
 **Notes are scoped by excluding sibling plugins, not by including the plugin's directory.**
 A release routinely lands work outside its own tree — a gate in `scripts/`, tests in
