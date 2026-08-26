@@ -214,7 +214,7 @@ def check_required_files(repo: Path) -> list[Finding]:
             findings.append(Finding("error", str(repo / rel), f"required file missing ({rel})"))
     for rel in REQUIRED_DIRS:
         if not (repo / rel).is_dir():
-            findings.append(Finding("warning", str(repo / rel), f"required dir missing ({rel}); `/cms init` would create it"))
+            findings.append(Finding("warning", str(repo / rel), f"required dir missing ({rel}); `/crucible:cms init` would create it"))
     return findings
 
 
@@ -261,7 +261,7 @@ def check_architecture_page(repo: Path) -> list[Finding]:
         return []
     return [Finding("warning", str(page),
                     "generated page is out of date with ARCHITECTURE.md "
-                    "— re-render with `/cms render`")]
+                    "— re-render with `/crucible:cms render`")]
 
 
 # ── content-shape checks ────────────────────────────────────────────────────

@@ -19,9 +19,12 @@ type. A trading service draws its order book; a web app draws its request path.
 
 Pure stdlib, matching the CMS scripts this is intended to join.
 
-    /cms render                     # docs/ARCHITECTURE.md -> .html (+ .txt)
-    /cms render --check             # exit 1 if the page is stale
-    /cms render --publish           # print the publish manifest line
+    render.py <repo>                # docs/ARCHITECTURE.md -> .html (+ .txt)
+    render.py <repo> --check        # exit 1 if the page is stale
+    render.py <repo> --publish      # print the publish manifest line
+
+Via the skill: `/crucible:cms render`. The flags above belong to this script and
+have no slash-command form, so they are shown as the script invocation they are.
 """
 
 from __future__ import annotations
