@@ -20,7 +20,7 @@ Pure stdlib, Python 3.9+. Run as
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/cms/scripts/<name>.py" <args>`; if
 `CLAUDE_PLUGIN_ROOT` is unset, substitute the absolute path to this skill's `scripts/`.
 
-| Command | Script | Purpose |
+| Command (conceptual — invoke via `/crucible:cms <sub>`) | Script | Purpose |
 |---------|--------|---------|
 | `/cms init <path>` | `init.py <path>` | Scaffold standard skeleton into a new or underdocumented repo (idempotent) |
 | `/cms check [<path>]` | `check.py [<path>]` | Lint against standard. Tiered Error/Warning. Exit non-zero on Error |
