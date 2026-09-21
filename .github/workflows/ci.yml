@@ -12,7 +12,13 @@ on:
     # Weekly behavioural check. A skill's prose can stop working without any file in this
     # repo changing — the model underneath it moves — so this is the one check that must
     # fire on a calendar rather than on a diff.
-    - cron: "0 6 * * 1"
+    #
+    # :17 and not :00 deliberately. GitHub documents the top of every hour as a high-load
+    # window for the `schedule` event and advises picking another minute; under enough load
+    # a queued run is not merely delayed but **dropped**, leaving no run record at all — a
+    # missing weekly check that looks identical to one that has not fired yet. Measured here
+    # before the move: the first two runs fired ~35 min late, the next four 5–6 HOURS late.
+    - cron: "17 6 * * 1"
   workflow_dispatch:
     inputs:
       model:
@@ -124,21 +130,35 @@ jobs:
         # run down, so "it collected" is already most of what this job proves.
         run: pytest -q
 
-  # Tier 2 (DISABLED by default) — the live skill-eval suite. It drives the real `claude`
+  # Tier 2 (OFF by default) — the live skill-eval suite. It drives the real `claude`
   # CLI against the plugins, so it needs the CLI installed and an API key, and it spends
-  # tokens. Enable by (a) removing `if: false`, (b) adding an ANTHROPIC_API_KEY repo secret,
-  # and (c) running the harness in hermetic mode (bare=True uses ANTHROPIC_API_KEY instead
-  # of an interactive login). Consider gating it to PRs that touch skills/ to control cost.
+  # tokens. Turn it on by (a) setting the repo variable LIVE_EVAL_ENABLED to `true`,
+  # (b) adding an ANTHROPIC_API_KEY repo secret, and (c) reading the go-live checklist in
+  # evals/README.md first — the suite is not currently green enough to gate on.
   live-eval:
-    # No longer `if: false`. It was disabled because it spends tokens on every push —
-    # so it now runs only when asked for, or once a week, rather than never.
+    # Three states, encoded so they cannot be confused with each other:
     #
-    # It needs an ANTHROPIC_API_KEY repo secret, because CI has no logged-in session and
-    # the runner must use bare mode. Without the secret the job fails fast and says so,
-    # which is the honest state: "not configured" must not look like "passing". Locally
-    # you do NOT need a key — `run_evals.py` defaults to bare=False and uses your existing
+    #   flag off                  -> job is SKIPPED (grey). Not configured, and says so.
+    #   flag on, secret missing   -> job FAILS (exit 2). A real misconfiguration.
+    #   flag on, secret present   -> the suite runs and its own result stands.
+    #
+    # The middle case is why the `exit 2` below stays exactly as it is: "not configured"
+    # must not look like "passing", and the fix for a weekly red is never to paint it
+    # green. But the first case was being reported as the second — the cron was switched
+    # on in e8bd821 while the secret never existed, so this job failed 6 of 6 scheduled
+    # runs and had never once passed. A gate that has only ever been red teaches people to
+    # skim past it, and then its true alarms are skimmed past too. A job that does not run
+    # is the honest encoding of a feature that is off; a job that runs and fails is not.
+    #
+    # `vars` and not `secrets` because the secrets context is NOT available in a job-level
+    # `if:` (only github/needs/vars/inputs are) — so presence of the key cannot be tested
+    # here. The flag is a human-set switch you flip in lockstep with adding the secret.
+    #
+    # Locally you need neither: `run_evals.py` defaults to bare=False and uses your existing
     # login, so the behavioural suite is free to run on a subscription. See evals/README.md.
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    if: >
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') &&
+      vars.LIVE_EVAL_ENABLED == 'true'
     runs-on: ubuntu-latest
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

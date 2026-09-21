@@ -88,10 +88,55 @@ That was true of CI and **never true of running it yourself**:
 So the behavioural half of this repo's verification has always been free to run on the
 machine you already work on. `python3 evals/run_evals.py` is the whole command.
 
-For CI, `live-eval` now runs on **manual dispatch or the weekly schedule** rather than
-never, defaults to a cheap model, and **exits 2 when `ANTHROPIC_API_KEY` is missing** —
-because a job that skips silently is indistinguishable from one that passed, which is the
-same mistake this repo refuses everywhere else.
+For CI, `live-eval` runs on **manual dispatch or the weekly schedule** — and only while the
+repo variable `LIVE_EVAL_ENABLED` is `true`. It defaults to a cheap model, and **exits 2
+when `ANTHROPIC_API_KEY` is missing**, because a job that skips silently is
+indistinguishable from one that passed — the same mistake this repo refuses everywhere
+else.
+
+Those two gates are not redundant; they encode three states, and the point is that the
+three stay distinguishable:
+
+| `LIVE_EVAL_ENABLED` | `ANTHROPIC_API_KEY` | CI result | Means |
+|---|---|---|---|
+| unset / not `true` | — | **skipped** (grey) | the suite is off, and says so |
+| `true` | missing | **fails**, exit 2 | a real misconfiguration |
+| `true` | present | the suite's own verdict | it actually ran |
+
+The flag exists because the middle row was being used to report the top row. The cron was
+switched on before the secret was ever added, and `live-eval` then failed **6 of 6**
+scheduled runs without passing once. An alarm that has only ever been red is one people
+learn to skim past — and then its true alarms get skimmed past too, which is the more
+expensive half.
+
+It is a **variable** rather than a test of the secret because GitHub does not make the
+`secrets` context available in a job-level `if:` (only `github`, `needs`, `vars` and
+`inputs` are), so key *presence* cannot be tested there at all. Flip the flag in lockstep
+with adding the secret.
+
+### Before you turn it on
+
+The flag is not paperwork. The suite is not currently in a state worth gating on, and
+enabling it without the following buys a slower, costlier red in place of a fast one:
+
+- [ ] **Make the suite reliably green first.** Its last full run was **28/32**, and 24 of
+      the 32 scenarios gate on `pass^k` — every one of k=3 runs must pass, so 72 runs must
+      all succeed. At a 5% per-run flake rate that is roughly a 2.5% chance of green. The
+      known offender is `qa-gatekeeper` intermittently emitting no `QA-VERDICT` line;
+      either make it deterministic or move those scenarios to rate-gating.
+- [ ] **Add `timeout-minutes` to the job.** 32 scenarios x k=3 at the 240 s per-run timeout
+      is 6.4 h worst case, against GitHub's 6 h hard job limit — the run would be killed
+      with no report rather than failing with one.
+- [ ] **Consider `-k 1` on the schedule**, keeping k=3 for dispatch. This file already says
+      k=1 is triage and not measurement; that distinction maps onto the two triggers.
+- [ ] **Mint the key from a dedicated Anthropic workspace with a low spend cap.** Spend
+      limits are enforced per workspace rather than per key, so a dedicated workspace is
+      the only way to bound the blast radius of a leak.
+- [ ] **Put the job behind an Environment with a required reviewer** (free on public
+      repos). `workflow_dispatch` needs only *write* access, so without this any write
+      collaborator can spend the budget at will.
+- [ ] **Verify the `--bare` path once, by hand, before trusting a schedule.** Every local
+      run uses `bare=False`; the CI auth path has never executed.
 
 Pin a cheaper model to cut the CI bill. These scenarios assert *behavioural compliance* —
 did it refuse the merge, did it avoid pushing, did it write the file — not reasoning
