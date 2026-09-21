@@ -160,6 +160,16 @@ jobs:
       (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') &&
       vars.LIVE_EVAL_ENABLED == 'true'
     runs-on: ubuntu-latest
+    # The suite is 32 scenarios run k times, strictly sequentially, each with a 240 s
+    # per-run timeout (`runner.py:DEFAULT_TIMEOUT`). At k=3 that is 96 runs and a 6.4 h
+    # worst case — past GitHub's **6 h hard job limit**, where the platform kills the job
+    # and no report is uploaded at all. A run that dies that way reports "cancelled", which
+    # is neither the pass nor the fail the suite was asked for.
+    #
+    # 180 min is the cap rather than the expectation: measured runs sit nearer 70-145 min.
+    # It exists so the job fails as itself, with its artifact, instead of being killed by
+    # the platform — not to make a slow suite fast.
+    timeout-minutes: 180
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       # A cheap model by default: these scenarios assert *behavioural compliance* with a
@@ -182,11 +192,20 @@ jobs:
             echo "with your existing login: python3 evals/run_evals.py" >&2
             exit 2
           fi
-      - name: Install claude CLI + uv + pytest
+      - name: Install claude CLI + pytest
+        # The CLI is PINNED, and that is the point of this job rather than an aside: this
+        # suite's subject *is* the CLI's behaviour, so an unpinned `npm install -g` lets the
+        # thing under test change with no diff in this repo — a scenario that starts failing
+        # then has two candidate causes (the skill, or a CLI that moved overnight) and the
+        # failure cannot be attributed. The same reasoning the README already gives for not
+        # proxying the suite at another model applies to not floating the CLI version.
+        #
+        # Bump this deliberately, as its own commit, so a behavioural change has a diff to
+        # blame. `uv` used to be installed here and never used — nothing under evals/ shells
+        # out to anything but `claude` and `git` — so it is gone.
         run: |
-          npm install -g @anthropic-ai/claude-code
+          npm install -g @anthropic-ai/claude-code@2.1.278
           pip install pytest
-          curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Run the skill-eval suite (hermetic)
         run: python3 evals/run_evals.py -k "$EVAL_K" --model "$EVAL_MODEL" --bare --json evals/baselines/ci.json
       - name: Keep the report even when the gate fails
