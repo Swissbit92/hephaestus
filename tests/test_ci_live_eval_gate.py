@@ -117,3 +117,43 @@ def test_weekly_cron_avoids_the_top_of_the_hour():
             f'cron "{expr}" fires at the top of the hour, which GitHub documents as a '
             f"high-load window; pick another minute"
         )
+
+
+# ------------------------------------------------------------- the job must end by itself
+def test_live_eval_caps_its_own_runtime_below_the_platform_limit():
+    """Without a cap the suite can outlive GitHub's 6 h hard job limit and be killed.
+
+    32 scenarios x k=3, strictly sequential, at `runner.py:DEFAULT_TIMEOUT` (240 s) is a
+    6.4 h worst case. A job killed by the platform reports `cancelled` and uploads nothing —
+    neither the pass nor the fail it was asked for, and no artifact to read afterwards.
+    """
+    block = _job_block("live-eval", _ci_text())
+    found = re.search(r"^\s*timeout-minutes:\s*(\d+)\s*$", block, re.MULTILINE)
+    assert found, (
+        "live-eval has no timeout-minutes; a 6.4 h worst case against GitHub's 6 h hard "
+        "limit means the platform kills the job instead of the job failing with a report"
+    )
+    minutes = int(found.group(1))
+    assert minutes < 360, (
+        f"timeout-minutes is {minutes}, at or past GitHub's 360-minute hard job limit — "
+        f"the cap must bite before the platform does, or it is decorative"
+    )
+
+
+# ---------------------------------------------------------------- the subject must hold still
+def test_the_claude_cli_is_pinned():
+    """The CLI is what this suite tests, so it must not move without a diff.
+
+    An unpinned `npm install -g` means a scenario can start failing because the CLI changed
+    overnight, and a failure with two candidate causes — the skill, or the tool — cannot be
+    attributed. Same reasoning the README gives for refusing to proxy the suite at another
+    model.
+    """
+    block = _job_block("live-eval", _ci_text())
+    installs = re.findall(r"npm install -g (\S+)", block)
+    assert installs, "no npm install found in live-eval — did the install step move?"
+    for spec in installs:
+        assert "@" in spec.lstrip("@"), (
+            f"`{spec}` is unpinned; pin it to an exact version so the thing under test "
+            f"cannot change without a commit to blame"
+        )

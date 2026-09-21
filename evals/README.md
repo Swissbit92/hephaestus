@@ -124,9 +124,16 @@ enabling it without the following buys a slower, costlier red in place of a fast
       all succeed. At a 5% per-run flake rate that is roughly a 2.5% chance of green. The
       known offender is `qa-gatekeeper` intermittently emitting no `QA-VERDICT` line;
       either make it deterministic or move those scenarios to rate-gating.
-- [ ] **Add `timeout-minutes` to the job.** 32 scenarios x k=3 at the 240 s per-run timeout
-      is 6.4 h worst case, against GitHub's 6 h hard job limit — the run would be killed
-      with no report rather than failing with one.
+- [x] **Add `timeout-minutes` to the job.** Done — `timeout-minutes: 180`. 32 scenarios
+      x k=3 at the 240 s per-run timeout is 6.4 h worst case, against GitHub's 6 h hard job
+      limit; past it the platform kills the job, which reports `cancelled` and uploads no
+      artifact — neither the pass nor the fail the suite was asked for. 180 is a cap, not an
+      expectation (measured runs sit nearer 70–145 min).
+- [x] **Pin the `claude` CLI.** Done — `@2.1.278`. The CLI is this suite's *subject*, so an
+      unpinned `npm install -g` let it change with no diff here, leaving any new failure
+      with two candidate causes (the skill, or the tool) and no way to attribute it. Bump it
+      deliberately, as its own commit. The unused `uv` install was dropped at the same time —
+      nothing under `evals/` shells out to anything but `claude` and `git`.
 - [ ] **Consider `-k 1` on the schedule**, keeping k=3 for dispatch. This file already says
       k=1 is triage and not measurement; that distinction maps onto the two triggers.
 - [ ] **Mint the key from a dedicated Anthropic workspace with a low spend cap.** Spend
