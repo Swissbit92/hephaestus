@@ -838,7 +838,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "mcp", specifier = ">=1.2.0" }]
+requires-dist = [{ name = "mcp", specifier = ">=1.2.0,<2" }]
 
 [[package]]
 name = "sse-starlette"
