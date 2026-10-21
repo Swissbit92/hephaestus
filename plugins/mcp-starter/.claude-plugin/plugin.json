@@ -1,7 +1,7 @@
 {
   "name": "mcp-starter",
   "description": "A minimal, working template for packaging a Python MCP server as a Claude Code plugin — userConfig credential injection, inline mcpServers, uv-isolated server, first-run hook, and a /setup wizard. Copy it to start your own.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "Swissbit92"
   },
