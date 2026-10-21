@@ -1,7 +1,7 @@
 {
   "name": "sqlite-readonly",
   "description": "Zero-config read-only SQLite MCP server — safely query any local .db (3-layer read-only enforcement, schema introspection, natural-language→SQL).",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "Swissbit92"
   },
