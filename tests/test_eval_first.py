@@ -308,3 +308,31 @@ def test_run_deterministic_cascade():
     assert ok["all_passed"] is True
     bad = det.run_deterministic("hello", [{"check": "non_empty"}, {"check": "max_length", "args": {"n": 2}}])
     assert bad["all_passed"] is False
+
+
+# --------------------------------------------------------------------------- resolution pre-flight
+def test_wilson_interval_matches_the_published_values():
+    lo, hi = rel.wilson_interval(7, 10)
+    assert (round(lo, 3), round(hi, 3)) == (0.397, 0.892)
+
+
+def test_wilson_interval_does_not_collapse_at_a_perfect_score():
+    """The normal approximation gives [1, 1] for 10/10 — certainty from ten runs."""
+    lo, hi = rel.wilson_interval(10, 10)
+    assert hi == 1.0 and 0.70 < lo < 0.75
+
+
+def test_required_n_for_ten_points_from_seventy_percent():
+    assert rel.required_n(0.7, 0.1) == 291
+    assert rel.required_n(0.7, 0.2) < rel.required_n(0.7, 0.1)
+
+
+def test_required_n_rejects_an_impossible_target():
+    with pytest.raises(ValueError):
+        rel.required_n(0.95, 0.1)
+
+
+def test_identical_repeats_are_flagged_as_deterministic():
+    assert rel.deterministic_runs(["a", "a"]) is True
+    assert rel.deterministic_runs(["a", "b"]) is False
+    assert rel.deterministic_runs(["a"]) is False   # one run shows nothing either way

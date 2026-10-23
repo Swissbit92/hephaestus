@@ -364,6 +364,76 @@ def test_freeze_and_compare_baseline(tmp_path):
     assert cmp["regressions"] == ["s1"] and cmp["clean"] is False
 
 
+def _rep(passed: bool, meta=None, runs=1):
+    s = report.summarize_scenario({"id": "s1", "gate_mode": "all"}, [[det("a", passed)]] * runs)
+    return report.build_report([s], meta=meta)
+
+
+_META = {"k": 3, "models": ["claude-opus-5-5"], "date": "2026-10-23",
+         "cli_versions": ["2.1.309"], "plugin_revision": "abc1234", "develop_fix_cap": "unbounded"}
+
+
+def test_meta_is_recorded_only_when_given():
+    assert "meta" not in _rep(True)
+    assert _rep(True, meta=_META)["meta"]["develop_fix_cap"] == "unbounded"
+
+
+def test_a_baseline_from_another_model_is_not_comparable():
+    """Pass rates measured on two models are two experiments. Comparing them would report a
+    model change as a skill regression (or hide one behind a model upgrade)."""
+    other = {**_META, "models": ["claude-haiku-4-5"]}
+    cmp = report.compare_to_baseline(_rep(True, meta=_META), _rep(True, meta=other))
+    assert cmp["comparable"] is False and "models" in cmp["reason"]
+    assert cmp["clean"] is False
+
+
+def test_a_baseline_at_another_k_is_not_comparable():
+    cmp = report.compare_to_baseline(_rep(True, meta=_META), _rep(True, meta={**_META, "k": 10}))
+    assert cmp["comparable"] is False and cmp["reason"].startswith("k differs")
+
+
+def test_meta_on_one_side_only_is_not_comparable():
+    cmp = report.compare_to_baseline(_rep(True, meta=_META), _rep(True))
+    assert cmp["comparable"] is False
+
+
+def test_date_cli_and_revision_differences_do_not_block_comparison():
+    """The plugin revision is the thing under test; date and CLI move on their own."""
+    later = {**_META, "date": "2026-11-01", "cli_versions": ["2.2.0"], "plugin_revision": "def5678"}
+    cmp = report.compare_to_baseline(_rep(True, meta=later), _rep(True, meta=_META))
+    assert cmp["comparable"] is True and cmp["clean"] is True
+
+
+def test_avg_deltas_expose_a_drop_that_pass_fail_hides():
+    base = report.build_report([report.summarize_scenario(
+        {"id": "s1", "gate_mode": "rate", "min_rate": 0.6}, [[det("a", True)]] * 3)])
+    now = report.build_report([report.summarize_scenario(
+        {"id": "s1", "gate_mode": "rate", "min_rate": 0.6},
+        [[det("a", True)], [det("a", True)], [det("a", False)]])])
+    cmp = report.compare_to_baseline(now, base)
+    assert cmp["regressions"] == [] and cmp["avg_deltas"]["s1"] == pytest.approx(-0.3333, abs=1e-3)
+
+
+def test_parse_stream_takes_model_and_version_from_the_init_event():
+    """The --model flag defaults to None, so only the init event says what actually ran."""
+    import json
+    from harness import runner
+    init = {"type": "system", "subtype": "init", "plugins": [{"name": "crucible"}],
+            "model": "claude-opus-5-5", "claude_code_version": "2.1.309"}
+    out = runner._parse_stream(json.dumps(init) + "\n")
+    assert out[-2:] == ("claude-opus-5-5", "2.1.309")
+
+
+def test_develop_fix_cap_reads_the_enforcing_script(tmp_path, monkeypatch):
+    import run_evals
+    monkeypatch.setattr(run_evals, "REPO_ROOT", tmp_path)
+    assert run_evals.develop_fix_cap() == "unbounded"
+    script = tmp_path / "plugins" / "crucible" / "scripts" / "milestone_ledger.py"
+    script.parent.mkdir(parents=True)
+    script.write_text("DEFAULT_FIX_CAP = 3\n", encoding="utf-8")
+    assert run_evals.develop_fix_cap() == "3"
+
+
 # --------------------------------------------------------------------------- auth mode
 # `--bare` decides how the suite authenticates, and getting it wrong is expensive in both
 # directions: omitted in CI the run has no credentials at all, and forced locally it
@@ -420,3 +490,55 @@ def test_cli_advertises_the_flags_ci_invokes_it_with():
     assert p.returncode == 0
     for flag in ("--bare", "--model", "-k"):
         assert flag in p.stdout, f"CI passes {flag} and the CLI does not accept it"
+
+
+def test_parallel_repetitions_report_the_same_k_and_order(monkeypatch):
+    """--jobs must not change what is measured: k runs, each its own fixture, results kept
+    in repetition order, so a parallel run compares cleanly against a serial baseline."""
+    import itertools
+    import threading
+    import run_evals
+    counter = itertools.count()
+    lock = threading.Lock()
+    dirs = []
+
+    def _fake_run_skill(prompt, fixture_dir, plugin_root, **kw):
+        with lock:
+            n = next(counter)
+            dirs.append(str(fixture_dir))
+        return RunResult(plugin_loaded=True, loaded_plugins=["crucible"],
+                         final_text="ok" if n % 2 == 0 else "no", model="m", cli_version="v")
+
+    monkeypatch.setattr(run_evals.runner, "run_skill", _fake_run_skill)
+    scenario = {"id": "x", "fixture": "start_clean", "plugin": "crucible", "prompt": "p",
+                "checks": [{"check": "final_text_matching", "args": {"pattern": "ok"}}]}
+    summary = run_evals.run_scenario(scenario, 6, None, None, jobs=3)
+    assert summary["k"] == 6 and sum(summary["run_pass"]) == 3
+    assert summary["models"] == ["m"] and len(set(dirs)) == 6   # no shared fixture dir
+
+
+def test_file_matching_sees_the_research_the_ledger_actually_wrote(tmp_path):
+    """The research scenario grades the ledger's end state, so its pattern must match what
+    milestone_ledger.py really writes — red before the event exists, green after."""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+    import fixtures
+    repo = fixtures.build("develop_next_milestone", tmp_path / "r")
+    scenario = next(s for s in json.loads(
+        (Path(__file__).resolve().parent.parent / "evals" / "scenarios.json").read_text(
+            encoding="utf-8"))["scenarios"] if s["id"] == "develop/full-milestone-records-its-research")
+    args = next(c["args"] for c in scenario["checks"] if c["check"] == "file_matching")
+    run = RunResult(fixture_path=str(repo))
+    assert scoring.apply_check("file_matching", run, args).passed is False
+    script = Path(__file__).resolve().parent.parent / "plugins" / "crucible" / "scripts" / "milestone_ledger.py"
+    for argv in (["start", "M2"], ["research", "M2", "--note", "csv module docs"]):
+        subprocess.run([sys.executable, str(script), "--repo", str(repo), *argv], check=True,
+                       capture_output=True)
+    assert scoring.apply_check("file_matching", run, args).passed is True
+
+
+def test_file_matching_reports_a_missing_file():
+    ok, detail = scoring.file_matching(RunResult(fixture_path="/nonexistent"), "x/*.json", "a")
+    assert ok is False and "no file matches" in detail

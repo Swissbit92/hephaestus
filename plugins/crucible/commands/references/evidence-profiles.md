@@ -64,10 +64,14 @@ a `pyproject.toml` may configure only the linter:
 | `setup.cfg` | contains `[tool:pytest]` |
 | `tox.ini` | contains `[pytest]` |
 
-Gates: `pytest`, `coverage_delta.py --repo <root>`, plus `ruff check` / `ruff format --check`
-when a ruff config is present, `mypy` when configured, and `pre-commit run --all-files` when
-that config exists (its hook list may extend well beyond the linter already found — check it
-rather than assuming it duplicates).
+Gates: `pytest`, `coverage_delta.py --repo .` (after `cd <root>`), plus — when a ruff config
+is present — lint as a **delta** (`metric_delta.py --metric ruff`: only findings new since the
+branch point fail) and `ruff format --check`, `mypy` when configured, and `pre-commit run
+--all-files` when that config exists (its hook list may extend well beyond the linter already
+found — check it rather than assuming it duplicates). Whenever anything is runnable, one
+repo-wide `metric_delta.py --metric clones` line is added: exact duplicated code new since the
+branch point, language-agnostic. Node lint stays absolute in v1 — the base-side worktree has
+no `node_modules`, so an eslint delta could only ever exit 2.
 
 Coverage thresholds are **read and reported, never imposed**. They differ per project and
 already live inside the project's own test command; re-asserting one from the outside would
