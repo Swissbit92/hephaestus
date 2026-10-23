@@ -101,6 +101,20 @@ It should produce: implementation milestones (ordered), files to create/modify (
 
 **Gate:** present the plan to the user for approval. Do NOT implement without explicit approval.
 
+### Set the fix budget (FULL + LIGHT)
+
+At approval — FULL after this gate, LIGHT at the Phase 0 confirmation — open the milestone
+ledger with the user's words and an estimate per milestone:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/milestone_ledger.py" init --tier FULL \
+  --estimate M1=<minutes> --estimate M2=<minutes> --user-said "<the user's approval, verbatim>"
+```
+
+Each milestone gets 3 fix rounds (every REJECT counts, whatever its cause), 3 setup rounds
+for environment failures, and twice its estimate. Only the user changes these — at plan
+approval, or at a checkpoint.
+
 ### Record the prediction (FULL only)
 
 Once the plan is approved and before implementing, write down what this change is expected
@@ -170,13 +184,17 @@ Keep all branch logic in the skill; this phase only invokes it.
 ## 5. PHASE 3 — IMPLEMENT (all workflows)
 
 1. Break work into 2–5 logical milestones.
-2. Implement one milestone at a time.
-3. After each milestone → immediately run **Phase 4 (QA)**.
-4. Do NOT batch multiple milestones before QA.
+2. Implement one milestone at a time; open each with `milestone_ledger.py start M<n>`.
+3. **FULL: each milestone starts with its own narrow research** — the APIs, libraries and
+   prior art *this* milestone touches — launched in parallel with its first build step,
+   never only after a failure. Record it with `milestone_ledger.py research M<n> --note
+   "<what you looked up, and what it changed>"`; a PASS does not close a FULL milestone
+   without it.
+4. After each milestone → immediately run **Phase 4 (QA)**. Do NOT batch milestones before QA.
 5. Keep the task list current (TaskUpdate).
 
 ### Concurrent agent teams (within a milestone)
-Parallelize when work is independent (different modules, no shared imports; tests vs. implementation in different files). Serialize when files share data structures, changes cascade, or order matters for correctness. Judgment call per task.
+Parallelize when work is independent (different modules, no shared imports; tests vs. implementation in different files). Serialize when files share data structures, changes cascade, or order matters for correctness. Judgment call per task. At most **5** agents at once, milestone research included, unless the user sets another cap: detail is lost in every hand-off, and a small team keeps what it reports checkable.
 
 ### Performance discipline
 Don't write serial loops over independent, expensive units of work when the language/runtime offers real parallelism — use it (process pools, workers, batching), and send shared data to workers once rather than per task. A serial loop over independent CPU-bound work is a code smell — flag it in QA.
@@ -262,9 +280,19 @@ the Phase 4.0 results. Checks (all projects):
 8. Performance check — no new serial loop over independent expensive work where parallelism is feasible.
 9. Claim provenance — no number, benchmark or behavioural claim that arrived from *outside this session* (another agent, another session, a person, a doc) has been written into a test, a constant or a docstring as fact. Received values stay marked as received until derived here, from the source. Pinning one in a test is the worst case: the wrong value acquires a guard, and the guard is what stops the next person questioning it.
 
-**Verdicts:** PASS → proceed to docs, then next milestone. CONDITIONAL PASS → fix minor issues, proceed. REJECT → fix critical issues, re-run QA; do not proceed until PASS.
+**Verdicts go through the ledger.** After every verdict run `milestone_ledger.py record
+M<n> --verdict PASS|CONDITIONAL_PASS|REJECT --kind <the gate that failed>` (`setup` when the
+environment failed, not the change), and before any further fix attempt run `status M<n>`.
+Follow the first line it prints:
 
-Record the test count after each pass.
+- `PROCEED` → REJECT: fix and re-run QA. PASS / CONDITIONAL PASS (minor issues fixed): docs, then the next milestone.
+- `STOP DIAGNOSE` → the same gate failed twice. Find the mechanism — not a third variation of the same idea — and record it with `diagnose M<n> --note`.
+- `STOP CHECKPOINT-ROUNDS|SETUP|TIME` → stop fixing. Ask the user: **ship** the best result so far, **continue** for another budget, or **restart** the milestone from the plan; record the answer with `ship|extend|restart M<n> --user-said "<their words>"`. Never choose for them.
+- `STOP RESEARCH-MISSING` → record the milestone's research before moving on.
+- exit `2` → could not determine; fix the invocation — it is not a pass.
+
+After each verdict give the user one short status line (`milestone_ledger.py report`) and
+carry on: a progress report, not a question. Record the test count after each pass.
 
 ---
 
