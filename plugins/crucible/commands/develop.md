@@ -223,6 +223,12 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/detect_profile.py" --emit-gates   # + --r
 **Run every line it prints**, and treat a non-zero exit from any of them as a QA failure.
 Drop `--emit-gates` for the human-readable report, or add `--json` for the full structure.
 
+Two printed lines are delta gates: `metric_delta.py --metric clones` (duplicated code, always)
+and `--metric ruff` (where ruff is configured). Both compare the *set* of findings at the
+current merge-base with now, so inherited findings never fail a branch and a swapped one
+cannot hide: `0` = nothing new · `1` = **new findings** — each needs a stated reason or a
+fix, otherwise REJECT · `2` = could not determine · `3` = nothing to measure (a SKIP).
+
 Anything the detector calls a *capability* — a browser suite whose config starts no server,
 say — is deliberately **not** printed as runnable; it goes to stderr instead. Running one
 against nothing collects zero tests and exits clean, and zero tests passing is not a pass.

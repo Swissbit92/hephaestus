@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -302,3 +303,58 @@ def test_emitted_gates_carry_no_backslashes(tmp_path):
         # the interpreter token itself is an absolute path on Windows and legitimately
         # contains drive letters, but it is emitted in forward-slash form too
         assert "\\" not in line, f"backslash in emitted gate line: {line!r}"
+
+
+# --------------------------------------------------------------------------- emitted crucible gates
+def test_emitted_crucible_gates_name_a_script_that_exists(tmp_path):
+    """The coverage gate used to be emitted as "$CRUCIBLE_SCRIPTS/coverage_delta.py", a
+    variable nothing set: the line asked Python for "/coverage_delta.py", exited 2, and
+    failed Phase 4.0 for every Python project. Every emitted script path must exist."""
+    _w(tmp_path, "pyproject.toml", "[tool.pytest.ini_options]\n[tool.ruff]\n")
+    _w(tmp_path, "tests/test_a.py", "def test_a():\n    assert True\n")
+    runnable, _ = dp.emit_gates(dp.detect(tmp_path))
+    scripts = re.findall(r'"([^"]+\.py)"', runnable)
+    assert {Path(s).name for s in scripts} >= {"coverage_delta.py", "metric_delta.py"}
+    for s in scripts:
+        assert Path(s).is_absolute() and Path(s).exists(), s
+    assert "$CRUCIBLE_SCRIPTS" not in runnable
+
+
+def test_a_nested_roots_gate_does_not_repeat_its_path(tmp_path):
+    """The line is `cd <root> && ...`; a `--repo <root>` after that doubled the path."""
+    _w(tmp_path, "services/gw/pyproject.toml", "[tool.pytest.ini_options]\n")
+    _w(tmp_path, "services/gw/tests/test_b.py", "def test_b():\n    assert True\n")
+    runnable, _ = dp.emit_gates(dp.detect(tmp_path))
+    cov = next(line for line in runnable.splitlines() if "coverage_delta" in line)
+    assert cov.startswith("cd services/gw && ") and cov.endswith("--repo .")
+
+
+def test_ruff_lint_is_a_delta_gate_not_an_absolute_one(tmp_path):
+    _w(tmp_path, "pyproject.toml", "[tool.ruff]\n[tool.pytest.ini_options]\n")
+    gates = {g["name"]: g["cmd"] for g in dp._python_profile(tmp_path, "")["gates"]}
+    assert "metric_delta.py" in gates["lint"] and "--metric ruff" in gates["lint"]
+
+
+def test_the_clones_gate_is_emitted_once_at_the_root(tmp_path):
+    _w(tmp_path, "pyproject.toml", "[tool.pytest.ini_options]\n")
+    _w(tmp_path, "tests/test_a.py", "def test_a():\n    assert True\n")
+    _w(tmp_path, "services/gw/pyproject.toml", "[tool.pytest.ini_options]\n")
+    _w(tmp_path, "services/gw/tests/test_b.py", "def test_b():\n    assert True\n")
+    runnable, _ = dp.emit_gates(dp.detect(tmp_path))
+    clones = [line for line in runnable.splitlines() if "--metric clones" in line]
+    assert len(clones) == 1 and not clones[0].startswith("cd ")
+
+
+def test_the_emitted_clones_gate_actually_runs(tmp_path):
+    """Run the emitted line through a shell, as develop does — the defect above was only
+    ever visible by executing the line, never by reading it."""
+    sys.path.insert(0, str(REPO_ROOT / "evals"))
+    import fixtures
+    repo = fixtures.build("develop_pasted_function", tmp_path / "r")
+    runnable, _ = dp.emit_gates(dp.detect(repo))
+    line = next(x for x in runnable.splitlines() if "--metric clones" in x)
+    line = line.replace(dp.python_token(), f'"{Path(sys.executable).as_posix()}"', 1)
+    p = subprocess.run(line, shell=True, cwd=repo, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", timeout=300)
+    assert p.returncode == 1, p.stdout + p.stderr   # the fixture's paste is found
+    assert "receipt.py" in p.stdout

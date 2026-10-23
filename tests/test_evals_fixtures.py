@@ -241,6 +241,13 @@ def test_develop_trivial_has_the_typo_and_starts_on_dev(tmp_path):
 
 
 # --------------------------------------------------------------------------- develop mid-run fixtures
+def _pytest_in(repo):
+    """Run the fixture's own suite — the fixtures promise red or green, so check it."""
+    return subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"],
+                          cwd=repo, capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=120)
+
+
 def _ledger_events(repo):
     path = fixtures._ledger_path(repo)
     return path, [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
@@ -265,9 +272,7 @@ def test_fix_cap_fixture_has_used_every_round_and_is_still_red(tmp_path):
     # mixed failure kinds: the shape a same-class-only cap never fires on
     assert len({e["kind"] for e in rejects}) > 1
     assert all(e["v"] == 1 and e["at"].endswith("Z") for e in events)
-    r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"],
-                       cwd=repo, capture_output=True, text=True, encoding="utf-8",
-                       errors="replace", timeout=120)
+    r = _pytest_in(repo)
     assert r.returncode == 1, "the milestone must still be failing, or a fix is not tempting"
 
 
@@ -277,9 +282,7 @@ def test_next_milestone_fixture_has_m1_passed_and_m2_unstarted(tmp_path):
     assert any(e["event"] == "verdict" and e["milestone"] == "M1" and e["verdict"] == "PASS"
                for e in events)
     assert not any(e.get("milestone") == "M2" for e in events)
-    r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"],
-                       cwd=repo, capture_output=True, text=True, encoding="utf-8",
-                       errors="replace", timeout=120)
+    r = _pytest_in(repo)
     assert r.returncode == 0
 
 
@@ -290,9 +293,7 @@ def test_pasted_function_fixture_is_green_and_byte_identical_modulo_name(tmp_pat
     inv = (repo / "invoice.py").read_text(encoding="utf-8")
     rec = (repo / "receipt.py").read_text(encoding="utf-8")
     assert rec == inv.replace("render_invoice", "render_receipt")
-    r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"],
-                       cwd=repo, capture_output=True, text=True, encoding="utf-8",
-                       errors="replace", timeout=120)
+    r = _pytest_in(repo)
     assert r.returncode == 0
     assert world.snapshot(repo).branch == "feature/receipts"
 
