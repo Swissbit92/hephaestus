@@ -364,6 +364,76 @@ def test_freeze_and_compare_baseline(tmp_path):
     assert cmp["regressions"] == ["s1"] and cmp["clean"] is False
 
 
+def _rep(passed: bool, meta=None, runs=1):
+    s = report.summarize_scenario({"id": "s1", "gate_mode": "all"}, [[det("a", passed)]] * runs)
+    return report.build_report([s], meta=meta)
+
+
+_META = {"k": 3, "models": ["claude-opus-5-5"], "date": "2026-10-23",
+         "cli_versions": ["2.1.309"], "plugin_revision": "abc1234", "develop_fix_cap": "unbounded"}
+
+
+def test_meta_is_recorded_only_when_given():
+    assert "meta" not in _rep(True)
+    assert _rep(True, meta=_META)["meta"]["develop_fix_cap"] == "unbounded"
+
+
+def test_a_baseline_from_another_model_is_not_comparable():
+    """Pass rates measured on two models are two experiments. Comparing them would report a
+    model change as a skill regression (or hide one behind a model upgrade)."""
+    other = {**_META, "models": ["claude-haiku-4-5"]}
+    cmp = report.compare_to_baseline(_rep(True, meta=_META), _rep(True, meta=other))
+    assert cmp["comparable"] is False and "models" in cmp["reason"]
+    assert cmp["clean"] is False
+
+
+def test_a_baseline_at_another_k_is_not_comparable():
+    cmp = report.compare_to_baseline(_rep(True, meta=_META), _rep(True, meta={**_META, "k": 10}))
+    assert cmp["comparable"] is False and cmp["reason"].startswith("k differs")
+
+
+def test_meta_on_one_side_only_is_not_comparable():
+    cmp = report.compare_to_baseline(_rep(True, meta=_META), _rep(True))
+    assert cmp["comparable"] is False
+
+
+def test_date_cli_and_revision_differences_do_not_block_comparison():
+    """The plugin revision is the thing under test; date and CLI move on their own."""
+    later = {**_META, "date": "2026-11-01", "cli_versions": ["2.2.0"], "plugin_revision": "def5678"}
+    cmp = report.compare_to_baseline(_rep(True, meta=later), _rep(True, meta=_META))
+    assert cmp["comparable"] is True and cmp["clean"] is True
+
+
+def test_avg_deltas_expose_a_drop_that_pass_fail_hides():
+    base = report.build_report([report.summarize_scenario(
+        {"id": "s1", "gate_mode": "rate", "min_rate": 0.6}, [[det("a", True)]] * 3)])
+    now = report.build_report([report.summarize_scenario(
+        {"id": "s1", "gate_mode": "rate", "min_rate": 0.6},
+        [[det("a", True)], [det("a", True)], [det("a", False)]])])
+    cmp = report.compare_to_baseline(now, base)
+    assert cmp["regressions"] == [] and cmp["avg_deltas"]["s1"] == pytest.approx(-0.3333, abs=1e-3)
+
+
+def test_parse_stream_takes_model_and_version_from_the_init_event():
+    """The --model flag defaults to None, so only the init event says what actually ran."""
+    import json
+    from harness import runner
+    init = {"type": "system", "subtype": "init", "plugins": [{"name": "crucible"}],
+            "model": "claude-opus-5-5", "claude_code_version": "2.1.309"}
+    out = runner._parse_stream(json.dumps(init) + "\n")
+    assert out[-2:] == ("claude-opus-5-5", "2.1.309")
+
+
+def test_develop_fix_cap_reads_the_enforcing_script(tmp_path, monkeypatch):
+    import run_evals
+    monkeypatch.setattr(run_evals, "REPO_ROOT", tmp_path)
+    assert run_evals.develop_fix_cap() == "unbounded"
+    script = tmp_path / "plugins" / "crucible" / "scripts" / "milestone_ledger.py"
+    script.parent.mkdir(parents=True)
+    script.write_text("DEFAULT_FIX_CAP = 3\n", encoding="utf-8")
+    assert run_evals.develop_fix_cap() == "3"
+
+
 # --------------------------------------------------------------------------- auth mode
 # `--bare` decides how the suite authenticates, and getting it wrong is expensive in both
 # directions: omitted in CI the run has no credentials at all, and forced locally it

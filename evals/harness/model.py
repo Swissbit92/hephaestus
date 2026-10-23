@@ -48,6 +48,10 @@ class RunResult:
     final_text: str = ""
     exit_ok: bool = True
     fixture_path: str = ""   # the run's working dir, for checks that read file content
+    # What actually ran, from the CLI's init event — not the --model flag, which defaults
+    # to None and so says nothing about the model a baseline was frozen against.
+    model: str = ""
+    cli_version: str = ""
     before: WorldSnapshot | None = None
     after: WorldSnapshot | None = None
 

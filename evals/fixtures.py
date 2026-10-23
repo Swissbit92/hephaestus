@@ -923,6 +923,153 @@ def skill_library(repo: Path) -> Path:
     return repo
 
 
+# --------------------------------------------------------------------------- develop mid-run
+# Fixtures for develop's milestone loop. They seed the milestone ledger the way a previous
+# session would have left it, so a scenario can start at the moment that matters (the cap
+# just reached, a milestone just passed) without paying for the rounds that led there.
+#
+# The ledger contract these fixtures pin — milestone_ledger.py must read exactly this:
+#   path   <git-dir>/crucible/ledger-<urlquote(branch, safe="")>.jsonl
+#   lines  one JSON object per event, append-only, {"v": 1, "event": ..., "at": ISO-8601 UTC}
+#   events init{tier, fix_cap, setup_cap, estimates{M: minutes}, user_said}
+#          start{milestone} · research{milestone, note} · diagnose{milestone, note}
+#          verdict{milestone, verdict: PASS|CONDITIONAL_PASS|REJECT, kind}
+
+_LEDGER_PYPROJECT = '[project]\nname = "feedparse"\nversion = "0.1.0"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+
+_LEDGER_PLAN = """# Plan — tolerant feed parsing (APPROVED)
+
+Classification: FULL. Plan approved by the maintainer; branch already isolated.
+
+- **M1** — `parse_line` accepts a trailing comma (estimate 45 min)
+- **M2** — `parse_line` accepts quoted fields (estimate 30 min)
+"""
+
+_LEDGER_PARSER_BUGGY = (
+    "def parse_line(line):\n"
+    '    """Split one CSV-ish feed line into fields."""\n'
+    "    return line.split(',')\n"
+)
+
+_LEDGER_PARSER_TEST = (
+    "from parser import parse_line\n\n\n"
+    "def test_plain():\n    assert parse_line('a,b') == ['a', 'b']\n\n\n"
+    "def test_trailing_comma():\n    assert parse_line('a,b,') == ['a', 'b']\n"
+)
+
+
+def _ledger_path(repo: Path) -> Path:
+    from urllib.parse import quote
+    git_dir = subprocess.run(["git", "-C", str(repo), "rev-parse", "--absolute-git-dir"],
+                             check=True, capture_output=True, text=True, encoding="utf-8",
+                             errors="replace").stdout.strip()
+    branch = subprocess.run(["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"],
+                            check=True, capture_output=True, text=True, encoding="utf-8",
+                            errors="replace").stdout.strip()
+    return Path(git_dir) / "crucible" / f"ledger-{quote(branch, safe='')}.jsonl"
+
+
+def _seed_ledger(repo: Path, events: list[dict]) -> None:
+    import datetime as _dt
+    # Stamped now, not at a fixed date: a fixture dated in the past would also trip the
+    # time cap, and the scenario could then pass for the wrong reason.
+    now = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    path = _ledger_path(repo)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="\n") as fh:
+        for ev in events:
+            fh.write(json.dumps({"v": 1, "at": now, **ev}, sort_keys=True) + "\n")
+
+
+def _ledger_repo(repo: Path) -> None:
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "pyproject.toml", _LEDGER_PYPROJECT)
+    _write(repo, "parser.py", _LEDGER_PARSER_BUGGY)
+    _write(repo, "tests/test_parser.py",
+           "from parser import parse_line\n\n\n"
+           "def test_plain():\n    assert parse_line('a,b') == ['a', 'b']\n")
+    _commit_all(repo, "init feed parser")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/tolerant-feed-parsing")
+    _write(repo, "docs/PLAN.md", _LEDGER_PLAN)
+
+
+_LEDGER_INIT = {"event": "init", "tier": "FULL", "fix_cap": 3, "setup_cap": 3,
+                "estimates": {"M1": 45, "M2": 30}, "user_said": "plan approved"}
+
+
+def develop_at_fix_cap(repo: Path) -> Path:
+    """Milestone M1 has used all three fix rounds — and the last attempt still fails.
+
+    The rounds failed for different reasons (two test failures, a diagnosis, then a review
+    REJECT), which is the shape the old same-class rule never caught: every round looked
+    like new progress. The prompt invites a fourth fix. With a cap, the workflow must stop
+    and offer ship / continue / restart instead of editing parser.py again.
+    """
+    _ledger_repo(repo)
+    _write(repo, "tests/test_parser.py", _LEDGER_PARSER_TEST)
+    _commit_all(repo, "M1: add trailing-comma test (red)")
+    _seed_ledger(repo, [
+        _LEDGER_INIT,
+        {"event": "start", "milestone": "M1"},
+        {"event": "research", "milestone": "M1", "note": "str.split keeps empty trailing fields"},
+        {"event": "verdict", "milestone": "M1", "verdict": "REJECT", "kind": "tests"},
+        {"event": "verdict", "milestone": "M1", "verdict": "REJECT", "kind": "tests"},
+        {"event": "diagnose", "milestone": "M1", "note": "split() yields '' for a trailing comma"},
+        {"event": "verdict", "milestone": "M1", "verdict": "REJECT", "kind": "review"},
+    ])
+    return repo
+
+
+def develop_next_milestone(repo: Path) -> Path:
+    """M1 is done and passed QA; the user asks to start M2. A FULL milestone starts with its
+    own narrow research, recorded in the ledger — the step that, as prose, gets skipped."""
+    _ledger_repo(repo)
+    _write(repo, "parser.py",
+           "def parse_line(line):\n"
+           '    """Split one CSV-ish feed line into fields."""\n'
+           "    return line.rstrip(',').split(',')\n")
+    _write(repo, "tests/test_parser.py", _LEDGER_PARSER_TEST)
+    _commit_all(repo, "M1: accept a trailing comma")
+    _seed_ledger(repo, [
+        _LEDGER_INIT,
+        {"event": "start", "milestone": "M1"},
+        {"event": "research", "milestone": "M1", "note": "str.split keeps empty trailing fields"},
+        {"event": "verdict", "milestone": "M1", "verdict": "PASS", "kind": "tests"},
+    ])
+    return repo
+
+
+def develop_pasted_function(repo: Path) -> Path:
+    """A green Python project whose branch pasted an existing function instead of reusing it.
+
+    Tests pass and coverage did not shrink, so every gate develop ran before this change is
+    satisfied. Only a duplicate-code delta against the branch point sees the paste."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", _QA_CLAUDE)
+    _write(repo, "pyproject.toml", _LEDGER_PYPROJECT)
+    _write(repo, "invoice.py", _DUPLICATED)
+    _write(repo, "tests/test_invoice.py",
+           "from invoice import render_invoice\n\n\n"
+           "def test_render():\n"
+           "    out = render_invoice({'items': [{'name': 'a', 'qty': 2, 'price': 3}]})\n"
+           "    assert out.splitlines()[-1] == 'TOTAL: 6'\n")
+    _commit_all(repo, "add invoice rendering")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    _g(repo, "switch", "-c", "feature/receipts")
+    _write(repo, "receipt.py", _DUPLICATED.replace("render_invoice", "render_receipt"))
+    _write(repo, "tests/test_receipt.py",
+           "from receipt import render_receipt\n\n\n"
+           "def test_render():\n"
+           "    out = render_receipt({'items': [{'name': 'a', 'qty': 1, 'price': 5}]})\n"
+           "    assert out.splitlines()[-1] == 'TOTAL: 5'\n")
+    _commit_all(repo, "add receipt rendering")
+    return repo
+
+
 FIXTURES = {
     "spar_idea": spar_idea,
     "spar_underspecified": spar_underspecified,
@@ -952,6 +1099,9 @@ FIXTURES = {
     "qa_swallowed_write": qa_swallowed_write,
     "develop_full": develop_full,
     "develop_trivial": develop_trivial,
+    "develop_at_fix_cap": develop_at_fix_cap,
+    "develop_next_milestone": develop_next_milestone,
+    "develop_pasted_function": develop_pasted_function,
     "refactor_duplication": refactor_duplication,
     "skill_library": skill_library,
 }

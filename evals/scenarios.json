@@ -341,6 +341,83 @@
       ]
     },
     {
+      "id": "develop/stops-at-the-fix-cap",
+      "skill": "develop",
+      "plugin": "crucible",
+      "fixture": "develop_at_fix_cap",
+      "prompt": "/crucible:develop We are mid-run on the approved plan in docs/PLAN.md (classification FULL, plan approved, branch already isolated). Milestone M1 just got another QA REJECT: tests/test_parser.py still fails. Fix it and re-run QA.",
+      "kind": "capability",
+      "gate_mode": "rate",
+      "min_rate": 0.8,
+      "timeout": 600,
+      "checks": [
+        {
+          "check": "file_unchanged",
+          "args": {
+            "path": "parser.py"
+          }
+        },
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "(?is)\\bship\\b.*\\brestart\\b|\\brestart\\b.*\\bship\\b"
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "develop/full-milestone-records-its-research",
+      "skill": "develop",
+      "plugin": "crucible",
+      "fixture": "develop_next_milestone",
+      "prompt": "/crucible:develop We are mid-run on the approved plan in docs/PLAN.md (classification FULL, plan approved, branch already isolated). M1 passed QA. Start milestone M2.",
+      "kind": "capability",
+      "gate_mode": "rate",
+      "min_rate": 0.9,
+      "timeout": 600,
+      "checks": [
+        {
+          "check": "bash_matching",
+          "args": {
+            "pattern": "milestone_ledger\\.py\"?\\s+research"
+          }
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "develop/phase4-runs-the-delta-gates",
+      "skill": "develop",
+      "plugin": "crucible",
+      "fixture": "develop_pasted_function",
+      "prompt": "/crucible:develop I just finished adding receipt rendering on this branch. Run the Phase 4 QA gate on it and tell me whether it is good to merge.",
+      "kind": "capability",
+      "gate_mode": "rate",
+      "min_rate": 0.9,
+      "checks": [
+        {
+          "check": "bash_matching",
+          "args": {
+            "pattern": "metric_delta\\.py"
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
       "id": "qa-gatekeeper/rejects-vacuous-assertion",
       "skill": "qa-gatekeeper",
       "plugin": "crucible",

@@ -15,7 +15,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -64,6 +66,8 @@ def make_cli_judge(model: str):
 def run_scenario(scenario: dict, k: int, model: str | None, judge_fn, bare=False) -> dict:
     plugin_root = REPO_ROOT / "plugins" / scenario["plugin"]
     runs: list[list[Criterion]] = []
+    models: set[str] = set()
+    cli_versions: set[str] = set()
     for i in range(k):
         with tempfile.TemporaryDirectory(prefix="eval-") as td:
             fixture_dir = fixtures.build(scenario["fixture"], Path(td) / "repo")
@@ -80,6 +84,10 @@ def run_scenario(scenario: dict, k: int, model: str | None, judge_fn, bare=False
                 timeout=scenario.get("timeout", runner.DEFAULT_TIMEOUT),
                 bare=bare,
             )
+            if run.model:
+                models.add(run.model)
+            if run.cli_version:
+                cli_versions.add(run.cli_version)
             target_loaded = scenario["plugin"] in run.loaded_plugins
             criteria: list[Criterion] = [
                 Criterion("plugin_loaded", "deterministic", target_loaded,
@@ -92,12 +100,56 @@ def run_scenario(scenario: dict, k: int, model: str | None, judge_fn, bare=False
                     criteria.append(judge_mod.judge_criterion(
                         jc["key"], jc["criterion"], jc["rubric"], run.final_text, judge_fn))
             runs.append(criteria)
-    return report_mod.summarize_scenario(scenario, runs)
+    summary = report_mod.summarize_scenario(scenario, runs)
+    summary["models"] = sorted(models)
+    summary["cli_versions"] = sorted(cli_versions)
+    return summary
+
+
+def develop_fix_cap() -> str:
+    """The fix-round cap develop enforces at this plugin revision, read from the script that
+    enforces it — not restated here, where it could drift. "unbounded" before the ledger
+    existed: a baseline frozen then measured a workflow with no cap at all, and saying so
+    is what makes a later comparison honest about what changed."""
+    ledger = REPO_ROOT / "plugins" / "crucible" / "scripts" / "milestone_ledger.py"
+    if not ledger.exists():
+        return "unbounded"
+    m = re.search(r"^DEFAULT_FIX_CAP\s*=\s*(\d+)", ledger.read_text(encoding="utf-8"), re.M)
+    return m.group(1) if m else "unknown"
+
+
+def plugin_revision() -> str:
+    """HEAD plus a dirty marker for plugins/: the run measures the working tree, so a clean
+    sha alone would misattribute numbers taken on uncommitted plugin edits."""
+    def _git(*a: str) -> str:
+        try:
+            r = subprocess.run(["git", "-C", str(REPO_ROOT), *a], capture_output=True,
+                               text=True, encoding="utf-8", errors="replace", timeout=30)
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+        return r.stdout.strip() if r.returncode == 0 else ""
+    sha = _git("rev-parse", "--short", "HEAD") or "unknown"
+    dirty = bool(_git("status", "--porcelain", "--", "plugins"))
+    return f"{sha}{'+dirty' if dirty else ''}"
+
+
+def build_meta(summaries: list[dict], k: int) -> dict:
+    models = sorted({m for s in summaries for m in s.get("models", [])})
+    versions = sorted({v for s in summaries for v in s.get("cli_versions", [])})
+    return {
+        "date": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d"),
+        "k": k,
+        "models": models,
+        "cli_versions": versions,
+        "plugin_revision": plugin_revision(),
+        "develop_fix_cap": develop_fix_cap(),
+    }
 
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Run the hephaestus skill-eval suite")
-    ap.add_argument("--scenario", help="run only this scenario id (default: all)")
+    ap.add_argument("--scenario", action="append",
+                    help="run only this scenario id; repeat for several (default: all)")
     ap.add_argument("-k", type=int, default=3, help="runs per scenario (pass^k); default 3")
     ap.add_argument("--model", help="pin the model under test (e.g. claude-sonnet-4-6)")
     ap.add_argument("--bare", action="store_true",
@@ -115,10 +167,12 @@ def main(argv: list[str]) -> int:
 
     scenarios = json.loads((HERE / "scenarios.json").read_text(encoding="utf-8"))["scenarios"]
     if args.scenario:
-        scenarios = [s for s in scenarios if s["id"] == args.scenario]
-        if not scenarios:
-            print(f"error: no scenario id {args.scenario!r}", file=sys.stderr)
+        known = {s["id"] for s in scenarios}
+        missing = [sid for sid in args.scenario if sid not in known]
+        if missing:
+            print(f"error: no scenario id {missing[0]!r}", file=sys.stderr)
             return 2
+        scenarios = [s for s in scenarios if s["id"] in args.scenario]
 
     judge_fn = make_cli_judge(judge_mod.JUDGE_MODEL) if args.judge else None
 
@@ -135,8 +189,9 @@ def main(argv: list[str]) -> int:
                     print(f"      ✘ {name}: {c['passes']}/{c['n']} — {c['last_detail']}")
         summaries.append(summary)
 
-    report = report_mod.build_report(summaries)
+    report = report_mod.build_report(summaries, meta=build_meta(summaries, args.k))
     print(f"\nSuite: {report['scenarios_passed']}/{report['scenarios_total']} scenarios passed")
+    print(f"meta: {json.dumps(report['meta'], sort_keys=True)}")
 
     if args.json:
         report_mod.freeze_baseline(report, args.json)
@@ -146,7 +201,12 @@ def main(argv: list[str]) -> int:
         bpath = Path(args.baseline)
         if bpath.exists():
             cmp = report_mod.compare_to_baseline(report, json.loads(bpath.read_text(encoding="utf-8")))
+            if not cmp["comparable"]:
+                print(f"cannot compare to baseline: {cmp['reason']} — this is not a pass",
+                      file=sys.stderr)
+                return 2
             print(f"vs baseline: regressions={cmp['regressions']} improvements={cmp['improvements']} new={cmp['new']}")
+            print(f"avg@k deltas: {json.dumps(cmp['avg_deltas'], sort_keys=True)}")
         else:
             report_mod.freeze_baseline(report, bpath)
             print(f"baseline frozen to {bpath}")
