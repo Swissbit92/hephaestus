@@ -64,6 +64,10 @@ or mutates a shared service must be **serialised — one worktree at a time**. T
 failure that looks like a bug in the code rather than a bug in the setup, because both
 worktrees are individually correct.
 
+**Never link production data into a worktree.** A symlinked `data/` directory or database
+file turns the isolated tree's test run into a write to the real thing. When a change needs
+real input, copy a small read-only sample to a git-ignored path.
+
 Two mechanics worth stating before they bite:
 
 - **One branch can be checked out in only one worktree.** That is why parallel work forks

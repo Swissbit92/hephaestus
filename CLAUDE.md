@@ -181,7 +181,9 @@ hephaestus/
     │   ├── skills/{cms,spar-with-me,grill-me,start-branch,sync-branch,finish-branch,skill-craft,eval-first,flag-gate,loop-harness,act-for-real,repo-audit,refactor-audit}/
     │   │                             # cms/assets/ holds the renderer's CSS+JS as real
     │   │                             # files; cms/scripts/render_layout.py is the pure geometry
-    │   ├── scripts/                 # detect_profile · evidence_gate · coverage_delta · invariants_run · new_skill · skill_lint (+ hook) · predictions
+    │   ├── scripts/                 # detect_profile · evidence_gate · coverage_delta · metric_delta · mutation_probe ·
+    │   │                            # milestone_ledger · invariants_run · new_skill · skill_lint (+ hook) · predictions ·
+    │   │                            # crucible_common (shared helpers — import it, don't copy)
     │   ├── commands/{develop,curate}.md
     │   └── agents/qa-gatekeeper.md
     ├── forge-unity/             # Unity evidence + adapter contract (engine-specific, operator-free)

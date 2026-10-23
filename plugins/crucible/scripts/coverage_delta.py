@@ -22,72 +22,23 @@ from __future__ import annotations
 import argparse
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-DEFAULT_TARGETS = ("dev", "main", "master", "trunk")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-
-def _utf8_stdio() -> None:
-    """Force UTF-8 on the streams this script writes to.
-
-    Windows consoles default to a legacy codepage (commonly cp1252), so a single em-dash
-    or check-mark in otherwise successful output raises UnicodeEncodeError *after* the
-    work is done — turning a passing gate into exit 1, which reads as a real failure.
-    Reconfiguring is a no-op on platforms that are already UTF-8.
-    """
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
-        except (AttributeError, ValueError):
-            pass  # a detached or captured stream (pytest); nothing to reconfigure
-
-
-def python_exe() -> str:
-    """The interpreter to re-invoke for collection.
-
-    Never the literal "python3": that name does not exist on Windows (where the only
-    `python3` on PATH is usually the Microsoft Store stub, which prints an ad and
-    collects nothing — indistinguishable here from "every test was deleted"). It also
-    pins collection to the *same* interpreter running this script, so a venv's pytest
-    is not silently swapped for the system one.
-    """
-    return sys.executable or shutil.which("python3") or shutil.which("python") or "python3"
-
-
-def _run(cmd: list[str], cwd: Path, timeout: int = 300) -> tuple[int, str]:
-    try:
-        # encoding is pinned rather than left to the locale: with text=True alone, Windows
-        # decodes via locale.getpreferredencoding() (commonly cp1252), and a single non-ASCII
-        # byte in a test id or traceback then raises or mojibakes mid-parse.
-        p = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=timeout)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        return 127, f"{type(e).__name__}: {e}"
-    return p.returncode, (p.stdout or "") + (p.stderr or "")
-
-
-def git_branches(repo: Path) -> list[str]:
-    rc, out = _run(["git", "branch", "--format=%(refname:short)"], repo)
-    return [b.strip() for b in out.splitlines() if b.strip()] if rc == 0 else []
-
-
-def detect_target(repo: Path, preferred: str | None = None) -> str | None:
-    """The long-lived branch this work integrates into."""
-    branches = set(git_branches(repo))
-    if preferred:
-        return preferred if preferred in branches else None
-    for name in DEFAULT_TARGETS:
-        if name in branches:
-            return name
-    return None
-
-
-def merge_base(repo: Path, target: str) -> str | None:
-    rc, out = _run(["git", "merge-base", "HEAD", target], repo)
-    return out.strip() if rc == 0 and out.strip() else None
+# Shared with every gate script: one copy of the encoding, interpreter and branch-point
+# lessons, not one per file. detect_target now prefers the integration target
+# start-branch recorded in git config over the name heuristic.
+from crucible_common import (  # noqa: E402
+    DEFAULT_TARGETS,
+    detect_target,
+    merge_base,
+    python_exe,
+    utf8_stdio as _utf8_stdio,
+)
+from crucible_common import run as _run  # noqa: E402
 
 
 def detect_collect_cmd(repo: Path) -> list[str] | None:

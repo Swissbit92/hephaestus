@@ -8,4 +8,7 @@ exec "$PY" -m pytest -q -o addopts= \
   tests/test_detect_profile.py::test_exit_2_on_malformed_manifest \
   tests/test_detect_profile.py::test_exit_3_when_no_markers_and_it_says_so \
   tests/test_invariants_run.py::test_exit_2_when_the_check_path_is_missing \
-  tests/test_invariants_run.py::test_exit_3_when_stated_but_never_wired
+  tests/test_invariants_run.py::test_exit_3_when_stated_but_never_wired \
+  tests/test_milestone_ledger.py::test_exit_2_when_there_is_no_ledger \
+  tests/test_milestone_ledger.py::test_exit_2_on_detached_head \
+  tests/test_milestone_ledger.py::test_exit_2_for_an_unreadable_ledger

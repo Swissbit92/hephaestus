@@ -240,6 +240,64 @@ def test_develop_trivial_has_the_typo_and_starts_on_dev(tmp_path):
     assert snap.dirty is False
 
 
+# --------------------------------------------------------------------------- develop mid-run fixtures
+def _pytest_in(repo):
+    """Run the fixture's own suite — the fixtures promise red or green, so check it."""
+    return subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"],
+                          cwd=repo, capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=120)
+
+
+def _ledger_events(repo):
+    path = fixtures._ledger_path(repo)
+    return path, [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def test_ledger_lives_in_the_git_dir_keyed_by_branch(tmp_path):
+    """Branch-local and never committed: a ledger in the work tree would land in the diff,
+    and one not keyed by branch would be shared by every branch of a plain checkout."""
+    repo = fixtures.build("develop_at_fix_cap", tmp_path / "r")
+    path, _ = _ledger_events(repo)
+    assert path.parent == repo / ".git" / "crucible"
+    assert path.name == "ledger-feature%2Ftolerant-feed-parsing.jsonl"
+    assert world.snapshot(repo).dirty is False
+
+
+def test_fix_cap_fixture_has_used_every_round_and_is_still_red(tmp_path):
+    repo = fixtures.build("develop_at_fix_cap", tmp_path / "r")
+    _, events = _ledger_events(repo)
+    rejects = [e for e in events if e["event"] == "verdict" and e["verdict"] == "REJECT"]
+    init = events[0]
+    assert init["event"] == "init" and len(rejects) == init["fix_cap"] == 3
+    # mixed failure kinds: the shape a same-class-only cap never fires on
+    assert len({e["kind"] for e in rejects}) > 1
+    assert all(e["v"] == 1 and e["at"].endswith("Z") for e in events)
+    r = _pytest_in(repo)
+    assert r.returncode == 1, "the milestone must still be failing, or a fix is not tempting"
+
+
+def test_next_milestone_fixture_has_m1_passed_and_m2_unstarted(tmp_path):
+    repo = fixtures.build("develop_next_milestone", tmp_path / "r")
+    _, events = _ledger_events(repo)
+    assert any(e["event"] == "verdict" and e["milestone"] == "M1" and e["verdict"] == "PASS"
+               for e in events)
+    assert not any(e.get("milestone") == "M2" for e in events)
+    r = _pytest_in(repo)
+    assert r.returncode == 0
+
+
+def test_pasted_function_fixture_is_green_and_byte_identical_modulo_name(tmp_path):
+    """The paste must be invisible to every gate that existed before the delta gate — green
+    suite, no test removed — or the scenario cannot show what the new gate adds."""
+    repo = fixtures.build("develop_pasted_function", tmp_path / "r")
+    inv = (repo / "invoice.py").read_text(encoding="utf-8")
+    rec = (repo / "receipt.py").read_text(encoding="utf-8")
+    assert rec == inv.replace("render_invoice", "render_receipt")
+    r = _pytest_in(repo)
+    assert r.returncode == 0
+    assert world.snapshot(repo).branch == "feature/receipts"
+
+
 # --------------------------------------------------------------------------- scenarios.json integrity
 def _load_scenarios():
     return json.loads(SCENARIOS.read_text(encoding="utf-8"))["scenarios"]

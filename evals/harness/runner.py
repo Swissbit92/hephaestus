@@ -36,9 +36,9 @@ def _result_text(block: dict) -> str:
 
 
 def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[ToolCall],
-                                        list[ToolResult], str]:
+                                        list[ToolResult], str, str, str]:
     """Parse `--output-format stream-json` lines into (any_plugin_loaded, loaded_plugin_names,
-    skills, errors, tool_calls, tool_results, final_text).
+    skills, errors, tool_calls, tool_results, final_text, model, cli_version).
 
     Tool *results* arrive on `user` events and are matched back to the tool that produced them
     via tool_use_id. For an Agent/Task call that is the subagent's own output — what to assert
@@ -52,6 +52,8 @@ def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[T
     tool_results: list[ToolResult] = []
     id_to_name: dict[str, str] = {}
     final_text = ""
+    model = ""
+    cli_version = ""
     for line in stdout.splitlines():
         line = line.strip()
         if not line:
@@ -67,6 +69,8 @@ def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[T
             plugins = ev.get("plugins", []) or []
             loaded_plugins = [p.get("name", "") if isinstance(p, dict) else str(p) for p in plugins]
             plugin_loaded = bool(plugins) and not errors
+            model = str(ev.get("model", "") or "")
+            cli_version = str(ev.get("claude_code_version", "") or "")
         elif t == "assistant":
             for block in (ev.get("message", {}).get("content", []) or []):
                 if isinstance(block, dict) and block.get("type") == "tool_use":
@@ -80,7 +84,8 @@ def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[T
                     tool_results.append(ToolResult(name=name, text=_result_text(block)))
         elif t == "result":
             final_text = ev.get("result", "") or final_text
-    return plugin_loaded, loaded_plugins, skills, errors, tool_calls, tool_results, final_text
+    return (plugin_loaded, loaded_plugins, skills, errors, tool_calls, tool_results, final_text,
+            model, cli_version)
 
 
 def run_skill(
@@ -133,12 +138,13 @@ def run_skill(
         exit_ok = False
 
     (plugin_loaded, loaded_plugins, skills, errors,
-     tool_calls, tool_results, final_text) = _parse_stream(stdout)
+     tool_calls, tool_results, final_text, model_seen, cli_version) = _parse_stream(stdout)
     after = world.snapshot(fixture_dir)
 
     return RunResult(
         plugin_loaded=plugin_loaded, loaded_plugins=loaded_plugins, skills=skills,
         plugin_errors=errors, tool_calls=tool_calls, tool_results=tool_results,
         final_text=final_text,
-        exit_ok=exit_ok, fixture_path=str(fixture_dir), before=before, after=after,
+        exit_ok=exit_ok, fixture_path=str(fixture_dir),
+        model=model_seen, cli_version=cli_version, before=before, after=after,
     )

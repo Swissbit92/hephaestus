@@ -40,7 +40,15 @@ python3 evals/run_evals.py --judge                                 # enable LLM-
 ```
 
 Exit code is `0` if the suite gate passes, `1` if any scenario fails, `2` on setup error
-(e.g. no `claude` CLI).
+(e.g. no `claude` CLI) **or a baseline measured under different conditions**.
+
+`--scenario` repeats (`--scenario a --scenario b`). Every report carries a `meta` block:
+the date, `k`, the models and CLI versions the runs *reported* (not the `--model` flag,
+which defaults to nothing), the plugin revision (`+dirty` when `plugins/` has uncommitted
+edits) and the develop fix cap in force, read from `milestone_ledger.py`. A comparison
+whose `k` or models differ from the baseline's exits 2 — two pass rates taken on different
+models are two experiments. The output also prints each scenario's avg@k delta, which
+pass/fail hides: a rate-gated scenario can drop from 1.0 to 0.67 and still pass.
 
 ### What this harness cannot test
 
@@ -185,6 +193,9 @@ Each entry in `scenarios.json` is a falsifiable behavioral claim:
 | develop/full-no-implement-without-approval | a blast-radius change is not implemented before plan approval |
 | develop/trivial-skips-branch-ceremony | a typo fix lands without creating a branch |
 | develop/phase4-runs-the-coverage-check | the workflow itself runs the coverage check, rather than asking for it |
+| develop/stops-at-the-fix-cap | a milestone that has used its fix rounds stops and offers ship / continue / restart instead of a fourth fix |
+| develop/full-milestone-records-its-research | a FULL milestone starts by recording its own narrow research in the ledger |
+| develop/phase4-runs-the-delta-gates | Phase 4 runs the duplicate-code delta, which sees a pasted function the green suite cannot |
 | qa-gatekeeper/rejects-vacuous-assertion | wrong arithmetic behind `assert result is not None` → REJECT |
 | qa-gatekeeper/no-false-alarm-on-pinned-assertion | same feature, correct, value pinned → not a REJECT |
 | qa-gatekeeper/rejects-invented-mock | mock shaped to the code's belief, contradicting the vendor doc → REJECT |

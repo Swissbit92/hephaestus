@@ -28,6 +28,12 @@ import shutil
 import sys
 from pathlib import Path
 
+# The crucible scripts emitted gates run, as an absolute path. Gate lines used to spell this
+# "$CRUCIBLE_SCRIPTS/...", a variable nothing ever set — so the emitted coverage gate asked
+# Python to open "/coverage_delta.py", exited 2, and failed Phase 4.0 for every Python
+# project. Resolved here, at the only place that knows where the scripts actually are.
+SCRIPTS_DIR = Path(__file__).resolve().parent.as_posix()
+
 PRUNE = {".venv", "venv", "__pycache__", ".git", "node_modules", ".tox",
          "dist", "build", ".mypy_cache", ".pytest_cache", "site-packages"}
 
@@ -116,7 +122,9 @@ def _python_profile(root: Path, rel: str) -> dict | None:
         gates.append({"name": "tests", "cmd": f"{py} -m pytest", "kind": GATE,
                       "source": where or "tests/ directory (no pytest config found)"})
         gates.append({"name": "coverage-delta", "kind": GATE,
-                      "cmd": f'{py} "$CRUCIBLE_SCRIPTS/coverage_delta.py" --repo {rel or "."}',
+                      # `--repo .`, not the root's path: a nested root's line is already
+                      # prefixed `cd <root> &&`, and repeating the path doubled it.
+                      "cmd": f'{py} "{SCRIPTS_DIR}/coverage_delta.py" --repo .',
                       "source": "crucible"})
     if not has_cfg and has_tests:
         notes.append("no pytest config found; the bare command may pick a different rootdir "
@@ -124,7 +132,10 @@ def _python_profile(root: Path, rel: str) -> dict | None:
 
     pp_text = _read(pp) if pp.exists() else ""
     if "[tool.ruff]" in pp_text or (root / ".ruff.toml").exists() or (root / "ruff.toml").exists():
-        gates.append({"name": "lint", "cmd": "ruff check .", "kind": GATE, "source": "ruff config"})
+        # A delta, not an absolute gate: a codebase that already carries findings fails an
+        # absolute lint gate on every branch, and a gate that always fails is ignored.
+        gates.append({"name": "lint", "kind": GATE, "source": "ruff config (delta vs branch point)",
+                      "cmd": f'{python_token()} "{SCRIPTS_DIR}/metric_delta.py" --metric ruff --repo .'})
         if "[tool.ruff.format]" in pp_text or "[tool.ruff]" in pp_text:
             gates.append({"name": "format", "cmd": "ruff format --check .", "kind": GATE,
                           "source": "ruff config"})
@@ -281,6 +292,10 @@ def emit_gates(profiles: list[dict]) -> tuple[str, str]:
             runnable.append(f"{prefix}{g['cmd']}")
         for n in p.get("notes", []):
             notes.append(f"note — {root}: {n}")
+    if runnable:
+        # Once for the whole repo, not per root: duplication crosses project boundaries, and
+        # the tokenizer is language-agnostic, so one pass sees a paste between two roots.
+        runnable.append(f'{python_token()} "{SCRIPTS_DIR}/metric_delta.py" --metric clones --repo .')
     return "\n".join(runnable), "\n".join(notes)
 
 
