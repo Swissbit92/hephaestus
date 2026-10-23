@@ -515,3 +515,30 @@ def test_parallel_repetitions_report_the_same_k_and_order(monkeypatch):
     summary = run_evals.run_scenario(scenario, 6, None, None, jobs=3)
     assert summary["k"] == 6 and sum(summary["run_pass"]) == 3
     assert summary["models"] == ["m"] and len(set(dirs)) == 6   # no shared fixture dir
+
+
+def test_file_matching_sees_the_research_the_ledger_actually_wrote(tmp_path):
+    """The research scenario grades the ledger's end state, so its pattern must match what
+    milestone_ledger.py really writes — red before the event exists, green after."""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+    import fixtures
+    repo = fixtures.build("develop_next_milestone", tmp_path / "r")
+    scenario = next(s for s in json.loads(
+        (Path(__file__).resolve().parent.parent / "evals" / "scenarios.json").read_text(
+            encoding="utf-8"))["scenarios"] if s["id"] == "develop/full-milestone-records-its-research")
+    args = next(c["args"] for c in scenario["checks"] if c["check"] == "file_matching")
+    run = RunResult(fixture_path=str(repo))
+    assert scoring.apply_check("file_matching", run, args).passed is False
+    script = Path(__file__).resolve().parent.parent / "plugins" / "crucible" / "scripts" / "milestone_ledger.py"
+    for argv in (["start", "M2"], ["research", "M2", "--note", "csv module docs"]):
+        subprocess.run([sys.executable, str(script), "--repo", str(repo), *argv], check=True,
+                       capture_output=True)
+    assert scoring.apply_check("file_matching", run, args).passed is True
+
+
+def test_file_matching_reports_a_missing_file():
+    ok, detail = scoring.file_matching(RunResult(fixture_path="/nonexistent"), "x/*.json", "a")
+    assert ok is False and "no file matches" in detail

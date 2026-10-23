@@ -2,7 +2,7 @@
 title: Lessons Learned
 status: active
 created: 2026-06-28
-last_reviewed_on: 2026-06-28
+last_reviewed_on: 2026-10-24
 review_in: 12 months
 applies_to: hephaestus
 ai_summary: "Dated, append-only record of what this repo measured and got wrong, newest first — including the two results that most constrain how work is done here: the qa-gatekeeper agent scoring 40/40 against a no-agent control that also scored 40/40, and 'placement beats wording' failing to reproduce when applied as a reordering. Read it before citing a skill's scenarios as evidence it earns its cost, before assuming a fix that sounds right will measure right, and before recording a lesson in the module that learned it rather than as a check."
@@ -11,6 +11,48 @@ ai_summary: "Dated, append-only record of what this repo measured and got wrong,
 # Lessons Learned
 
 Append-only, dated entries. Newest first. Each entry: what happened, what we learned, how to apply going forward.
+
+## 2026-10-24 — The fix cap, measured; and a check that graded the spelling, not the work
+
+- **What:** crucible 1.6.0 replaced develop's unbounded QA loop with a per-milestone budget
+  (`milestone_ledger.py`) and added delta gates and a revert/mutation probe. Baselines were
+  frozen first, on the unchanged plugin. Results:
+  - `stops-at-the-fix-cap`: **0/10 → 10/10**. Before the change, every run edited the file for
+    a fourth fix.
+  - `phase4-runs-the-delta-gates`: **0/3 → 3/3**.
+  - The three existing develop scenarios held at 3/3.
+  - `develop.md` ended 12 bytes *smaller* than it started, because the rationale moved to
+    `commands/references/develop-rationale.md`.
+- **What went wrong:** `full-milestone-records-its-research` read **2/3**. The failing
+  transcript showed the run did use the ledger, but called it through a shell variable
+  (`L=…/milestone_ledger.py; python3 $L …`), which a Bash-text pattern cannot see. Re-graded on
+  the outcome (a research event in the ledger file, via the new `file_matching` check), it
+  reads **10/10 at k=10**. The prediction was settled `partial`: the claim held for the
+  behaviour, but the check it named did not measure that behaviour.
+- **What we learned:**
+  - **Grade the end state, not the command text.** A pattern over Bash calls fails a
+    differently-spelled correct step and passes a command that ran and failed. Where the
+    behaviour leaves state (a ledger, a file, a commit), assert on the state.
+  - **A miss needs to say what *did* happen.** "No command matched" could not tell a skipped
+    step from a renamed one. `bash_matching` now prints the last commands it saw, and that was
+    the only reason this was diagnosable without a fourth live run.
+  - **A shipped gate was broken, and only executing it showed that.**
+    `detect_profile --emit-gates` printed `"$CRUCIBLE_SCRIPTS/coverage_delta.py"`, a variable
+    nothing set, so the line exited 2 for every Python project. Reading the line looked fine.
+    A test now runs an emitted line through a shell.
+  - **The duplicate gate caught its own author twice in one day.** One was a pytest block
+    pasted three times; the other was a repo-setup helper copied into two new test files. Both
+    were genuine and now share one helper. A third flag, a per-file `_run` wrapper bound to its
+    own script, is this repo's convention, and was let through with a stated reason. That is
+    the intended use: a new clone needs a reason, not a ban.
+  - **Freeze the baseline before the tree it measures can change.** The harness reads the live
+    `plugins/` folder, so implementation ran in a separate worktree for the ~2 hours of the
+    freeze. `--jobs` later ran a 10-run scenario in about one run's wall clock.
+- **How to apply:** For a new behavioural scenario, prefer `file_matching` or a state check
+  over `bash_matching`. Keep `bash_matching` for "the step was invoked at all" where no state
+  results. Before settling a prediction on a miss, read the failing transcript; if the
+  instrument is the cause, fix it, re-measure at k≥10, and settle `partial` rather than
+  claiming the original check passed.
 
 ## 2026-08-23 — The eval suite's first full run, and what k=1 could not have told us
 

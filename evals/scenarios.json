@@ -383,9 +383,10 @@
       "timeout": 600,
       "checks": [
         {
-          "check": "bash_matching",
+          "check": "file_matching",
           "args": {
-            "pattern": "milestone_ledger\\.py\"?\\s+research"
+            "path": ".git/crucible/ledger-*.jsonl",
+            "pattern": "\"event\": \"research\", \"milestone\": \"M2\""
           }
         },
         {
