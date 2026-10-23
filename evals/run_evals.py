@@ -63,43 +63,52 @@ def make_cli_judge(model: str):
     return judge_fn
 
 
-def run_scenario(scenario: dict, k: int, model: str | None, judge_fn, bare=False) -> dict:
+def _one_run(scenario: dict, model: str | None, judge_fn, bare: bool) -> tuple[list[Criterion], str, str]:
+    """One repetition in its own throwaway fixture: (criteria, model seen, CLI version)."""
     plugin_root = REPO_ROOT / "plugins" / scenario["plugin"]
-    runs: list[list[Criterion]] = []
-    models: set[str] = set()
-    cli_versions: set[str] = set()
-    for i in range(k):
-        with tempfile.TemporaryDirectory(prefix="eval-") as td:
-            fixture_dir = fixtures.build(scenario["fixture"], Path(td) / "repo")
-            env = {key: val.replace("{fixture}", str(fixture_dir))
-                   for key, val in (scenario.get("env") or {}).items()}
-            # A scenario that spawns a subagent pays for two nested runs — the subagent
-            # usually runs a whole test suite of its own — so it needs materially more
-            # headroom than a single-agent scenario. Without it the run is cut short and
-            # the result reads as "the subagent produced nothing", which is a claim about
-            # the skill when it was really a claim about the clock.
-            run = runner.run_skill(
-                scenario["prompt"], fixture_dir, plugin_root,
-                model=model, env=env, allowed_tools=scenario.get("allowed_tools"),
-                timeout=scenario.get("timeout", runner.DEFAULT_TIMEOUT),
-                bare=bare,
-            )
-            if run.model:
-                models.add(run.model)
-            if run.cli_version:
-                cli_versions.add(run.cli_version)
-            target_loaded = scenario["plugin"] in run.loaded_plugins
-            criteria: list[Criterion] = [
-                Criterion("plugin_loaded", "deterministic", target_loaded,
-                          f"loaded={run.loaded_plugins} errors={run.plugin_errors}")
-            ]
-            for chk in scenario["checks"]:
-                criteria.append(scoring.apply_check(chk["check"], run, chk.get("args")))
-            if judge_fn:
-                for jc in scenario.get("judge", []):
-                    criteria.append(judge_mod.judge_criterion(
-                        jc["key"], jc["criterion"], jc["rubric"], run.final_text, judge_fn))
-            runs.append(criteria)
+    with tempfile.TemporaryDirectory(prefix="eval-") as td:
+        fixture_dir = fixtures.build(scenario["fixture"], Path(td) / "repo")
+        env = {key: val.replace("{fixture}", str(fixture_dir))
+               for key, val in (scenario.get("env") or {}).items()}
+        # A scenario that spawns a subagent pays for two nested runs — the subagent
+        # usually runs a whole test suite of its own — so it needs materially more
+        # headroom than a single-agent scenario. Without it the run is cut short and
+        # the result reads as "the subagent produced nothing", which is a claim about
+        # the skill when it was really a claim about the clock.
+        run = runner.run_skill(
+            scenario["prompt"], fixture_dir, plugin_root,
+            model=model, env=env, allowed_tools=scenario.get("allowed_tools"),
+            timeout=scenario.get("timeout", runner.DEFAULT_TIMEOUT),
+            bare=bare,
+        )
+        target_loaded = scenario["plugin"] in run.loaded_plugins
+        criteria: list[Criterion] = [
+            Criterion("plugin_loaded", "deterministic", target_loaded,
+                      f"loaded={run.loaded_plugins} errors={run.plugin_errors}")
+        ]
+        for chk in scenario["checks"]:
+            criteria.append(scoring.apply_check(chk["check"], run, chk.get("args")))
+        if judge_fn:
+            for jc in scenario.get("judge", []):
+                criteria.append(judge_mod.judge_criterion(
+                    jc["key"], jc["criterion"], jc["rubric"], run.final_text, judge_fn))
+        return criteria, run.model, run.cli_version
+
+
+def run_scenario(scenario: dict, k: int, model: str | None, judge_fn, bare=False,
+                 jobs: int = 1) -> dict:
+    """k repetitions, `jobs` at a time. Each repetition has its own fixture directory and
+    its own CLI process, so they are independent; results keep repetition order, and the
+    report's k is unchanged — a parallel run compares against a serial baseline."""
+    if jobs > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=jobs) as pool:
+            results = list(pool.map(lambda _i: _one_run(scenario, model, judge_fn, bare), range(k)))
+    else:
+        results = [_one_run(scenario, model, judge_fn, bare) for _ in range(k)]
+    runs = [r[0] for r in results]
+    models = {r[1] for r in results if r[1]}
+    cli_versions = {r[2] for r in results if r[2]}
     summary = report_mod.summarize_scenario(scenario, runs)
     summary["models"] = sorted(models)
     summary["cli_versions"] = sorted(cli_versions)
@@ -157,6 +166,8 @@ def main(argv: list[str]) -> int:
                          "ANTHROPIC_API_KEY. Required in CI, which has no logged-in "
                          "session; omit it locally to use your existing login for free")
     ap.add_argument("--judge", action="store_true", help="enable optional LLM-judge criteria")
+    ap.add_argument("--jobs", type=int, default=1,
+                    help="run up to N repetitions (and scenarios) at once; default 1")
     ap.add_argument("--json", help="write the full JSON report here")
     ap.add_argument("--baseline", help="baseline JSON: compare against it; freeze if absent")
     args = ap.parse_args(argv)
@@ -176,10 +187,21 @@ def main(argv: list[str]) -> int:
 
     judge_fn = make_cli_judge(judge_mod.JUDGE_MODEL) if args.judge else None
 
-    summaries = []
-    for s in scenarios:
+    def _scenario(s: dict) -> dict:
         print(f"▶ {s['id']}  (k={args.k}) …", flush=True)
-        summary = run_scenario(s, args.k, args.model, judge_fn, bare=args.bare)
+        return run_scenario(s, args.k, args.model, judge_fn, bare=args.bare,
+                            jobs=max(1, args.jobs // max(1, len(scenarios))) if args.jobs > 1 else 1)
+
+    if args.jobs > 1 and len(scenarios) > 1:
+        # Scenarios in parallel too, sharing the job budget; output is printed in order.
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(args.jobs, len(scenarios))) as pool:
+            results = list(pool.map(_scenario, scenarios))
+    else:
+        results = [_scenario(s) for s in scenarios]
+
+    summaries = []
+    for s, summary in zip(scenarios, results):
         mark = "✔" if summary["passed"] else "✘"
         print(f"  {mark} {'PASS' if summary['passed'] else 'FAIL'}  "
               f"pass^k={summary['pass_hat_k']} avg={summary['avg_at_k']}")

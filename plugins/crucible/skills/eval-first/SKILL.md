@@ -17,12 +17,13 @@ All pure-stdlib, dependency-light, with injected `judge_fn`/`embed_fn` so they r
 - **`deterministic.py`** — Layer-1 check registry (`non_empty`, `exact_match`, `regex_match`, `json_has_keys`, `max_length`, `citation_present`, …) + `run_deterministic()`. Cheap, auditable, runs before any judge call.
 - **`judge.py`** — blind A/B LLM judge: `build_ab_prompt`, `parse_ab_verdict`, `judge_pairs` (swap-augmented), plus `assert_judge_distinct` (blocks self-grading). `JUDGE_MODEL` is pinned.
 - **`ab_harness.py`** — `make_blind_pairs`, `tally` (exact sign test), `verdict` — the match-or-beat-or-revert decision.
-- **`reliability.py`** — `pass_hat_k` (pass^k, regression gates), `avg_at_k` (capability), `pass_at_k_estimate`.
+- **`reliability.py`** — `pass_hat_k` (pass^k, regression gates), `avg_at_k` (capability), `pass_at_k_estimate`, and resolution: `wilson_interval`, `required_n`, `deterministic_runs` (CLI: `reliability.py ci|n`).
 
 Templates in `templates/`: `probes.json.template` (your eval cases) and `eval-config.yaml.template` (thresholds, judge pin, rubric).
 
 ## The workflow
 
+0. **Pre-flight** ([references/statistics.md](references/statistics.md)): run one case twice — identical outputs mean repeats measure nothing, so replicate across cases, not k; then check the Wilson interval and the cases needed for the smallest delta you care about. State all three with the result.
 1. **Build cases.** Copy `probes.json.template` → `evals/probes.json`. 20–50 cases to start; cover normal use, robustness/edge, and adversarial inputs.
 2. **Freeze the baseline FIRST.** Run the *current* system over all cases, score it, `freeze_baseline(path, "legacy", report)`. This is the ruler. Never freeze after the change.
 3. **Make the change**, behind a flag/branch (instant revert).

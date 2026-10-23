@@ -490,3 +490,28 @@ def test_cli_advertises_the_flags_ci_invokes_it_with():
     assert p.returncode == 0
     for flag in ("--bare", "--model", "-k"):
         assert flag in p.stdout, f"CI passes {flag} and the CLI does not accept it"
+
+
+def test_parallel_repetitions_report_the_same_k_and_order(monkeypatch):
+    """--jobs must not change what is measured: k runs, each its own fixture, results kept
+    in repetition order, so a parallel run compares cleanly against a serial baseline."""
+    import itertools
+    import threading
+    import run_evals
+    counter = itertools.count()
+    lock = threading.Lock()
+    dirs = []
+
+    def _fake_run_skill(prompt, fixture_dir, plugin_root, **kw):
+        with lock:
+            n = next(counter)
+            dirs.append(str(fixture_dir))
+        return RunResult(plugin_loaded=True, loaded_plugins=["crucible"],
+                         final_text="ok" if n % 2 == 0 else "no", model="m", cli_version="v")
+
+    monkeypatch.setattr(run_evals.runner, "run_skill", _fake_run_skill)
+    scenario = {"id": "x", "fixture": "start_clean", "plugin": "crucible", "prompt": "p",
+                "checks": [{"check": "final_text_matching", "args": {"pattern": "ok"}}]}
+    summary = run_evals.run_scenario(scenario, 6, None, None, jobs=3)
+    assert summary["k"] == 6 and sum(summary["run_pass"]) == 3
+    assert summary["models"] == ["m"] and len(set(dirs)) == 6   # no shared fixture dir
