@@ -111,7 +111,10 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.13"]
-    runs-on: ubuntu-latest
+    # 3.9 is pinned to ubuntu-24.04: ubuntu-latest moved to 26.04, whose setup-python
+    # manifest has no 3.9 build, so the floor job failed in setup before a test ran.
+    # The others stay on latest. Retire the pin with the 3.9 floor, not before.
+    runs-on: ${{ matrix.python-version == '3.9' && 'ubuntu-24.04' || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
