@@ -15,6 +15,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "plugins" / "crucible" / "scripts" / "invariants_run.py"
 
@@ -170,3 +172,34 @@ def test_verdict_is_independent_of_how_the_task_was_described(tmp_path):
                  check_body="import sys\nsys.exit(1)\n")
     verdicts = {_run(repo).returncode for _ in range(3)}
     assert verdicts == {1}, "the outcome must not vary with context, only with the code"
+
+
+def test_a_check_that_exits_2_is_undetermined_not_a_violation(tmp_path):
+    """A check's own exit 2 — a missing tool, an interpreter that will not run — is its
+    "could not determine". Reporting it as INVARIANT VIOLATED sent people hunting for a
+    broken constraint that was never checked."""
+    repo = _repo(tmp_path,
+                 ENTRY.format(title="Seam", status="active", statement="s", check="checks/c.py"),
+                 check_body="import sys\nprint('cannot determine: pytest is not installed')\nsys.exit(2)\n")
+    p = _run(repo)
+    combined = p.stdout + p.stderr
+    assert p.returncode == 2
+    assert "INVARIANT VIOLATED" not in combined and "1 undetermined" in combined
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX sh helper; the fake interpreter is a shebang script")
+def test_run_pytest_maps_a_missing_pytest_to_exit_2(tmp_path):
+    """The shell side of the same fix: the checks call run_pytest from _python.sh."""
+    import os
+    helper = REPO_ROOT / "scripts" / "checks" / "_python.sh"
+    venvless = tmp_path / "bin"
+    venvless.mkdir()
+    fake = venvless / "fakepy"
+    # an interpreter that runs but cannot import pytest
+    fake.write_text(f"#!/bin/sh\nif [ \"$1\" = \"-c\" ] && [ \"$2\" = \"import pytest\" ]; then exit 1; fi\n"
+                    f"exec {sys.executable} \"$@\"\n", encoding="utf-8")
+    fake.chmod(0o755)
+    script = f'. "{helper.as_posix()}"\nrun_pytest -q\nexit $?\n'
+    p = subprocess.run(["sh", "-c", script], capture_output=True, text=True, encoding="utf-8",
+                       errors="replace", timeout=60, env={**os.environ, "PYTHON": str(fake)})
+    assert p.returncode == 2 and "pytest is not installed" in p.stderr

@@ -27,7 +27,8 @@ Format expected in docs/INVARIANTS.md — one entry per `##` heading:
 Exit codes:
     0 — every wired check ran and passed
     1 — an active invariant's check FAILED (a violation)
-    2 — could not determine (a Check: path missing or not executable, or a parse failure)
+    2 — could not determine (a Check: path missing or not executable, a parse failure, or
+        a check that itself exited 2 because it could not run — e.g. a missing tool)
     3 — nothing enforceable: no INVARIANTS.md, or no entry has a check yet. NOT a pass.
 """
 from __future__ import annotations
@@ -157,7 +158,9 @@ def main(argv: list[str] | None = None) -> int:
         if code == 0:
             passed.append(e)
             print(f"  ok    {e.title}")
-        elif code == 2 and detail.startswith(("Check path does not exist", "could not execute")):
+        # Exit 2 from a check is its own "could not determine" (a missing tool, an
+        # interpreter that will not run), never a violation — whoever produced it.
+        elif code == 2:
             undetermined.append((e, detail))
             print(f"  ????  {e.title} — {detail}")
         else:
