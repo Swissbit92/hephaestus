@@ -131,7 +131,18 @@ assumption as the code. Before accepting green, check all three:
   exchange, an HTTP API, a driver), the mock's shape and values are the author's *belief*
   about that system. If the belief is wrong, the suite is green and production is broken.
   Ask what the mock is pinned to — a recorded real response, a cited doc — and flag any
-  mock whose values exist only because someone assumed them.
+  mock whose values exist only because someone assumed them. The same holds for fixtures of
+  input data: where code parses outside input (records, timestamps, payloads), a fixture
+  invented to fit the code is a belief too — check it against a small sample of real data,
+  copied read-only to a git-ignored path, never linked from production.
+- **Would the tests fail without the change?** The `mutation_probe.py --revert` result
+  arrives from Phase 4.0 (if it did not, run
+  `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/mutation_probe.py" --revert` yourself): exit
+  **1** = the changed tests pass with the branch point's code restored, so they do not test
+  the change — REJECT unless it is deliberately test-neutral. On the final milestone a
+  `--mutate` result lists planted defects the tests did not kill: each survivor is reported
+  and either killed by a new test or shown equivalent to the original — a finding, not an
+  automatic REJECT.
 
 ### 4c. Silent failure
 
@@ -162,6 +173,20 @@ what stops the next person questioning it.
 Not a finding when the value is derived in-test, is a published constant cited to its
 source, or is explicitly labelled as a received claim awaiting confirmation. The fix is
 never "delete the number" — it is derive it here, or label it.
+
+### 4e. Every occurrence, not the one that was reported
+
+When the change fixes a defect, the defect's *shape* is the finding, not its location. Search
+the whole repository — not the module where it was reported — for the same pattern (the same
+call, the same early return, the same unguarded input), widening the pattern one step at a
+time. Each sibling is fixed in this change or listed with the reason it is different. For a
+behavioural defect, the evidence covers every instance of the input class (every caller,
+platform, input shape), with the **worst case** reported, not the reported case. A fix shown
+only where the bug was spotted is a partial fix: REJECT.
+
+New duplicated code arrives as the `metric_delta.py --metric clones` result from Phase 4.0:
+each new clone needs a stated reason (two similar things that will diverge) or reuse of what
+exists; with neither, REJECT.
 
 ### 5. Check documentation consistency
 - If architecture/APIs changed, verify CLAUDE.md and relevant docs reflect it.

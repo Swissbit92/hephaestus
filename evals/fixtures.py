@@ -996,6 +996,19 @@ def _ledger_repo(repo: Path) -> None:
     _write(repo, "docs/PLAN.md", _LEDGER_PLAN)
 
 
+def branched_repo(repo: Path, base: dict[str, str], branch: str = "feature/x") -> Path:
+    """A repo whose `base` files are committed on main, with `dev` cut there and `branch`
+    checked out — the minimal shape every branch-point gate needs. Tests then write and
+    commit (or leave uncommitted) whatever change they are probing."""
+    _init(repo)
+    for rel, text in base.items():
+        _write(repo, rel, text)
+    _commit_all(repo, "base")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "-q", "-c", branch)
+    return repo
+
+
 _LEDGER_INIT = {"event": "init", "tier": "FULL", "fix_cap": 3, "setup_cap": 3,
                 "estimates": {"M1": 45, "M2": 30}, "user_said": "plan approved"}
 

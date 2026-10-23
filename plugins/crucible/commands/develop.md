@@ -97,7 +97,7 @@ Design the blueprint, informed by Phase 1.
 
 Run a `Plan` agent. Feed it: Phase 1 exploration results, web-research findings, project alignment, and the user's constraints.
 
-It should produce: implementation milestones (ordered), files to create/modify (paths), existing utilities to reuse (paths), test strategy, and risk areas.
+It should produce: implementation milestones (ordered), files to create/modify (paths), existing utilities to reuse (paths) — and for anything new, why existing code could not serve — test strategy, and risk areas.
 
 **Gate:** present the plan to the user for approval. Do NOT implement without explicit approval.
 
@@ -245,6 +245,19 @@ are gone; this is a REJECT unless each removal has a stated reason (behaviour de
 deleted, or the test moved and appears under ADDED) · `2` = **could not determine, which is
 not a pass** — fix the invocation (usually `--collect-cmd`) and re-run.
 
+For Python changes, check that the tests depend on the change — every milestone `--revert`
+(the branch point's code restored in a throwaway copy), the final milestone also `--mutate`
+(up to 6 planted defects in the changed functions):
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/mutation_probe.py" --revert   # | --mutate
+```
+
+`0` = the tests fail without the change / killed every mutant · `1` = **they pass without
+it** (REJECT unless deliberately test-neutral) / **mutants survived** (each is a finding) ·
+`2` = could not determine (a canary failed: the copy's tests are red, or they run some other
+copy of the code) · `3` = nothing to probe — additive change, no changed test — a SKIP.
+
 Then run the repo's standing constraints, if it has any:
 
 ```bash
@@ -274,7 +287,10 @@ an assignment.
 ### 4.1 Then review
 
 Use a `qa-gatekeeper` agent if your project provides one; otherwise do QA directly. Give it
-the Phase 4.0 results. Checks (all projects):
+the Phase 4.0 results. **Re-check what any agent reports before passing it on:** a verdict
+is evidence to verify, not a conclusion — re-run the command behind each verdict-bearing
+claim (a result, a count, "no other occurrence") before it reaches the user or the ledger.
+Checks (all projects):
 
 1. All tests pass.
 2. No passing-test regression vs. the branch-point baseline (derived live, not a stated number) — fewer passing tests or a newly failing test is a regression; *more* tests (the milestone added them) is not.
@@ -285,6 +301,7 @@ the Phase 4.0 results. Checks (all projects):
 7. Conventions followed (see the repo's CLAUDE.md).
 8. Performance check — no new serial loop over independent expensive work where parallelism is feasible.
 9. Claim provenance — no number, benchmark or behavioural claim that arrived from *outside this session* (another agent, another session, a person, a doc) has been written into a test, a constant or a docstring as fact. Received values stay marked as received until derived here, from the source. Pinning one in a test is the worst case: the wrong value acquires a guard, and the guard is what stops the next person questioning it.
+10. Every occurrence — a fix covers every instance of the defect's shape across the repo, worst case shown, not only the reported one (gatekeeper §4e).
 
 **Verdicts go through the ledger.** After every verdict run `milestone_ledger.py record
 M<n> --verdict PASS|CONDITIONAL_PASS|REJECT --kind <the gate that failed>` (`setup` when the

@@ -56,14 +56,7 @@ def _git(repo, *args):
 
 
 def _repo(tmp_path, files: dict[str, str]) -> Path:
-    repo = tmp_path / "r"
-    fixtures._init(repo)
-    for rel, text in files.items():
-        fixtures._write(repo, rel, text)
-    fixtures._commit_all(repo, "base")
-    _git(repo, "branch", "dev")
-    _git(repo, "switch", "-q", "-c", "feature/x")
-    return repo
+    return fixtures.branched_repo(tmp_path / "r", files)
 
 
 def _ruff_args(tmp_path):
