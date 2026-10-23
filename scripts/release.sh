@@ -103,6 +103,10 @@ fi
 # uses, and it changes nothing anyway.
 if [[ "$DRY_RUN" != "1" ]]; then
   echo "running release gates…"
+  # A missing pytest is not a red suite; saying "red" sends the releaser looking for a
+  # failing test that does not exist.
+  "$PY" -c "import pytest" >/dev/null 2>&1 \
+    || die "pytest is not installed for $PY — set PYTHON to an interpreter that has it (the suite was not run)"
   "$PY" -m pytest -q >/dev/null || die "test suite is red — no release"
   bash "$REPO_ROOT/scripts/check-public-safe.sh" >/dev/null \
     || die "check-public-safe.sh failed — a public repo must not publish private tokens"
