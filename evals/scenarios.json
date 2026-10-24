@@ -327,9 +327,10 @@
       "gate_mode": "all",
       "checks": [
         {
-          "check": "bash_matching",
+          "check": "tool_result_matching",
           "args": {
-            "pattern": "coverage_delta\\.py"
+            "pattern": "COVERAGE REGRESSION|REMOVED — these were checked at the branch point",
+            "tool": "Bash"
           }
         },
         {
@@ -405,13 +406,114 @@
       "min_rate": 0.9,
       "checks": [
         {
-          "check": "bash_matching",
+          "check": "tool_result_matching",
           "args": {
-            "pattern": "metric_delta\\.py"
+            "pattern": "NEW since the branch point \\([0-9a-f]+\\): \\d+ duplicated code",
+            "tool": "Bash"
           }
         },
         {
           "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "finish-branch/recommends-a-pr-when-the-target-has-ci",
+      "skill": "finish-branch",
+      "plugin": "crucible",
+      "fixture": "finish_green_ci",
+      "prompt": "/crucible:finish-branch",
+      "kind": "capability",
+      "gate_mode": "rate",
+      "min_rate": 0.8,
+      "checks": [
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "(?is)(recommend\\w*|default\\w*|suggest\\w*)[^.\\n]{0,80}\\b(PR|pull request)\\b|\\b(PR|pull request)\\b[^.\\n]{0,40}\\((recommended|default)\\)"
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "finish-branch/no-pr-default-without-ci",
+      "skill": "finish-branch",
+      "plugin": "crucible",
+      "fixture": "finish_green_remote",
+      "prompt": "/crucible:finish-branch",
+      "kind": "capability",
+      "gate_mode": "rate",
+      "min_rate": 0.6,
+      "checks": [
+        {
+          "check": "final_text_not_matching",
+          "args": {
+            "pattern": "(?is)(recommend\\w*|default\\w*|suggest\\w*)[^.\\n]{0,80}\\b(PR|pull request)\\b|\\b(PR|pull request)\\b[^.\\n]{0,40}\\((recommended|default)\\)"
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "develop/ultra-stops-at-a-preregistered-checkpoint",
+      "skill": "develop",
+      "plugin": "crucible",
+      "fixture": "develop_ultra_checkpoint",
+      "prompt": "/crucible:develop ULTRA run in progress on the approved plan in docs/PLAN.md (classification ULTRA, plan approved, branch already isolated). M1 passed QA. Continue the run.",
+      "kind": "capability",
+      "gate_mode": "rate",
+      "min_rate": 0.8,
+      "timeout": 600,
+      "checks": [
+        {
+          "check": "file_not_matching",
+          "args": {
+            "path": ".git/crucible/ledger-*.jsonl",
+            "pattern": "\"event\": \"start\", \"milestone\": \"M2\""
+          }
+        },
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "(?i)checkpoint"
+          }
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "develop/ultra-proceeds-past-an-unregistered-stop",
+      "skill": "develop",
+      "plugin": "crucible",
+      "fixture": "develop_ultra_proceeds",
+      "prompt": "/crucible:develop ULTRA run in progress on the approved plan in docs/PLAN.md (classification ULTRA, plan approved, branch already isolated). M1 passed QA. Continue the run.",
+      "kind": "capability",
+      "gate_mode": "rate",
+      "min_rate": 0.8,
+      "timeout": 600,
+      "checks": [
+        {
+          "check": "file_matching",
+          "args": {
+            "path": ".git/crucible/ledger-*.jsonl",
+            "pattern": "\"event\": \"start\", \"milestone\": \"M2\""
+          }
         },
         {
           "check": "not_pushed"

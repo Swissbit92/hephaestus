@@ -12,9 +12,16 @@ import json
 import os
 import shutil
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 from . import world
+
+_CRUCIBLE_SCRIPTS = Path(__file__).resolve().parents[2] / "plugins" / "crucible" / "scripts"
+if str(_CRUCIBLE_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_CRUCIBLE_SCRIPTS))
+from crucible_common import run_bounded  # noqa: E402
 from .model import RunResult, ToolCall, ToolResult
 
 DEFAULT_ALLOWED = ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "TodoWrite"]
@@ -35,10 +42,31 @@ def _result_text(block: dict) -> str:
     return ""
 
 
+def _usage(ev: dict) -> dict:
+    """Cost fields of a `result` event: {} when absent, so callers record None, never 0."""
+    u = ev.get("usage") or {}
+    out = {}
+    if "duration_ms" in ev:
+        out["duration_ms"] = int(ev["duration_ms"])
+    if "total_cost_usd" in ev:
+        out["cost_usd"] = float(ev["total_cost_usd"])
+    if u:
+        out["tokens"] = {"input": int(u.get("input_tokens", 0)),
+                         "output": int(u.get("output_tokens", 0)),
+                         "cache_read": int(u.get("cache_read_input_tokens", 0)),
+                         "cache_creation": int(u.get("cache_creation_input_tokens", 0))}
+    if "num_turns" in ev:
+        out["num_turns"] = int(ev["num_turns"])
+    spawned = (ev.get("subagent_stats") or {}).get("spawned")
+    if spawned is not None:
+        out["subagents"] = int(spawned)
+    return out
+
+
 def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[ToolCall],
-                                        list[ToolResult], str, str, str]:
+                                        list[ToolResult], str, str, str, dict]:
     """Parse `--output-format stream-json` lines into (any_plugin_loaded, loaded_plugin_names,
-    skills, errors, tool_calls, tool_results, final_text, model, cli_version).
+    skills, errors, tool_calls, tool_results, final_text, model, cli_version, usage).
 
     Tool *results* arrive on `user` events and are matched back to the tool that produced them
     via tool_use_id. For an Agent/Task call that is the subagent's own output — what to assert
@@ -54,6 +82,7 @@ def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[T
     final_text = ""
     model = ""
     cli_version = ""
+    usage: dict = {}
     for line in stdout.splitlines():
         line = line.strip()
         if not line:
@@ -84,8 +113,9 @@ def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[T
                     tool_results.append(ToolResult(name=name, text=_result_text(block)))
         elif t == "result":
             final_text = ev.get("result", "") or final_text
+            usage = _usage(ev)
     return (plugin_loaded, loaded_plugins, skills, errors, tool_calls, tool_results, final_text,
-            model, cli_version)
+            model, cli_version, usage)
 
 
 def run_skill(
@@ -128,17 +158,17 @@ def run_skill(
     run_env = {**os.environ, **(env or {})}
     exit_ok = True
     stdout = ""
-    try:
-        proc = subprocess.run(cmd, cwd=str(fixture_dir), env=run_env,
-                              capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
-        stdout = proc.stdout
-        exit_ok = proc.returncode == 0
-    except subprocess.TimeoutExpired as e:
-        stdout = e.stdout.decode() if isinstance(e.stdout, bytes) else (e.stdout or "")
-        exit_ok = False
+    started = time.monotonic()
+    # Bounded, never subprocess.run(timeout=): that kills only `claude`, and the Bash-tool
+    # children it started — a test suite, a mutant that loops — run on as orphans. Two such
+    # orphans once grew to ~100 GB each and froze the machine mid-eval.
+    b = run_bounded(cmd, fixture_dir, timeout, env=run_env)
+    stdout = b.stdout
+    exit_ok = b.returncode == 0 and not b.killed
 
     (plugin_loaded, loaded_plugins, skills, errors,
-     tool_calls, tool_results, final_text, model_seen, cli_version) = _parse_stream(stdout)
+     tool_calls, tool_results, final_text, model_seen, cli_version, usage) = _parse_stream(stdout)
+    wall_ms = int((time.monotonic() - started) * 1000)
     after = world.snapshot(fixture_dir)
 
     return RunResult(
@@ -147,4 +177,7 @@ def run_skill(
         final_text=final_text,
         exit_ok=exit_ok, fixture_path=str(fixture_dir),
         model=model_seen, cli_version=cli_version, before=before, after=after,
+        duration_ms=usage.get("duration_ms", wall_ms), cost_usd=usage.get("cost_usd"),
+        tokens=usage.get("tokens"), num_turns=usage.get("num_turns"),
+        subagents=usage.get("subagents"),
     )

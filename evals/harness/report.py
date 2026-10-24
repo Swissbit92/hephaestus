@@ -63,6 +63,25 @@ def summarize_scenario(scenario: dict, runs: list[list[Criterion]]) -> dict:
     }
 
 
+def summarize_perf(runs: list[dict]) -> dict:
+    """Medians of what the runs cost. Reported, never gated: wall clock and tokens of LLM
+    runs at small k are noisy, so a speed claim rests on deterministic counts and this is
+    the secondary evidence. A run with no usage (timeout) is excluded, not counted as 0."""
+    from statistics import median
+
+    def med(values):
+        values = [v for v in values if v is not None]
+        return round(median(values), 4) if values else None
+
+    with_usage = [r for r in runs if r.get("tokens")]
+    return {
+        "duration_ms_median": med([r.get("duration_ms") for r in runs]),
+        "cost_usd_median": med([r.get("cost_usd") for r in runs]),
+        "tokens_median": med([sum(r["tokens"].values()) for r in with_usage]),
+        "runs_with_usage": len(with_usage),
+    }
+
+
 def build_report(summaries: list[dict], meta: dict | None = None) -> dict:
     """`meta` records what the numbers were measured AGAINST — model, CLI version, k, the
     plugin revision and the develop fix cap in force. Without it a frozen baseline is a

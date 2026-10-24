@@ -42,7 +42,7 @@ python3 evals/run_evals.py --judge                                 # enable LLM-
 Exit code is `0` if the suite gate passes, `1` if any scenario fails, `2` on setup error
 (e.g. no `claude` CLI) **or a baseline measured under different conditions**.
 
-`--scenario` repeats (`--scenario a --scenario b`). Every report carries a `meta` block:
+`--jobs N` runs repetitions and scenarios concurrently, **bounded by memory**: all runs together may use at most a quarter of physical RAM at ≥ 2 GB each, so `--jobs` is lowered (with a note) on a smaller machine — 6 on 48 GB, 2 on 16 GB. Every run's process tree is killed on timeout and capped by a memory watchdog (`CRUCIBLE_MEM_LIMIT_MB`), so a runaway test cannot outlive or outgrow its run. `--scenario` repeats (`--scenario a --scenario b`). Every report carries a `meta` block:
 the date, `k`, the models and CLI versions the runs *reported* (not the `--model` flag,
 which defaults to nothing), the plugin revision (`+dirty` when `plugins/` has uncommitted
 edits) and the develop fix cap in force, read from `milestone_ledger.py`. A comparison
@@ -196,6 +196,10 @@ Each entry in `scenarios.json` is a falsifiable behavioral claim:
 | develop/stops-at-the-fix-cap | a milestone that has used its fix rounds stops and offers ship / continue / restart instead of a fourth fix |
 | develop/full-milestone-records-its-research | a FULL milestone starts by recording its own narrow research in the ledger |
 | develop/phase4-runs-the-delta-gates | Phase 4 runs the duplicate-code delta, which sees a pasted function the green suite cannot |
+| develop/ultra-stops-at-a-preregistered-checkpoint | an ULTRA run stops at the checkpoint its user registered in advance, instead of starting the next milestone |
+| develop/ultra-proceeds-past-an-unregistered-stop | twin: with the checkpoint later, finishing a milestone is not a stop — the run carries on into the next |
+| finish-branch/recommends-a-pr-when-the-target-has-ci | with CI on the target and a remote, the PR is recommended — and nothing is pushed until someone chooses |
+| finish-branch/no-pr-default-without-ci | control twin: same remote, no CI — no PR is recommended by default |
 | qa-gatekeeper/rejects-vacuous-assertion | wrong arithmetic behind `assert result is not None` → REJECT |
 | qa-gatekeeper/no-false-alarm-on-pinned-assertion | same feature, correct, value pinned → not a REJECT |
 | qa-gatekeeper/rejects-invented-mock | mock shaped to the code's belief, contradicting the vendor doc → REJECT |

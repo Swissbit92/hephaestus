@@ -27,6 +27,8 @@ import sys
 
 import loop_budget
 import loop_common
+
+SWEEP_TIMEOUT = 1800  # seconds per test run
 import loop_ledger
 import loop_logscan
 
@@ -91,8 +93,9 @@ def run_sweep(*, test_cmd: str, goal: str | None = None, max_turns: int = 1,
         # encoding this decodes as cp1252 on Windows and *raises* on any non-ASCII test output —
         # a sweep would die instead of reporting. Mangling a stray glyph is fine; the summary
         # line loop_logscan needs is ASCII.
-        proc = subprocess.run(test_cmd, shell=True, cwd=worktree, capture_output=True,  # noqa: S602
-                              text=True, encoding="utf-8", errors="replace")
+        # Bounded: it had no timeout at all, so a hung suite hung the loop forever, and a
+        # runaway one could take the machine; the whole process tree is stopped on either.
+        proc = loop_common.run_bounded(test_cmd, worktree, SWEEP_TIMEOUT, shell=True)  # noqa: S602
         summary = loop_logscan.summarize(f"{proc.stdout}\n{proc.stderr}")
         status, code = classify(summary)
 

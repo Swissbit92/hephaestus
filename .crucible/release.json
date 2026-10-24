@@ -1,0 +1,7 @@
+{
+  "from": "dev",
+  "to": "main",
+  "via": "pr",
+  "command": ["scripts/release.sh", "{plugin}", "{version}"],
+  "dry_run": ["scripts/release.sh", "{plugin}", "{version}", "--dry-run"]
+}
