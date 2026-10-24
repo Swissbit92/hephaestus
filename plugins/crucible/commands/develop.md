@@ -23,6 +23,8 @@ Several repos/packages → **CROSS-CUTTING** at the end.
   Phases 0 → 2.5 → 3 → 4 → 5 → 6 → 6.5 (no research, no architecture).
 - **TRIVIAL** — typos, 1-line fixes, formatting, comments. **No ceremony.** Just do it,
   verify, done. No isolate/integrate (Phases 2.5/6.5 skipped).
+- **ULTRA** — **never your choice**: only when the user's own words ask for it. FULL, plus
+  the long-run controls in **ULTRA** below.
 
 ## 2. PHASE 0 — CLASSIFY & ALIGN (all)
 
@@ -77,6 +79,16 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/predictions.py" record <branch-slug> --cl
 
 A check you have never watched fail is not a check: if it already passes on the unchanged
 tree, write a different one ([why](references/develop-rationale.md#phase-2--why-record-a-prediction)).
+
+**ULTRA** (a long run with few interruptions). At plan approval the user also names where
+the run must stop; init with `--tier ULTRA --checkpoint M<n> [--criteria <acceptance.json>]`
+and their words (the script refuses ULTRA unless those words say so). Then: each milestone's
+research may fan out to up to 4 **read-only** agents (within the cap; all writing stays
+single-threaded) · every QA round uses `qa_gates.py --final` · between checkpoints **carry
+on without asking** — log each choice you make alone with `milestone_ledger.py decide M<n>
+--note` · at `STOP CHECKPOINT-PREREGISTERED`, stop and ask, then `clear M<n> --user-said` ·
+the acceptance criteria are frozen: flip `pass`, never rewrite one (ship/PASS refuse if you
+did). Fix-budget checkpoints, integration and release stay the user's call.
 
 ## 4.5 PHASE 2.5 — ISOLATE (FULL + LIGHT)
 
@@ -149,6 +161,7 @@ PASS|CONDITIONAL_PASS|REJECT --kind <failing gate>` (`setup` if the environment 
 - `PROCEED` → after a REJECT, fix and re-run QA; after a pass, docs, then the next milestone.
 - `STOP DIAGNOSE` → the same gate failed twice: find the mechanism (not a third variation), then `diagnose M<n> --note`.
 - `STOP CHECKPOINT-*` → stop fixing. Ask the user: **ship** the best result, **continue**, or **restart** from the plan; record it with `ship|extend|restart M<n> --user-said "<their words>"`. Never choose for them.
+- `STOP CHECKPOINT-PREREGISTERED` (ULTRA) → a stop the user set in advance: ask them, then `clear M<n> --user-said`.
 - `STOP RESEARCH-MISSING` → record the milestone's research. Exit `2` → could not determine, not a pass.
 
 After each verdict give the user one status line (`report`) and carry on — a progress

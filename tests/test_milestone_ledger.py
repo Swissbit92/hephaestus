@@ -216,3 +216,73 @@ def test_the_eval_harness_reads_the_cap_this_script_enforces():
     """run_evals records develop_fix_cap by reading DEFAULT_FIX_CAP from this file."""
     assert ml.DEFAULT_FIX_CAP == 3
     assert "\nDEFAULT_FIX_CAP = 3\n" in SCRIPT.read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- ULTRA (1.7.0)
+def _ultra(tmp_path, *extra, said="ULTRA, stop after M1"):
+    fixtures._ledger_repo(tmp_path / "r")
+    r = tmp_path / "r"
+    fixtures._commit_all(r, "plan")
+    code, _, out = _run(r, "init", "--tier", "ULTRA", "--estimate", "M1=45", *extra, "--user-said", said)
+    return r, code, out
+
+
+def test_ultra_is_refused_unless_the_users_words_ask_for_it(tmp_path):
+    """Never auto-classified: an ambitious request is not a request for ULTRA."""
+    _, code, out = _ultra(tmp_path, said="go big, run it all autonomously")
+    assert code == 2 and "opt-in" in out
+
+
+def test_checkpoints_belong_to_ultra_only(tmp_path):
+    fixtures._ledger_repo(tmp_path / "r")
+    code, _, out = _run(tmp_path / "r", "init", "--tier", "FULL", "--checkpoint", "M1", "--user-said", "ok")
+    assert code == 2 and "ULTRA" in out
+
+
+def test_a_preregistered_checkpoint_stops_the_run_until_the_user_clears_it(tmp_path):
+    r, code, _ = _ultra(tmp_path, "--checkpoint", "M1")
+    assert code == 0
+    _run(r, "start", "M1")
+    _run(r, "research", "M1", "--note", "docs")
+    assert _run(r, "record", "M1", "--verdict", "PASS")[:2] == (1, "STOP CHECKPOINT-PREREGISTERED")
+    assert _run(r, "start", "M2")[:2] == (1, "STOP CHECKPOINT-PREREGISTERED")
+    assert _run(r, "clear", "M1", "--user-said", "looks good, carry on")[:2] == (0, "DONE")
+    assert _run(r, "start", "M2")[0] == 0
+
+
+def test_without_a_checkpoint_the_run_carries_on(tmp_path):
+    r, _, _ = _ultra(tmp_path, "--checkpoint", "M2")
+    _run(r, "start", "M1")
+    _run(r, "research", "M1", "--note", "docs")
+    assert _run(r, "record", "M1", "--verdict", "PASS")[:2] == (0, "DONE")
+    assert _run(r, "start", "M2")[0] == 0
+
+
+def test_ultra_milestones_need_research_like_full(tmp_path):
+    r, _, _ = _ultra(tmp_path)
+    _run(r, "start", "M1")
+    assert _run(r, "record", "M1", "--verdict", "PASS")[:2] == (1, "STOP RESEARCH-MISSING")
+
+
+def test_frozen_criteria_may_only_flip_pass_flags(tmp_path):
+    fixtures._ledger_repo(tmp_path / "r")
+    r = tmp_path / "r"
+    crit = r / "acceptance.json"
+    crit.write_text(json.dumps([{"id": "trailing-comma", "check": "parse_line('a,')", "pass": False}]))
+    fixtures._commit_all(r, "plan + criteria")
+    assert _run(r, "init", "--tier", "ULTRA", "--criteria", "acceptance.json",
+                "--user-said", "ULTRA")[0] == 0
+    _run(r, "start", "M1")
+    _run(r, "research", "M1", "--note", "docs")
+    crit.write_text(json.dumps([{"id": "trailing-comma", "check": "parse_line('a,')", "pass": True}]))
+    assert _run(r, "record", "M1", "--verdict", "PASS")[0] == 0           # flipping pass: fine
+    crit.write_text(json.dumps([{"id": "trailing-comma", "check": "parse_line('')", "pass": True}]))
+    code, _, out = _run(r, "ship", "M1", "--user-said", "ship it")
+    assert code == 2 and "acceptance criteria" in out                   # moving the goalposts: no
+
+
+def test_choices_made_alone_are_logged_and_reported(tmp_path):
+    r, _, _ = _ultra(tmp_path)
+    _run(r, "start", "M1")
+    _run(r, "decide", "M1", "--note", "kept the old parser API; callers in two repos")
+    assert "decided alone (M1): kept the old parser API" in _run(r, "report")[2]

@@ -39,11 +39,15 @@ Usage:
   milestone_ledger.py status M1                                   # evaluates only
   milestone_ledger.py diagnose M1 --note "the mechanism"
   milestone_ledger.py extend|restart|ship M1 --user-said "..."
+  ULTRA (opt-in, the user's words must say so):
+  milestone_ledger.py init --tier ULTRA --checkpoint M2 [--criteria acceptance.json] --user-said "..."
+  milestone_ledger.py decide M1 --note "a choice made without asking, and why"
+  milestone_ledger.py clear M2 --user-said "..."                   # lift a pre-registered stop
   milestone_ledger.py report
 
 The first stdout line of record/status is machine-readable: ``PROCEED``, ``DONE`` or
 ``STOP <REASON>`` with REASON one of CHECKPOINT-ROUNDS, CHECKPOINT-SETUP, CHECKPOINT-TIME,
-DIAGNOSE, RESEARCH-MISSING.
+DIAGNOSE, RESEARCH-MISSING, CHECKPOINT-PREREGISTERED.
 
 Exit codes:
   0 — proceed (or the milestone is done)
@@ -55,7 +59,9 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from urllib.parse import quote
@@ -70,7 +76,12 @@ SAME_KIND_LIMIT = 2
 TIME_FACTOR = 2
 SCHEMA = 1
 
-TIERS = ("FULL", "LIGHT", "TRIVIAL")
+TIERS = ("FULL", "LIGHT", "TRIVIAL", "ULTRA")
+RESEARCH_TIERS = ("FULL", "ULTRA")
+# ULTRA is opt-in only: never a tier the agent picks for itself. The guard is the user's own
+# words, which must name it — as strong as the cap guard, and as honest about its limit (the
+# agent writes the quote). Phase 0's confirmation is the real gate.
+_ULTRA_WORD = re.compile(r"\bultra\b", re.I)
 VERDICTS = ("PASS", "CONDITIONAL_PASS", "REJECT")
 # One per gate that can fail a round, so "the same kind twice" means the same gate twice.
 # `setup` is the environment, not the change, and goes to its own budget.
@@ -139,7 +150,8 @@ def milestone_state(events: list[dict], m: str) -> dict:
           "base_fix_cap": fix_cap, "fix_cap": fix_cap, "setup_cap": setup_cap,
           "rounds": 0, "setup": 0,
           "since_diagnose": [], "research": False, "passed": False, "shipped": False,
-          "extensions": 0, "restarts": 0,
+          "extensions": 0, "restarts": 0, "cleared": False,
+          "checkpoint": m in (init.get("checkpoints") or []),
           "estimate": (init.get("estimates") or {}).get(m)}
     for ev in events[1:]:
         if ev.get("milestone") != m:
@@ -171,7 +183,45 @@ def milestone_state(events: list[dict], m: str) -> dict:
                       fix_cap=fix_cap, setup_cap=setup_cap, window_at=ev.get("at"))
         elif kind == "ship":
             st["shipped"] = True
+        elif kind == "clear":
+            st["cleared"] = True
     return st
+
+
+def pending_checkpoint(events: list[dict]) -> str | None:
+    """The first milestone that passed QA, carries a pre-registered checkpoint, and has not
+    been cleared by the user — the run must stop there before anything else starts."""
+    for m in (events[0].get("checkpoints") or []):
+        st = milestone_state(events, m)
+        if (st["passed"] or st["shipped"]) and not st["cleared"]:
+            return m
+    return None
+
+
+def criteria_digest(path: Path) -> str:
+    """Hash of the acceptance criteria with every `pass` flag removed: the run may flip a
+    criterion to passing, never rewrite, add or delete one."""
+    def strip(x):
+        if isinstance(x, dict):
+            return {k: strip(v) for k, v in sorted(x.items()) if k != "pass"}
+        if isinstance(x, list):
+            return [strip(v) for v in x]
+        return x
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise Undetermined(f"cannot determine: acceptance criteria {path.as_posix()} unreadable ({e})") from None
+    return hashlib.sha256(json.dumps(strip(data), sort_keys=True).encode()).hexdigest()
+
+
+def check_criteria(repo: Path, init: dict) -> None:
+    ref = init.get("criteria")
+    if not ref:
+        return
+    if criteria_digest(Path(repo) / ref["path"]) != ref["sha256"]:
+        raise Undetermined(f"refused: the acceptance criteria in {ref['path']} changed after the run "
+                           "started (beyond pass flags) — log it with `decide`, then re-init with "
+                           "--replace and the user's words")
 
 
 def evaluate(st: dict, now: _dt.datetime) -> tuple[int, str, str]:
@@ -181,10 +231,14 @@ def evaluate(st: dict, now: _dt.datetime) -> tuple[int, str, str]:
     if st["shipped"]:
         return 0, "DONE", f"{m}: shipped at a checkpoint on the user's word"
     if st["passed"]:
-        if st["tier"] == "FULL" and not st["research"]:
+        if st["tier"] in RESEARCH_TIERS and not st["research"]:
             return 1, "STOP RESEARCH-MISSING", (
-                f"{m} passed QA but has no research recorded — a FULL milestone starts with "
-                f"narrow research; record it with `research {m} --note ...`")
+                f"{m} passed QA but has no research recorded — a {st['tier']} milestone starts "
+                f"with its own research; record it with `research {m} --note ...`")
+        if st["checkpoint"] and not st["cleared"]:
+            return 1, "STOP CHECKPOINT-PREREGISTERED", (
+                f"{m} passed — the user registered a checkpoint here before the run. Stop and "
+                f"ask them how to go on; record their answer with `clear {m} --user-said ...`")
         return 0, "DONE", f"{m}: passed"
     minutes = None
     if st["window_at"] and st["estimate"]:
@@ -243,9 +297,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--setup-cap", type=int, default=DEFAULT_SETUP_CAP)
     p.add_argument("--user-said")
     p.add_argument("--replace", action="store_true")
+    p.add_argument("--checkpoint", action="append", default=[], metavar="M",
+                   help="ULTRA: stop after milestone M passes (repeatable)")
+    p.add_argument("--criteria", help="ULTRA: acceptance-criteria JSON frozen for the run")
     for name in ("start", "status"):
         sub.add_parser(name).add_argument("milestone")
-    for name in ("research", "diagnose"):
+    for name in ("research", "diagnose", "decide"):
         p = sub.add_parser(name)
         p.add_argument("milestone")
         p.add_argument("--note")
@@ -253,7 +310,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("milestone")
     p.add_argument("--verdict", choices=VERDICTS)
     p.add_argument("--kind", choices=KINDS, default="other")
-    for name in ("extend", "restart", "ship"):
+    for name in ("extend", "restart", "ship", "clear"):
         p = sub.add_parser(name)
         p.add_argument("milestone")
         p.add_argument("--user-said")
@@ -276,11 +333,22 @@ def main(argv: list[str] | None = None) -> int:
             if a.fix_cap < 1 or a.setup_cap < 1:
                 raise Undetermined("refused: caps must be at least 1")
             estimates = _parse_estimates(a.estimate)
+            extra = {}
+            if a.tier == "ULTRA":
+                if not _ULTRA_WORD.search(said):
+                    raise Undetermined("refused: ULTRA is opt-in — the user's own words must ask "
+                                       "for it (--user-said must contain ULTRA)")
+                extra["checkpoints"] = a.checkpoint
+                if a.criteria:
+                    extra["criteria"] = {"path": Path(a.criteria).as_posix(),
+                                         "sha256": criteria_digest(Path(repo) / a.criteria)}
+            elif a.checkpoint or a.criteria:
+                raise Undetermined("refused: --checkpoint and --criteria belong to an ULTRA run")
             if path.exists():
                 path.unlink()
             append(path, {"event": "init", "tier": a.tier, "fix_cap": a.fix_cap,
                           "setup_cap": a.setup_cap, "estimates": estimates,
-                          "user_said": said}, now)
+                          "user_said": said, **extra}, now)
             print(f"ledger ready: {path.as_posix()} · fix cap {a.fix_cap} · setup cap "
                   f"{a.setup_cap} · {len(estimates)} estimate(s)")
             return 0
@@ -294,6 +362,9 @@ def main(argv: list[str] | None = None) -> int:
                 _, line, human = evaluate(milestone_state(events, m), now_dt)
                 print(f"{line:<24} {human}")
             for e in events:
+                if e["event"] == "decide":
+                    print(f"decided alone ({e.get('milestone')}): {e.get('note')}")
+            for e in events:
                 if e.get("user_said"):
                     print(f"user said ({e['event']}{' ' + e['milestone'] if e.get('milestone') else ''}): "
                           f"{e['user_said']}")
@@ -302,22 +373,32 @@ def main(argv: list[str] | None = None) -> int:
         m = a.milestone
         st = milestone_state(events, m)
         if a.cmd == "start":
+            held = pending_checkpoint(events)
+            if held and held != m:
+                print("STOP CHECKPOINT-PREREGISTERED")
+                print(f"{held} passed and the user registered a checkpoint there — ask them "
+                      f"before starting {m}; record the answer with `clear {held} --user-said ...`")
+                return 1
             if not st["started"]:
                 append(path, {"event": "start", "milestone": m}, now)
             print(f"{m} started")
             return 0
         if not st["started"]:
             raise Undetermined(f"cannot determine: milestone {m} was never started")
-        if a.cmd in ("research", "diagnose"):
+        if a.cmd in ("research", "diagnose", "decide"):
             note = _need(a.note, f"{a.cmd} needs a non-empty --note")
             append(path, {"event": a.cmd, "milestone": m, "note": note}, now)
             st = milestone_state(load(path), m)
-        elif a.cmd in ("extend", "restart", "ship"):
+        elif a.cmd in ("extend", "restart", "ship", "clear"):
             said = _need(a.user_said, f"{a.cmd} needs --user-said: only the user changes a cap")
+            if a.cmd == "ship":
+                check_criteria(repo, events[0])
             append(path, {"event": a.cmd, "milestone": m, "user_said": said}, now)
             st = milestone_state(load(path), m)
         elif a.cmd == "record":
             verdict = _need(a.verdict, "record needs --verdict PASS|CONDITIONAL_PASS|REJECT")
+            if verdict in PASSING:
+                check_criteria(repo, events[0])
             append(path, {"event": "verdict", "milestone": m, "verdict": verdict,
                           "kind": a.kind}, now)
             st = milestone_state(load(path), m)
