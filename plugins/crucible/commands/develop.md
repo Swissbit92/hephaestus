@@ -179,73 +179,35 @@ No serial loops over independent, expensive work where the runtime offers parall
 
 Catch issues before they compound.
 
-### 4.0 Run the deterministic checks FIRST — yourself, before delegating
+### 4.0 Run the deterministic checks FIRST — yourself, in one call
 
-Anything a script can decide, a script decides. Run these in the main loop and carry the
-**results** into the review; do not ask a subagent to remember to run them.
-
-**First, find out what this project supports** — the right gates differ per project, and a
-repo may hold several independent ones:
+Anything a script can decide, a script decides, and each gate runs once
+([why](references/develop-rationale.md#phase-40--why-the-checks-are-scripts-run-by-you)):
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/detect_profile.py" --emit-gates   # + --repo/--max-depth
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/qa_gates.py"           # every QA round
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/qa_gates.py" --final   # a milestone's last round: also plants defects
 ```
 
-`0` = one runnable command per line on stdout, already scoped to the right directory ·
-`2` = **could not determine** · `3` = **nothing runnable — a SKIP, not a pass.**
+It runs what `detect_profile.py` finds for this repo (tests, coverage delta, duplicate-code
+and lint deltas), the revert probe and the invariants — read-only gates concurrently, test
+gates one at a time unless the repo declares them parallel-safe in `.crucible/qa.json`. It
+prints a line per gate, the tail of each failing one, and `QA-GATES: PASS|FAIL|UNDETERMINED|SKIP`,
+and stores the verdict for this exact tree. `0` pass · `1` a gate failed · `2` **could not
+determine, not a pass** · `3` nothing to gate (a SKIP). A failing gate's `1` means:
 
-**Run every line it prints**, and treat a non-zero exit from any of them as a QA failure.
-Drop `--emit-gates` for the human-readable report, or add `--json` for the full structure.
+| Gate | `1` = |
+|---|---|
+| tests | something that passed at the branch point fails now |
+| coverage-delta | tests present at the branch point are gone — REJECT unless each removal has a stated reason |
+| clones, lint-delta | findings new since the branch point — each needs a stated reason or a fix, else REJECT |
+| revert-probe | the changed tests pass without the change — REJECT unless deliberately test-neutral |
+| mutation-probe | planted defects survived — each is a finding: kill it with a test, or show it equivalent |
+| invariants | a standing constraint no longer holds |
 
-Two printed lines are delta gates — `metric_delta.py --metric clones` (duplicated code) and
-`--metric ruff` (where configured) — reporting only findings new since the branch point:
-`1` = **new findings**, each needing a stated reason or a fix, otherwise REJECT · `2` =
-could not determine · `3` = nothing to measure (a SKIP).
-
-Anything the detector calls a *capability* (a browser suite whose config starts no server)
-is deliberately **not** printed as runnable; it goes to stderr.
-
-Then run the coverage check for each Python root it reported:
-
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/coverage_delta.py"   # + --repo/--target/--base/--collect-cmd as needed
-```
-
-`0` = no test disappeared · `1` = **coverage regression** — REJECT unless each removal has a
-stated reason (behaviour deliberately deleted, or the test moved and appears under ADDED) ·
-`2` = **could not determine, not a pass** — fix the invocation (usually `--collect-cmd`).
-
-For Python changes, check that the tests depend on the change — every milestone `--revert`
-(the branch point's code restored in a throwaway copy), the final milestone also `--mutate`
-(up to 6 planted defects in the changed functions):
-
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/mutation_probe.py" --revert   # | --mutate
-```
-
-`0` = the tests depend on the change / every mutant killed · `1` = **they pass without it**
-(REJECT unless deliberately test-neutral) / **mutants survived** (each a finding) · `2` =
-could not determine (a canary failed) · `3` = nothing to probe (a SKIP).
-
-Then run the repo's standing constraints, if it has any:
-
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/invariants_run.py"   # + --repo/--file
-```
-
-`0` = every wired check passed · `1` = **an invariant was violated** — a constraint agreed to
-hold for all work here no longer does · `2` = could not determine · `3` = **nothing
-enforceable** (no file, or no entry has a check yet) — a SKIP, not a pass.
-
-Profile catalogue and the deliberate non-goals:
+Hand the gatekeeper the `QA-GATES` line, not an assignment: it reads the stored verdict
+(`qa_gates.py --show`) instead of re-running anything. Profile catalogue:
 [references/evidence-profiles.md](references/evidence-profiles.md).
-
-Why these are scripts you run rather than instructions the gatekeeper follows — a measured
-3/6 vs 3/3 — and why the delta gates compare sets, not counts:
-[references/develop-rationale.md](references/develop-rationale.md#phase-40--why-the-checks-are-scripts-run-by-you).
-
-State the exit code in the QA record, and hand it to the gatekeeper as an input rather than
-an assignment.
 
 ### 4.1 Then review
 

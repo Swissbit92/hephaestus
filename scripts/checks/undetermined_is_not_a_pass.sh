@@ -11,5 +11,7 @@ run_pytest -q -o addopts= \
   tests/test_invariants_run.py::test_exit_3_when_stated_but_never_wired \
   tests/test_milestone_ledger.py::test_exit_2_when_there_is_no_ledger \
   tests/test_milestone_ledger.py::test_exit_2_on_detached_head \
-  tests/test_milestone_ledger.py::test_exit_2_for_an_unreadable_ledger
+  tests/test_milestone_ledger.py::test_exit_2_for_an_unreadable_ledger \
+  tests/test_qa_gates.py::test_a_malformed_parallel_declaration_is_undetermined \
+  tests/test_qa_gates.py::test_aggregate_never_folds_could_not_determine_into_a_pass
 exit $?

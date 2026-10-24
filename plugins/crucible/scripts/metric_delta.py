@@ -51,7 +51,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from crucible_common import (  # noqa: E402
+    cache_disabled,
+    cache_get,
+    cache_key,
+    cache_put,
     detect_target,
+    script_digest,
     git_out,
     merge_base,
     run,
@@ -241,8 +246,18 @@ def ruff_findings(root: Path, ruff: list[str]) -> set[tuple]:
     return found
 
 
-def ruff_delta(repo: Path, base: str, ruff: list[str]) -> list[dict]:
+def ruff_delta(repo: Path, base: str, ruff: list[str], no_cache: bool = False) -> list[dict]:
     head = ruff_findings(repo, ruff)
+    # The base side costs a worktree and a full lint; for one base and one ruff it is the
+    # same answer every round, so it is cached. The ruff version is part of the key: a new
+    # ruff can report different findings on the same code.
+    rc, version = run([*ruff, "--version"], repo, timeout=60)
+    key = cache_key("metric_delta.ruff.base", base, ruff, version.strip() if rc == 0 else "?",
+                    script_digest(__file__))
+    cached = None if cache_disabled(no_cache) else cache_get(repo, key)
+    if cached is not None:
+        base_keys = {tuple(k) for k in cached}
+        return _new_ruff(head, base_keys)
     tmp = Path(tempfile.mkdtemp(prefix="metricdelta-"))
     wt = tmp / "base"
     rc, out = run(["git", "worktree", "add", "--detach", str(wt), base], repo)
@@ -255,6 +270,11 @@ def ruff_delta(repo: Path, base: str, ruff: list[str]) -> list[dict]:
         run(["git", "worktree", "remove", "--force", str(wt)], repo)
         shutil.rmtree(tmp, ignore_errors=True)
     base_keys = {f[:4] for f in base_set}
+    cache_put(repo, key, sorted(list(k) for k in base_keys))
+    return _new_ruff(head, base_keys)
+
+
+def _new_ruff(head: set[tuple], base_keys: set[tuple]) -> list[dict]:
     return [{"path": f[1], "lines": str(f[4]), "rule": f[0], "message": f[5]}
             for f in sorted(head, key=lambda x: (x[1], x[4])) if f[:4] not in base_keys]
 
@@ -270,6 +290,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--min-tokens", type=int, default=DEFAULT_MIN_TOKENS)
     ap.add_argument("--ruff", default="ruff", help="ruff command (default: ruff)")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="recompute the base side (also CRUCIBLE_NO_CACHE=1)")
     a = ap.parse_args(argv)
     repo = Path(a.repo)
     try:
@@ -295,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
             found = new_clones(base_files(repo, base), head, changed_lines(repo, base, head),
                                a.min_tokens)
         else:
-            found = ruff_delta(repo, base, a.ruff.split())
+            found = ruff_delta(repo, base, a.ruff.split(), a.no_cache)
     except Undetermined as e:
         print(str(e), file=sys.stderr)
         return 2

@@ -64,36 +64,26 @@ gets a green tick; recording it as `fail` turns a missing capability into an acc
 Name it, and name what would settle it.
 
 #### The test class, in detail
-Test counts drift: tests get added during the work, and a baseline number stated earlier
-gets summarized away or mis-remembered. A *stated* count is a hint, not ground truth — if
-you gate on it you will false-alarm the moment the milestone legitimately adds a test.
-Re-derive the baseline yourself.
 
-1. **Infer the test command** from the repo (README/CLAUDE.md, `package.json`, `Makefile`,
-   `pyproject.toml`).
-2. **Establish the baseline from ground truth** — the pre-work state, not a remembered count:
-   - Find the integration target. Read the recorded one first —
-     `git config --get branch."$(git rev-parse --abbrev-ref HEAD)".integrationTarget` —
-     which `start-branch` wrote when the branch was created. Only if it is unset, detect
-     it (the repo's `CLAUDE.md`/`CONTRIBUTING.md`, else the long-lived branch in git —
-     `main`/`master`/`dev`).
-   - This ordering matters for the same reason the count is re-derived rather than
-     trusted: re-running a heuristic is not the same as recovering an answer. The count
-     drifts because work happens, so it must be recomputed; the target does not drift, so
-     recomputing it can only *lose* a correction the user already made. Derive what
-     changes, recover what does not.
-   - `BASE=$(git merge-base HEAD <integration-target>)` — the commit this work branched from.
-   - Count tests at `BASE` *without disturbing the working tree*, in a throwaway worktree:
-     `git worktree add --detach <tmp> "$BASE"` → run the repo's collect/count command there
-     → `git worktree remove <tmp>`. If `HEAD` is itself the branch point (no commits yet),
-     count on a clean checkout with your changes stashed.
-3. **Run the full suite on the working tree now.** Record the passing count and any failures.
-4. **Verdict on regression:**
-   - **REJECT** if any test that passed at `BASE` now fails or errors, **or** the passing
-     count is **lower** than baseline.
-   - A **higher** passing count (the milestone added tests) is expected — **not** a regression.
-   - Compare against what you just derived, never against a number stated in the task.
-5. If tests fail, identify the root cause — don't just report the failure.
+**Take the evidence from the QA verdict — do not re-derive it.** develop's Phase 4.0 ran
+every deterministic gate once, for this exact tree, and stored the result:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/qa_gates.py" --show   # exit 2 = no verdict for this tree
+```
+
+If it exits 2 — you were invoked directly, or the tree changed since — run `qa_gates.py`
+yourself. Never run the suite and the coverage check by hand: the runner is what makes
+each gate run once. Then, per gate in the verdict:
+
+- **tests** exit 1 → **REJECT**: something that passed at the branch point now fails or
+  errors. Find the root cause; don't just report the failure.
+- **coverage-delta** exit 1 → tests present at the branch point are gone (see §4b). More
+  tests than at the branch point is expected, never a regression. It compares test
+  identities at the merge-base with the recorded integration target — never a count
+  stated in the task.
+- **revert-probe** / **mutation-probe** → §4b. **Any exit 2** → `could-not-check` for that
+  class, named, with what would settle it.
 
 ### 4b. A green suite is not evidence — interrogate it
 
@@ -101,25 +91,11 @@ Green is the *expected* state, so it carries almost no information on its own. T
 common way a defect ships is a suite that is green **because** it encodes the same wrong
 assumption as the code. Before accepting green, check all three:
 
-- **Did coverage shrink? Run the check, don't eyeball it.**
-
-  ```bash
-  python3 "${CLAUDE_PLUGIN_ROOT}/scripts/coverage_delta.py"          # add --repo/--target/--base/--collect-cmd as needed
-  ```
-
-  It diffs the *set of collected test identities* between the branch point and the working
-  tree. **Exit 0** = nothing disappeared · **1** = tests present at `BASE` are gone (a
-  coverage regression: REJECT unless each removal has an explicit reason — the behaviour was
-  deliberately deleted, or the test moved and appears under ADDED) · **2** = it could not
-  tell, which is *not* a pass; fix the invocation (usually `--collect-cmd`) and re-run.
-
-  Counts cannot see this. Delete one test and add another and the count is unchanged; delete
-  a test and the suite stays green precisely because what would have failed is no longer
-  asked. Judgement cannot see it reliably either — this is set arithmetic, so let the script
-  do it and read the verdict.
-
-  What the script does *not* catch: a test that still collects but was neutered (assertions
-  weakened, or skipped at runtime). That is the next bullet's job.
+- **Did coverage shrink?** Read the verdict's `coverage-delta` line, don't eyeball it: exit
+  **1** = tests present at the branch point are gone — REJECT unless each removal has an
+  explicit reason (the behaviour was deliberately deleted, or the test moved and appears
+  under ADDED). It does *not* catch a test that still collects but was neutered (assertions
+  weakened, skipped at runtime) — that is the next bullet's job.
 - **Do the new tests assert the right value, or merely that a value came back?**
   `assert result is not None`, `assert len(rows) > 0`, `assert a != b` and
   `expect(true).toBe(true)` pass for almost any implementation, including a broken one. An

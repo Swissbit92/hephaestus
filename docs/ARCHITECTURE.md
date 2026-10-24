@@ -177,6 +177,7 @@ forbids, and plugin updates overwrite that directory anyway.
 | `docs/predictions.jsonl` | JSONL, append-only | `predictions.py` | `predictions.py list`, `curate` |
 | `docs/INVARIANTS.md` | Markdown + `Check:` lines | maintainer | `invariants_run.py` |
 | `.crucible/evidence.json` | JSON | maintainer | `evidence_gate.py`, `finish-branch` |
+| **Shared QA state** (`<git-common-dir>/crucible/cache/`, `…/crucible/qa/<tree>.json`) | JSON | `coverage_delta`/`metric_delta` (branch-point results, keyed by base sha + command + interpreter + script), `qa_gates.py` (verdict per tree content) | later QA rounds and the gatekeeper; never committed; `--no-cache` / `CRUCIBLE_NO_CACHE=1` bypasses |
 | **Branch-local state** (`<git-dir>/crucible/ledger-<branch>.jsonl`) | JSONL, append-only | `milestone_ledger.py` during `develop` | the same branch's later rounds; never committed or merged (like `branch.<b>.integrationTarget` in git config) |
 | `.forge/adapter.json` | JSON | the *consuming project*, not this repo | `forge-unity/scripts/adapter.py` |
 

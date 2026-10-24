@@ -103,3 +103,78 @@ def detect_target(repo: Path, preferred: str | None = None) -> str | None:
 def merge_base(repo: Path, target: str) -> str | None:
     rc, out = run(["git", "merge-base", "HEAD", target], repo)
     return out.strip() if rc == 0 and out.strip() else None
+
+
+# --------------------------------------------------------------------------- base-side cache
+# What a gate computes at the BRANCH POINT depends only on that commit and on how it was
+# computed, so it can be reused across QA rounds — that side costs a worktree and a full
+# collection or lint run every time, and it is the same answer every time. Only the base
+# side is cached: the working tree changes between rounds, and a stale head-side result
+# would be exactly the wrong-but-green answer these gates exist to prevent.
+#
+# The key covers the base sha, the command, the interpreter (path and version) and the
+# calling script's own bytes, so upgrading a gate script or switching venvs misses the
+# cache. Known gap: upgrading packages inside the same venv, at the same interpreter path,
+# does not change the key — pass --no-cache (or CRUCIBLE_NO_CACHE=1) after doing that.
+# Only successful results are stored; a could-not-determine is never cached.
+
+def git_common_dir(repo: Path) -> Path | None:
+    """Shared by every worktree of the repo, so worktrees share one cache."""
+    out = git_out(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    if out and Path(out).is_absolute():
+        return Path(out)
+    out = git_out(repo, "rev-parse", "--git-common-dir")   # git < 2.31: may be relative
+    return (Path(repo) / out).resolve() if out else None
+
+
+def cache_key(*parts: object) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    for part in (*parts, sys.executable, sys.version):
+        h.update(repr(part).encode("utf-8"))
+        h.update(b"\x00")
+    return h.hexdigest()[:32]
+
+
+def script_digest(path: str | Path) -> str:
+    import hashlib
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()[:16]
+    except OSError:
+        return "unreadable"
+
+
+def cache_disabled(flag: bool = False) -> bool:
+    import os
+    return flag or os.environ.get("CRUCIBLE_NO_CACHE", "") not in ("", "0")
+
+
+def cache_get(repo: Path, key: str):
+    import json
+    root = git_common_dir(repo)
+    if root is None:
+        return None
+    try:
+        return json.loads((root / "crucible" / "cache" / f"{key}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def cache_put(repo: Path, key: str, value) -> None:
+    """Atomic: write a temp file, then rename over the target, so a concurrent reader sees
+    the old entry or the new one, never half of one."""
+    import json
+    import os
+    import tempfile
+    root = git_common_dir(repo)
+    if root is None:
+        return
+    d = root / "crucible" / "cache"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=str(d), suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(value, fh)
+        os.replace(tmp, d / f"{key}.json")
+    except OSError:
+        pass   # a cache that cannot be written is a cache miss next time, nothing worse
