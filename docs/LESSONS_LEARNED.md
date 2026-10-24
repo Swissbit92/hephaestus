@@ -12,6 +12,34 @@ ai_summary: "Dated, append-only record of what this repo measured and got wrong,
 
 Append-only, dated entries. Newest first. Each entry: what happened, what we learned, how to apply going forward.
 
+## 2026-10-24 — A timeout that kills only the child froze the machine; and three gates that hid a missing tool
+
+- **What:** During the crucible 1.7.0 evals (24 runs in parallel), `mutation_probe --mutate`
+  planted a mutant that looped forever, appending to a list. `subprocess.run(timeout=)` killed
+  the direct child (`uv`); the pytest grandchild, orphaned, kept running. Two such orphans grew
+  to ~100 GB each and froze a 48 GB Mac. The bug was years old; what was new was code that
+  deliberately runs *broken* programs (1.6.0's planted defects) and 24-wide eval runs.
+- **What we learned:**
+  - **A timeout must bound the whole process tree, and memory needs a ceiling too.** Every run
+    of project code now goes through `crucible_common.run_bounded` (own session, kill group +
+    descendants, reap, RSS watchdog). macOS ignores `RLIMIT_AS`, so the cap is a watchdog.
+  - **Bound the total, not each run.** A per-run cap times 24 jobs is still the machine.
+  - **A regression test for a safety guard must itself be safe when the guard is broken.**
+    The first delete-the-fix run of the memory test grew a runaway to 32 GB before it was
+    killed. The tests are now self-limiting and reap their own processes.
+  - **"Tool missing" kept reading as "check failed"** — `invariants_run` (1.6.1), then the
+    new runner's tests gate on a Homebrew `python3` without pytest ("No module named pytest",
+    exit 1, read as failing tests). The final eval caught it because agents trusted the
+    one-call verdict and stopped. Every gate now maps a missing tool to could-not-determine,
+    and the runner resolves an interpreter that can actually run pytest.
+  - **Collapsing explicit steps removes their fallbacks too.** develop 1.6 ran the coverage
+    check by hand *and* through the detector; the one-call runner kept only the detector's
+    path and silently skipped bare-pytest repos (3/3 → 0/3) until the eval showed it.
+- **How to apply:** Anything that runs code it did not write is bounded in time, tree and
+  memory. A cleanup that merges several steps lists what each step covered that the others did
+  not. Before reading an eval transcript as evidence, confirm which copy of the plugin it ran —
+  a relative `--plugin-dir` silently loads the installed one.
+
 ## 2026-10-24 — The fix cap, measured; and a check that graded the spelling, not the work
 
 - **What:** crucible 1.6.0 replaced develop's unbounded QA loop with a per-milestone budget
