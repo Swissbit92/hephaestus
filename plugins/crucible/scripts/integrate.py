@@ -42,6 +42,7 @@ from crucible_common import (  # noqa: E402
     detect_target,
     git_out,
     remote_ref,
+    run_bounded,
     utf8_stdio,
 )
 
@@ -162,14 +163,15 @@ def promote(repo: Path, values: dict[str, str]) -> tuple[int, str]:
     if "dry_run" in decl:
         dry = fill(decl["dry_run"], values)
         try:
-            p = subprocess.run(dry, cwd=str(repo), capture_output=True, text=True,
-                               encoding="utf-8", errors="replace", timeout=600)
-        except (OSError, subprocess.TimeoutExpired) as e:
+            b = run_bounded(dry, repo, 600)
+        except OSError as e:
             raise Undetermined(f"cannot determine: the dry run did not run ({e})") from None
-        tail = [ln for ln in (p.stdout + p.stderr).strip().splitlines() if ln.strip()][-12:]
-        lines.append(f"  dry run ({' '.join(dry)}): exit {p.returncode}")
+        if b.killed:
+            raise Undetermined(f"cannot determine: the dry run was stopped ({b.killed})")
+        tail = [ln for ln in (b.stdout + b.stderr).strip().splitlines() if ln.strip()][-12:]
+        lines.append(f"  dry run ({' '.join(dry)}): exit {b.returncode}")
         lines += [f"    {ln}" for ln in tail]
-        rc = 0 if p.returncode == 0 else 1
+        rc = 0 if b.returncode == 0 else 1
     if tools:
         lines.append(f"  note: {', '.join(tools)} also configured — check which one owns releases")
     return rc, "\n".join(lines)

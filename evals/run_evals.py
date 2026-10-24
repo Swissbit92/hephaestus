@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import os
 import re
 import subprocess
 import sys
@@ -157,6 +158,35 @@ def build_meta(summaries: list[dict], k: int) -> dict:
     }
 
 
+MIN_RUN_MB = 2048     # a claude run plus the tests it starts; below this, healthy runs get killed
+SUITE_FRACTION = 4    # all concurrent runs together may use at most 1/4 of physical RAM
+
+
+def physical_memory_mb() -> int | None:
+    import crucible_common
+    return crucible_common.physical_memory_mb()
+
+
+def safe_jobs(jobs: int) -> int:
+    """Concurrency that keeps every run at MIN_RUN_MB or more within a quarter of RAM:
+    6 jobs on 48 GB, 2 on a 16 GB laptop. The total is what froze the machine, not any
+    single run — 24 runs at 8 GB each is 192 GB."""
+    phys = physical_memory_mb()
+    if not phys:
+        return jobs
+    return max(1, min(jobs, (phys // SUITE_FRACTION) // MIN_RUN_MB))
+
+
+def per_run_memory_cap(jobs: int) -> int:
+    """Each concurrent run's share of the suite budget, never above the single-run cap."""
+    import crucible_common
+    single = crucible_common.mem_limit_mb() or crucible_common.default_mem_limit_mb()
+    phys = physical_memory_mb()
+    if not phys:
+        return single
+    return max(MIN_RUN_MB, min(single, (phys // SUITE_FRACTION) // max(1, jobs)))
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Run the hephaestus skill-eval suite")
     ap.add_argument("--scenario", action="append",
@@ -188,6 +218,17 @@ def main(argv: list[str]) -> int:
         scenarios = [s for s in scenarios if s["id"] in args.scenario]
 
     judge_fn = make_cli_judge(judge_mod.JUDGE_MODEL) if args.judge else None
+
+    # Bound the whole suite, not just each run: the cap is inherited by every bounded run
+    # inside (the claude tree in runner.py, and the plugin's gate scripts it calls).
+    jobs = safe_jobs(args.jobs)
+    if jobs < args.jobs:
+        print(f"note: --jobs {args.jobs} lowered to {jobs} — each run needs >= {MIN_RUN_MB} MB "
+              f"within a quarter of this machine's RAM", flush=True)
+        args.jobs = jobs
+    cap = per_run_memory_cap(args.jobs)
+    os.environ["CRUCIBLE_MEM_LIMIT_MB"] = str(cap)
+    print(f"memory cap per run: {cap} MB (jobs={args.jobs}; CRUCIBLE_MEM_LIMIT_MB)", flush=True)
 
     def _scenario(s: dict) -> dict:
         print(f"▶ {s['id']}  (k={args.k}) …", flush=True)

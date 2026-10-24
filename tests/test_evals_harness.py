@@ -580,3 +580,15 @@ def test_file_not_matching_fails_when_the_file_is_missing_or_matches(tmp_path):
     assert scoring.file_not_matching(run, "led.jsonl", "M2")[0] is True
     assert scoring.file_not_matching(run, "led.jsonl", "M1")[0] is False
     assert scoring.file_not_matching(run, "missing.jsonl", "M2")[0] is False
+
+
+def test_parallel_evals_are_bounded_in_total_not_just_per_run(monkeypatch):
+    """24 runs x an 8 GB per-run cap is 192 GB — the total is what froze the machine. Jobs
+    are clamped so each run keeps >= MIN_RUN_MB within half of physical RAM."""
+    import run_evals
+    for phys, expected in ((49152, 6), (16384, 2)):          # this Mac; a 16 GB laptop
+        monkeypatch.setattr(run_evals, "physical_memory_mb", lambda p=phys: p)
+        jobs = run_evals.safe_jobs(24)
+        assert jobs == expected
+        assert jobs * run_evals.per_run_memory_cap(jobs) <= phys // 4
+    assert run_evals.safe_jobs(1) == 1

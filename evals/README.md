@@ -42,7 +42,7 @@ python3 evals/run_evals.py --judge                                 # enable LLM-
 Exit code is `0` if the suite gate passes, `1` if any scenario fails, `2` on setup error
 (e.g. no `claude` CLI) **or a baseline measured under different conditions**.
 
-`--scenario` repeats (`--scenario a --scenario b`). Every report carries a `meta` block:
+`--jobs N` runs repetitions and scenarios concurrently, **bounded by memory**: all runs together may use at most a quarter of physical RAM at ≥ 2 GB each, so `--jobs` is lowered (with a note) on a smaller machine — 6 on 48 GB, 2 on 16 GB. Every run's process tree is killed on timeout and capped by a memory watchdog (`CRUCIBLE_MEM_LIMIT_MB`), so a runaway test cannot outlive or outgrow its run. `--scenario` repeats (`--scenario a --scenario b`). Every report carries a `meta` block:
 the date, `k`, the models and CLI versions the runs *reported* (not the `--model` flag,
 which defaults to nothing), the plugin revision (`+dirty` when `plugins/` has uncommitted
 edits) and the develop fix cap in force, read from `milestone_ledger.py`. A comparison

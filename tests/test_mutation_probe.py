@@ -173,3 +173,12 @@ def test_exit_2_without_a_mode(tmp_path):
 def test_exit_2_outside_a_git_repository(tmp_path):
     code, out = _run(tmp_path, "--revert")
     assert code == 2 and "not a git repository" in out
+
+
+def test_augmented_assignment_is_mutated():
+    """`i += 1` is as common as `a + b`; a probe that skipped it missed a whole class of
+    off-by-sign defects — and the mutant that loops forever."""
+    src = "def f(n):\n    i = 0\n    while i < n:\n        i += 1\n    return i\n"
+    tree = __import__("ast").parse(src)
+    mutated = [mp._apply(src, op, o) for op, _l, o in mp._sites(tree, {1, 2, 3, 4, 5}) if op == "arith"]
+    assert any("i -= 1" in m for m in mutated)

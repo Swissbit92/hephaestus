@@ -12,10 +12,16 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 from . import world
+
+_CRUCIBLE_SCRIPTS = Path(__file__).resolve().parents[2] / "plugins" / "crucible" / "scripts"
+if str(_CRUCIBLE_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_CRUCIBLE_SCRIPTS))
+from crucible_common import run_bounded  # noqa: E402
 from .model import RunResult, ToolCall, ToolResult
 
 DEFAULT_ALLOWED = ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "TodoWrite"]
@@ -153,14 +159,12 @@ def run_skill(
     exit_ok = True
     stdout = ""
     started = time.monotonic()
-    try:
-        proc = subprocess.run(cmd, cwd=str(fixture_dir), env=run_env,
-                              capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
-        stdout = proc.stdout
-        exit_ok = proc.returncode == 0
-    except subprocess.TimeoutExpired as e:
-        stdout = e.stdout.decode() if isinstance(e.stdout, bytes) else (e.stdout or "")
-        exit_ok = False
+    # Bounded, never subprocess.run(timeout=): that kills only `claude`, and the Bash-tool
+    # children it started — a test suite, a mutant that loops — run on as orphans. Two such
+    # orphans once grew to ~100 GB each and froze the machine mid-eval.
+    b = run_bounded(cmd, fixture_dir, timeout, env=run_env)
+    stdout = b.stdout
+    exit_ok = b.returncode == 0 and not b.killed
 
     (plugin_loaded, loaded_plugins, skills, errors,
      tool_calls, tool_results, final_text, model_seen, cli_version, usage) = _parse_stream(stdout)

@@ -42,7 +42,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from crucible_common import git_common_dir, git_out, python_exe, run, utf8_stdio  # noqa: E402
+from crucible_common import git_common_dir, git_out, python_exe, run, run_bounded, utf8_stdio  # noqa: E402
 
 SCRIPTS = Path(__file__).resolve().parent
 TAIL_LINES = 15
@@ -144,11 +144,10 @@ def _name(cmd: str) -> str:
 def run_gate(repo: Path, gate: dict) -> dict:
     started = time.monotonic()
     try:
-        p = subprocess.run(gate["cmd"], shell=True, cwd=str(repo), capture_output=True,
-                           text=True, encoding="utf-8", errors="replace", timeout=GATE_TIMEOUT)
-        code, out = p.returncode, (p.stdout or "") + (p.stderr or "")
-    except subprocess.TimeoutExpired:
-        code, out = 2, f"timed out after {GATE_TIMEOUT}s"
+        b = run_bounded(gate["cmd"], repo, GATE_TIMEOUT, shell=True)
+        code, out = b.returncode, b.stdout + b.stderr
+        if b.killed:      # the whole tree was stopped; nothing was measured
+            code = 2
     except OSError as e:
         code, out = 2, f"could not start: {e}"
     if code == 1 and "Traceback (most recent call last)" in out:
