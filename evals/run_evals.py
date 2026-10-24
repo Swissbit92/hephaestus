@@ -63,8 +63,8 @@ def make_cli_judge(model: str):
     return judge_fn
 
 
-def _one_run(scenario: dict, model: str | None, judge_fn, bare: bool) -> tuple[list[Criterion], str, str]:
-    """One repetition in its own throwaway fixture: (criteria, model seen, CLI version)."""
+def _one_run(scenario: dict, model: str | None, judge_fn, bare: bool) -> tuple[list[Criterion], str, str, dict]:
+    """One repetition in its own throwaway fixture: (criteria, model seen, CLI version, cost)."""
     plugin_root = REPO_ROOT / "plugins" / scenario["plugin"]
     with tempfile.TemporaryDirectory(prefix="eval-") as td:
         fixture_dir = fixtures.build(scenario["fixture"], Path(td) / "repo")
@@ -92,7 +92,8 @@ def _one_run(scenario: dict, model: str | None, judge_fn, bare: bool) -> tuple[l
             for jc in scenario.get("judge", []):
                 criteria.append(judge_mod.judge_criterion(
                     jc["key"], jc["criterion"], jc["rubric"], run.final_text, judge_fn))
-        return criteria, run.model, run.cli_version
+        perf = {"duration_ms": run.duration_ms, "cost_usd": run.cost_usd, "tokens": run.tokens}
+        return criteria, run.model, run.cli_version, perf
 
 
 def run_scenario(scenario: dict, k: int, model: str | None, judge_fn, bare=False,
@@ -112,6 +113,7 @@ def run_scenario(scenario: dict, k: int, model: str | None, judge_fn, bare=False
     summary = report_mod.summarize_scenario(scenario, runs)
     summary["models"] = sorted(models)
     summary["cli_versions"] = sorted(cli_versions)
+    summary["perf"] = report_mod.summarize_perf([r[3] for r in results])
     return summary
 
 
@@ -203,8 +205,11 @@ def main(argv: list[str]) -> int:
     summaries = []
     for s, summary in zip(scenarios, results):
         mark = "✔" if summary["passed"] else "✘"
+        perf = summary.get("perf") or {}
         print(f"  {mark} {'PASS' if summary['passed'] else 'FAIL'}  "
-              f"pass^k={summary['pass_hat_k']} avg={summary['avg_at_k']}")
+              f"pass^k={summary['pass_hat_k']} avg={summary['avg_at_k']}  "
+              f"median {perf.get('duration_ms_median')} ms · {perf.get('tokens_median')} tok · "
+              f"${perf.get('cost_usd_median')}")
         if not summary["passed"]:
             for name, c in summary["criteria"].items():
                 if c["passes"] < c["n"]:

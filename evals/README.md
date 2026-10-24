@@ -196,6 +196,10 @@ Each entry in `scenarios.json` is a falsifiable behavioral claim:
 | develop/stops-at-the-fix-cap | a milestone that has used its fix rounds stops and offers ship / continue / restart instead of a fourth fix |
 | develop/full-milestone-records-its-research | a FULL milestone starts by recording its own narrow research in the ledger |
 | develop/phase4-runs-the-delta-gates | Phase 4 runs the duplicate-code delta, which sees a pasted function the green suite cannot |
+| develop/ultra-stops-at-a-preregistered-checkpoint | an ULTRA run stops at the checkpoint its user registered in advance, instead of starting the next milestone |
+| develop/ultra-proceeds-past-an-unregistered-stop | twin: with the checkpoint later, finishing a milestone is not a stop — the run carries on into the next |
+| finish-branch/recommends-a-pr-when-the-target-has-ci | with CI on the target and a remote, the PR is recommended — and nothing is pushed until someone chooses |
+| finish-branch/no-pr-default-without-ci | control twin: same remote, no CI — no PR is recommended by default |
 | qa-gatekeeper/rejects-vacuous-assertion | wrong arithmetic behind `assert result is not None` → REJECT |
 | qa-gatekeeper/no-false-alarm-on-pinned-assertion | same feature, correct, value pinned → not a REJECT |
 | qa-gatekeeper/rejects-invented-mock | mock shaped to the code's belief, contradicting the vendor doc → REJECT |

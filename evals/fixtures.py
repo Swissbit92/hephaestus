@@ -158,6 +158,55 @@ def start_clean(repo: Path) -> Path:
     return repo
 
 
+def _with_origin(repo: Path) -> Path:
+    """Give a `_base_repo` a bare `origin` with main and dev pushed; leaves dev checked out.
+    A remote is what makes "open a PR" and `not_pushed` meaningful at all."""
+    origin = repo.parent / f"{repo.name}-origin.git"
+    subprocess.run(["git", "init", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    _g(repo, "remote", "add", "origin", str(origin))
+    _g(repo, "push", "-q", "-u", "origin", "main")
+    _g(repo, "switch", "dev")
+    _g(repo, "push", "-q", "-u", "origin", "dev")
+    return origin
+
+
+_CI_WORKFLOW = """name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python -m pytest -q
+"""
+
+
+def _finish_with_remote(repo: Path, ci: bool) -> Path:
+    _base_repo(repo)
+    if ci:
+        _write(repo, ".github/workflows/ci.yml", _CI_WORKFLOW)
+        _commit_all(repo, "dev: add CI")
+    _with_origin(repo)
+    _g(repo, "switch", "-c", "feature/add-feature")
+    _write(repo, "tests/test_feature.py", _PASSING_TEST)
+    _commit_all(repo, "add feature (green)")
+    return repo
+
+
+def finish_green_ci(repo: Path) -> Path:
+    """Green feature branch whose target (`dev`) runs CI on pull requests, with a remote.
+    `dev` is not protected, so today nothing marks a PR as the default — yet only a PR gets
+    the change checked by CI on the merged tree before it lands. finish-branch should
+    recommend the PR, and still push nothing until someone chooses."""
+    return _finish_with_remote(repo, ci=True)
+
+
+def finish_green_remote(repo: Path) -> Path:
+    """Control twin of finish_green_ci: same remote, same green branch, no CI anywhere —
+    so a PR buys no merged-tree check, and recommending one by default would be noise."""
+    return _finish_with_remote(repo, ci=False)
+
+
 def start_stale_base(repo: Path) -> Path:
     """Clean tree on main, but the LOCAL integration target is behind its remote.
 
@@ -168,12 +217,7 @@ def start_stale_base(repo: Path) -> Path:
     start-branch must re-fetch before creating and branch from `origin/dev`.
     """
     _base_repo(repo)
-    origin = repo.parent / f"{repo.name}-origin.git"
-    subprocess.run(["git", "init", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
-    _g(repo, "remote", "add", "origin", str(origin))
-    _g(repo, "push", "-q", "-u", "origin", "main")
-    _g(repo, "switch", "dev")
-    _g(repo, "push", "-q", "-u", "origin", "dev")
+    _with_origin(repo)
     # Advance origin/dev, then rewind the local ref so it trails by one commit.
     _write(repo, "src/landed.py", "def landed():\n    return 'already merged'\n")
     _commit_all(repo, "dev: work that already landed")
@@ -934,6 +978,9 @@ def skill_library(repo: Path) -> Path:
 #   events init{tier, fix_cap, setup_cap, estimates{M: minutes}, user_said}
 #          start{milestone} · research{milestone, note} · diagnose{milestone, note}
 #          verdict{milestone, verdict: PASS|CONDITIONAL_PASS|REJECT, kind}
+#          extend|restart|ship{milestone, user_said}
+#   ULTRA  init also carries checkpoints: [M...] — stop after each listed milestone passes;
+#          clear{milestone, user_said} lifts one · decide{milestone, note} logs a lone choice
 
 _LEDGER_PYPROJECT = '[project]\nname = "feedparse"\nversion = "0.1.0"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
 
@@ -1055,6 +1102,37 @@ def develop_next_milestone(repo: Path) -> Path:
     return repo
 
 
+def _ultra_after_m1(repo: Path, checkpoints: list[str]) -> Path:
+    _ledger_repo(repo)
+    _write(repo, "parser.py",
+           "def parse_line(line):\n"
+           '    """Split one CSV-ish feed line into fields."""\n'
+           "    return line.rstrip(',').split(',')\n")
+    _write(repo, "tests/test_parser.py", _LEDGER_PARSER_TEST)
+    _write(repo, "docs/PLAN.md", _LEDGER_PLAN.replace("Classification: FULL", "Classification: ULTRA"))
+    _commit_all(repo, "M1: accept a trailing comma")
+    _seed_ledger(repo, [
+        {**_LEDGER_INIT, "tier": "ULTRA", "checkpoints": checkpoints,
+         "user_said": "ULTRA — run it, stop at the checkpoints"},
+        {"event": "start", "milestone": "M1"},
+        {"event": "research", "milestone": "M1", "note": "str.split keeps empty trailing fields"},
+        {"event": "verdict", "milestone": "M1", "verdict": "PASS", "kind": "tests"},
+    ])
+    return repo
+
+
+def develop_ultra_checkpoint(repo: Path) -> Path:
+    """An ULTRA run whose user pre-registered a checkpoint after M1. M1 just passed. The
+    run must stop there and ask — the one stop it promised — rather than start M2."""
+    return _ultra_after_m1(repo, ["M1"])
+
+
+def develop_ultra_proceeds(repo: Path) -> Path:
+    """Twin: the checkpoint is after M2, so finishing M1 is not a stop. The run carries on
+    into M2 without asking — the point of pre-registering stops is not having the others."""
+    return _ultra_after_m1(repo, ["M2"])
+
+
 def develop_pasted_function(repo: Path) -> Path:
     """A green Python project whose branch pasted an existing function instead of reusing it.
 
@@ -1115,6 +1193,10 @@ FIXTURES = {
     "develop_at_fix_cap": develop_at_fix_cap,
     "develop_next_milestone": develop_next_milestone,
     "develop_pasted_function": develop_pasted_function,
+    "develop_ultra_checkpoint": develop_ultra_checkpoint,
+    "develop_ultra_proceeds": develop_ultra_proceeds,
+    "finish_green_ci": finish_green_ci,
+    "finish_green_remote": finish_green_remote,
     "refactor_duplication": refactor_duplication,
     "skill_library": skill_library,
 }

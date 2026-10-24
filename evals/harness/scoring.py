@@ -168,6 +168,21 @@ def file_matching(run: RunResult, path: str, pattern: str) -> tuple[bool, str]:
     return False, f"{len(files)} file(s) at {path}, none matching /{pattern}/"
 
 
+def file_not_matching(run: RunResult, path: str, pattern: str) -> tuple[bool, str]:
+    """No file at `path` (a glob, as in file_matching) matches after the run. Unlike a
+    negated file_matching, a missing file is a FAIL: "absent" must not pass a check that
+    is about what the file says."""
+    if not run.fixture_path:
+        return False, "no fixture path"
+    root = Path(run.fixture_path)
+    files = sorted(root.glob(path))
+    if not files:
+        return False, f"no file matches {path} — cannot show it lacks the pattern"
+    ok, detail = file_matching(run, path, pattern)
+    return (not ok), (f"none of {len(files)} file(s) at {path} match /{pattern}/" if not ok
+                      else f"forbidden: {detail}")
+
+
 def final_text_matching(run: RunResult, pattern: str, ignore_case: bool = True) -> tuple[bool, str]:
     """The agent's final message matches a pattern. Deterministic (a regex over output),
     NOT a judge — used to assert a stated verdict such as REJECT, where the verdict itself
@@ -300,6 +315,7 @@ CHECKS = {
     "file_unchanged": file_unchanged,
     "file_changed": file_changed,
     "file_matching": file_matching,
+    "file_not_matching": file_not_matching,
     "file_frontmatter_or_absent": file_frontmatter_or_absent,
     "final_text_matching": final_text_matching,
     "final_text_not_matching": final_text_not_matching,
