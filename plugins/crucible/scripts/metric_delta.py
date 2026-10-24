@@ -139,7 +139,9 @@ def new_clones(base_files: dict[str, str], head_files: dict[str, str],
             regions[path].append([first, last, other])
     found = []
     for path, spans in sorted(regions.items()):
-        spans.sort()
+        # by line range only: two windows of one long line share first and last line,
+        # and a tie would fall through to comparing the dicts (TypeError, exit 1)
+        spans.sort(key=lambda sp: (sp[0], sp[1]))
         merged = [[spans[0][0], spans[0][1], dict(spans[0][2])]]
         for first, last, others in spans[1:]:
             if first <= merged[-1][1] + 1:

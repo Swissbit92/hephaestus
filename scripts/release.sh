@@ -46,7 +46,12 @@ MANIFEST="$PLUGIN_DIR/.claude-plugin/plugin.json"
 
 # --- Preconditions -----------------------------------------------------------
 branch="$(git rev-parse --abbrev-ref HEAD)"
-[[ "$branch" == "main" ]] || die "must be on 'main' (currently on '$branch')"
+# A dry run changes nothing, so it may preview from any branch (crucible's promote step runs
+# it before integration has reached main); a real release must start from main.
+if [[ "$branch" != "main" ]]; then
+  [[ "$DRY_RUN" == "1" ]] || die "must be on 'main' (currently on '$branch')"
+  echo "note: dry run from '$branch' — a real release must be cut from 'main'" >&2
+fi
 [[ -z "$(git status --porcelain)" ]] || die "working tree not clean — commit or stash first"
 
 # --- Compute next version (math lives in bump_version.py, unit-tested) --------
@@ -210,7 +215,12 @@ fi
 # and the following release either conflicts or double-bumps. Observed in the wild the
 # first time this script was used by a second session — a stale base manufactured by the
 # release process itself, which is the exact failure `start-branch` gained a guard for.
-TARGET="$(git config --get "branch.dev.integrationTarget" >/dev/null 2>&1 && echo dev || echo dev)"
+# The integration branch this repo promotes FROM, as declared in .crucible/release.json
+# ("from"); dev when undeclared. (This line used to read branch.dev.integrationTarget — a key
+# nothing writes — and printed dev on both arms of the conditional, so it never read anything.)
+TARGET="$("$PY" -c 'import json,sys
+try: print(json.load(open(sys.argv[1])).get("from") or "dev")
+except Exception: print("dev")' "$REPO_ROOT/.crucible/release.json")"
 if git show-ref --verify --quiet "refs/heads/$TARGET"; then
   if git merge-base --is-ancestor "$TARGET" main; then
     git branch -f "$TARGET" main

@@ -192,3 +192,9 @@ def test_no_cache_env_disables_the_cache(monkeypatch):
     assert cc.cache_disabled() is True
     monkeypatch.setenv("CRUCIBLE_NO_CACHE", "0")
     assert cc.cache_disabled() is False
+
+
+def test_a_crashed_gate_is_undetermined_not_a_finding(tmp_path, monkeypatch):
+    gate = {"name": "clones", "cmd": f'"{sys.executable}" -c "raise TypeError(1)"', "lane": "static"}
+    result = qg.run_gate(tmp_path, gate)
+    assert result["exit"] == 2 and "crashed" in result["tail"][-1]

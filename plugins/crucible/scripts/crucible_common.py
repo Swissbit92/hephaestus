@@ -178,3 +178,44 @@ def cache_put(repo: Path, key: str, value) -> None:
         os.replace(tmp, d / f"{key}.json")
     except OSError:
         pass   # a cache that cannot be written is a cache miss next time, nothing worse
+
+
+# --------------------------------------------------------------------------- CI and remotes
+# Read from the TARGET's tree, never the working tree: a branch that adds a workflow says
+# nothing about whether the branch it merges into checks pull requests.
+CI_MARKERS = (
+    (r"^\.github/workflows/[^/]+\.ya?ml$", "github-actions"),
+    (r"^\.gitlab-ci\.ya?ml$", "gitlab-ci"),
+    (r"^\.circleci/config\.ya?ml$", "circleci"),
+    (r"^azure-pipelines\.ya?ml$", "azure-pipelines"),
+    (r"^bitbucket-pipelines\.ya?ml$", "bitbucket-pipelines"),
+    (r"^Jenkinsfile$", "jenkins"),
+    (r"^\.buildkite/", "buildkite"),
+    (r"^\.travis\.ya?ml$", "travis"),
+    (r"^\.drone\.ya?ml$", "drone"),
+    (r"^\.woodpecker(\.ya?ml|/)", "woodpecker"),
+)
+
+
+def remote_ref(repo: Path, branch: str) -> str | None:
+    """`origin/<branch>` (or the first remote that has it) — what a PR would target."""
+    remotes = (git_out(repo, "remote") or "").split()
+    for remote in (["origin"] if "origin" in remotes else []) + [r for r in remotes if r != "origin"]:
+        ref = f"{remote}/{branch}"
+        if git_out(repo, "rev-parse", "--verify", "--quiet", ref):
+            return ref
+    return None
+
+
+def detect_ci(repo: Path, ref: str) -> list[str] | None:
+    """CI systems configured in `ref`'s tree, sorted; None when the tree cannot be read."""
+    import re
+    rc, out = run(["git", "ls-tree", "-r", "--name-only", ref], repo, timeout=60)
+    if rc != 0:
+        return None
+    found = set()
+    for path in out.splitlines():
+        for pattern, name in CI_MARKERS:
+            if re.search(pattern, path):
+                found.add(name)
+    return sorted(found)

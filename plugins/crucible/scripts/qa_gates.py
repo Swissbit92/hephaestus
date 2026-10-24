@@ -151,6 +151,10 @@ def run_gate(repo: Path, gate: dict) -> dict:
         code, out = 2, f"timed out after {GATE_TIMEOUT}s"
     except OSError as e:
         code, out = 2, f"could not start: {e}"
+    if code == 1 and "Traceback (most recent call last)" in out:
+        # a gate that CRASHED exits 1 too — but it measured nothing, so it must not read as
+        # a finding ("new duplicates", "a violation"): could not determine, and say so
+        code, out = 2, out + "\n(the gate crashed — this is could-not-determine, not a finding)"
     if code not in (0, 1, 2, 3):
         # a tool's own non-scheme code (pytest 4/5, a crash): a failure, not a skip — but
         # pytest's "nothing collected/usage" are could-not-determine, not evidence

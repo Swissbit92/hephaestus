@@ -172,3 +172,15 @@ def test_json_output_lists_the_new_regions(tmp_path):
     code, out = _run(repo, "--metric", "clones", "--json")
     data = json.loads(out)
     assert code == 1 and data["new"][0]["path"] == "receipt.py"
+
+
+def test_a_pasted_long_line_does_not_crash_the_clone_gate(tmp_path):
+    """Regression (shipped in 1.6.0): two windows of one long line share their first and
+    last line, the region sort fell through to comparing dicts, and the gate died with a
+    TypeError — exit 1, which read as "new duplicated code"."""
+    line = "VALUES = [" + ", ".join(f"'v{i}'" for i in range(60)) + "]\n"
+    repo = _repo(tmp_path, {"a.py": line})
+    fixtures._write(repo, "b.py", line)
+    code, out = _run(repo, "--metric", "clones")
+    assert "Traceback" not in out
+    assert code == 1 and "b.py" in out
