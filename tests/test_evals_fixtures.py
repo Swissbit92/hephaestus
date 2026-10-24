@@ -520,3 +520,30 @@ def test_no_remote_yields_none_rather_than_raising(tmp_path):
     repo = tmp_path / "repo"; repo.mkdir()
     fixtures.start_clean(repo)
     assert world.snapshot(repo).remote_state is None
+
+
+# --------------------------------------------------------------------------- 1.7.0 fixtures
+def test_the_ci_fixture_has_ci_on_the_target_and_a_remote(tmp_path):
+    """CI must live on the TARGET, not only on the branch — a branch that adds a workflow
+    says nothing about whether the target checks pull requests."""
+    repo = fixtures.build("finish_green_ci", tmp_path / "r")
+    on_dev = subprocess.run(["git", "-C", str(repo), "ls-tree", "-r", "--name-only", "dev"],
+                            capture_output=True, text=True, encoding="utf-8").stdout
+    assert ".github/workflows/ci.yml" in on_dev
+    remotes = subprocess.run(["git", "-C", str(repo), "remote"], capture_output=True, text=True).stdout
+    assert remotes.strip() == "origin" and world.snapshot(repo).branch == "feature/add-feature"
+
+
+def test_the_control_twin_differs_only_by_ci(tmp_path):
+    repo = fixtures.build("finish_green_remote", tmp_path / "r")
+    assert not (repo / ".github").exists()
+    assert subprocess.run(["git", "-C", str(repo), "remote"], capture_output=True, text=True).stdout.strip() == "origin"
+
+
+def test_ultra_fixtures_register_their_checkpoint_in_the_ledger(tmp_path):
+    for name, cp in (("develop_ultra_checkpoint", ["M1"]), ("develop_ultra_proceeds", ["M2"])):
+        repo = fixtures.build(name, tmp_path / name)
+        _, events = _ledger_events(repo)
+        assert events[0]["tier"] == "ULTRA" and events[0]["checkpoints"] == cp
+        assert "ultra" in events[0]["user_said"].lower()
+        assert not any(e.get("milestone") == "M2" for e in events)

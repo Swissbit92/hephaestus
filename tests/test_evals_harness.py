@@ -421,7 +421,7 @@ def test_parse_stream_takes_model_and_version_from_the_init_event():
     init = {"type": "system", "subtype": "init", "plugins": [{"name": "crucible"}],
             "model": "claude-opus-5-5", "claude_code_version": "2.1.309"}
     out = runner._parse_stream(json.dumps(init) + "\n")
-    assert out[-2:] == ("claude-opus-5-5", "2.1.309")
+    assert out[7:9] == ("claude-opus-5-5", "2.1.309")
 
 
 def test_develop_fix_cap_reads_the_enforcing_script(tmp_path, monkeypatch):
@@ -542,3 +542,53 @@ def test_file_matching_sees_the_research_the_ledger_actually_wrote(tmp_path):
 def test_file_matching_reports_a_missing_file():
     ok, detail = scoring.file_matching(RunResult(fixture_path="/nonexistent"), "x/*.json", "a")
     assert ok is False and "no file matches" in detail
+
+
+def test_parse_stream_reads_cost_from_the_result_event():
+    import json
+    from harness import runner
+    result = {"type": "result", "result": "ok", "duration_ms": 2227, "total_cost_usd": 0.106,
+              "num_turns": 1, "subagent_stats": {"spawned": 2},
+              "usage": {"input_tokens": 2, "output_tokens": 4, "cache_read_input_tokens": 11217,
+                        "cache_creation_input_tokens": 12981}}
+    usage = runner._parse_stream(json.dumps(result) + "\n")[-1]
+    assert usage == {"duration_ms": 2227, "cost_usd": 0.106, "num_turns": 1, "subagents": 2,
+                     "tokens": {"input": 2, "output": 4, "cache_read": 11217, "cache_creation": 12981}}
+
+
+def test_a_stream_without_a_result_event_reports_no_cost_not_zero():
+    """A timeout ends the stream before the result event; an absent measure must not
+    average in as free."""
+    from harness import runner
+    assert runner._parse_stream("")[-1] == {}
+
+
+def test_perf_summary_takes_medians_and_ignores_missing_measures():
+    perf = report.summarize_perf([
+        {"duration_ms": 1000, "cost_usd": 0.1, "tokens": {"input": 1, "output": 1, "cache_read": 8, "cache_creation": 0}},
+        {"duration_ms": 3000, "cost_usd": None, "tokens": None},
+        {"duration_ms": 2000, "cost_usd": 0.3, "tokens": {"input": 2, "output": 2, "cache_read": 6, "cache_creation": 0}},
+    ])
+    assert perf["duration_ms_median"] == 2000
+    assert perf["cost_usd_median"] == 0.2 and perf["runs_with_usage"] == 2
+    assert perf["tokens_median"] == 10
+
+
+def test_file_not_matching_fails_when_the_file_is_missing_or_matches(tmp_path):
+    (tmp_path / "led.jsonl").write_text('{"event": "start", "milestone": "M1"}\n', encoding="utf-8")
+    run = RunResult(fixture_path=str(tmp_path))
+    assert scoring.file_not_matching(run, "led.jsonl", "M2")[0] is True
+    assert scoring.file_not_matching(run, "led.jsonl", "M1")[0] is False
+    assert scoring.file_not_matching(run, "missing.jsonl", "M2")[0] is False
+
+
+def test_parallel_evals_are_bounded_in_total_not_just_per_run(monkeypatch):
+    """24 runs x an 8 GB per-run cap is 192 GB — the total is what froze the machine. Jobs
+    are clamped so each run keeps >= MIN_RUN_MB within half of physical RAM."""
+    import run_evals
+    for phys, expected in ((49152, 6), (16384, 2)):          # this Mac; a 16 GB laptop
+        monkeypatch.setattr(run_evals, "physical_memory_mb", lambda p=phys: p)
+        jobs = run_evals.safe_jobs(24)
+        assert jobs == expected
+        assert jobs * run_evals.per_run_memory_cap(jobs) <= phys // 4
+    assert run_evals.safe_jobs(1) == 1

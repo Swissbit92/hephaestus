@@ -52,6 +52,14 @@ class RunResult:
     # to None and so says nothing about the model a baseline was frozen against.
     model: str = ""
     cli_version: str = ""
+    # Cost of the run, from the CLI's result event. None — never 0 — when the event is
+    # missing (a timeout ends the stream before it), so an absent measure cannot average
+    # in as "free". duration_ms always has a value: the runner's own clock is the fallback.
+    duration_ms: int | None = None
+    cost_usd: float | None = None
+    tokens: dict | None = None        # input / output / cache_read / cache_creation
+    num_turns: int | None = None
+    subagents: int | None = None
     before: WorldSnapshot | None = None
     after: WorldSnapshot | None = None
 

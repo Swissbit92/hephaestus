@@ -39,6 +39,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from crucible_common import run_bounded  # noqa: E402
+
 DEFAULT_REL = "docs/INVARIANTS.md"
 _FIELD = re.compile(r"^(Status|Statement|Falsifiable|Check)\s*:\s*(.*)$", re.I)
 _NONE = {"", "none", "none yet", "todo", "tbd", "-", "n/a"}
@@ -117,9 +121,12 @@ def run_check(repo: Path, entry: Entry, timeout: int = 300) -> tuple[int, str]:
     else:
         cmd = [str(target), *parts[1:]]
     try:
-        p = subprocess.run(cmd, cwd=str(repo), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
-    except (OSError, subprocess.TimeoutExpired) as e:
+        b = run_bounded(cmd, repo, timeout)
+    except OSError as e:
         return 2, f"could not execute: {type(e).__name__}: {e}"
+    if b.killed:
+        return 2, f"could not execute: stopped ({b.killed})"
+    p = b
     out = ((p.stdout or "") + (p.stderr or "")).strip()
     return p.returncode, out.splitlines()[-1] if out else ""
 

@@ -1,6 +1,6 @@
 ---
 name: finish-branch
-description: Close out a feature branch or worktree safely — gates on tests (no green, no merge), offers merge / open PR / keep / discard, defaults to a PR for deploy/protected targets, and cleans up without losing unmerged work. Use after implementation is done, or when the develop workflow reaches its INTEGRATE phase.
+description: Close out a feature branch or worktree safely — gates on tests (no green, no merge), offers merge / open PR / keep / discard, recommends a PR when the target runs CI or is protected, and cleans up without losing unmerged work. Use after implementation is done, or when the develop workflow reaches its INTEGRATE phase.
 ---
 
 You integrate finished work back to its target and clean up — without ever silently
@@ -85,7 +85,18 @@ merge a branch into itself. Say so and exit.
 
 ## Phase 3 — Let the user choose (never decide for them)
 
-Present four options:
+First ask which way this should go:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/integrate.py" recommend
+```
+
+`RECOMMEND: pr (...)` — the target runs CI (read from the *target's* tree) or is protected:
+only a PR gets the change checked on the merged tree before it lands, so **lead with Open PR
+and say why**. `RECOMMEND: choose (...)` — no CI, or no remote (a PR is impossible): present the
+options below as equals and **do not recommend one** — "protection not checked" is not a
+reason to lean towards a PR. Exit `2` = could not determine; say so. Then present four
+options:
 
 1. **Merge** — fast-forward or `--no-ff` merge into the target (only if Phase 1 was green).
 2. **Open PR** — push the branch and open a pull request against the target.
@@ -116,6 +127,22 @@ proceed on explicit confirmation. On confirmation, the discard may use `git bran
   rather than forcing.
 - Leave remote-branch deletion to the forge's auto-delete-on-merge setting rather than
   scripting a force-delete.
+
+## Phase 5 — Promote, only where the repo declares how
+
+Integration is not release. When the target is itself promoted onward (`dev` → `main`,
+then a tag), run:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/integrate.py" promote --set <name>=<value>   # fills {name} placeholders
+```
+
+It prints the repo's **declared** path from `.crucible/release.json` and runs only its dry
+run; with release-please, changesets or semantic-release it reports that the tool releases
+from CI (the promote step is a PR). No declaration and no tool → exit `3`: say so, never
+invent a release process. The release command itself pushes and publishes — it runs only on
+the user's explicit go **for that exact action**, never under an earlier "go ahead", and the
+result (tag, release) is then confirmed from a fresh read (`act-for-real`).
 
 ## Guardrails
 

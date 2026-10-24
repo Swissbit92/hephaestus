@@ -33,7 +33,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # start-branch recorded in git config over the name heuristic.
 from crucible_common import (  # noqa: E402
     DEFAULT_TARGETS,
+    cache_disabled,
+    cache_get,
+    cache_key,
+    cache_put,
     detect_target,
+    script_digest,
     merge_base,
     python_exe,
     utf8_stdio as _utf8_stdio,
@@ -129,6 +134,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--repo", default=".", help="repository path (default: cwd)")
     ap.add_argument("--target", default=None, help="integration branch (default: auto-detect)")
     ap.add_argument("--base", default=None, help="explicit base revision (skips merge-base)")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="recollect at the base even if a cached result exists "
+                         "(also CRUCIBLE_NO_CACHE=1)")
     ap.add_argument("--collect-cmd", default=None,
                     help="collector command, e.g. \"npx vitest list\" (default: auto-detect pytest)")
     a = ap.parse_args(argv)
@@ -162,7 +170,16 @@ def main(argv: list[str] | None = None) -> int:
     if head_ids is None:
         print("cannot determine coverage delta: collection failed on the working tree", file=sys.stderr)
         return 2
-    base_ids = collect_at_rev(repo, base, cmd)
+    # The base side is the same answer every round for one base and one collector, and it
+    # costs a worktree plus a full collection, so it is cached (see crucible_common).
+    key = cache_key("coverage_delta.base", base, cmd, script_digest(__file__))
+    cached = None if cache_disabled(a.no_cache) else cache_get(repo, key)
+    if cached is not None:
+        base_ids, from_cache = set(cached), True
+    else:
+        base_ids, from_cache = collect_at_rev(repo, base, cmd), False
+        if base_ids:                       # never cache empty or failed collections
+            cache_put(repo, key, sorted(base_ids))
     if base_ids is None:
         print(f"cannot determine coverage delta: collection failed at BASE ({base[:12]})", file=sys.stderr)
         return 2
@@ -177,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     code, text = report(base_ids, head_ids)
-    print(f"BASE = {base[:12]}\n{text}")
+    print(f"BASE = {base[:12]}{' (cached)' if from_cache else ''}\n{text}")
     return code
 
 

@@ -99,3 +99,32 @@ merge-base fixes both, and the merge-base moving forward is the ratchet — no s
 code, not that they would disagree with a broken version of it. Restoring the branch point's
 code and watching the changed tests fail is the cheapest proof they test the change; planted
 defects are the stronger one, kept to the final milestone because each costs a test run.
+
+## Phase 4.1 — why the gatekeeper reads the verdict instead of re-running
+
+A QA round used to build the branch-point test set up to four times and run the full suite
+up to three: the emitted gate, develop's explicit coverage check, and then the gatekeeper's
+own worktree count and suite run. Measured on a fixture, that was 7 collections and 5
+pytest sessions per round. `qa_gates.py` runs each gate once and stores the verdict keyed
+by the tree's content, so the gatekeeper's evidence is the same evidence, not a second
+measurement of it.
+
+**Coverage is a set, not a count.** Delete one test and add another and the count is
+unchanged; delete a test and the suite stays green precisely because what would have
+failed is no longer asked. Judgement cannot see it reliably either — it is set arithmetic.
+
+**Recover the integration target; re-derive the count.** Test counts drift because work
+happens, so they are recomputed. The integration target does not drift, so recomputing it
+can only *lose* a correction the user already made — which is why every script reads the
+target `start-branch` recorded (`branch.<b>.integrationTarget`) before falling back to a
+heuristic.
+
+**Claim provenance — why a received number is a finding.** The failure is invisible by
+construction: the number is plausible, the code around it is correct, and the tests pass —
+because they were written to match it. The pinned case is the worst one: the wrong value
+acquires a guard, and the guard is exactly what stops the next person questioning it.
+
+**Why the verdict is a token.** A verdict that has to be inferred from prose gets inferred
+differently by different readers, and by the same reader on different days. A fixed last
+line (`QA-VERDICT: …`) is what the evals and develop parse; the ~400-word cap keeps the
+report the user reads to the findings.

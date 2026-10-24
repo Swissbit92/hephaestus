@@ -58,11 +58,13 @@ from crucible_common import (  # noqa: E402
     merge_base,
     python_exe,
     run,
+    run_bounded,
     utf8_stdio,
 )
 
 DEFAULT_MAX_MUTANTS = 6
 TEST_PATH = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|conftest\.py$)")
+GENERATED = re.compile(r"(^|/)(__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache)/|\.py[co]$")
 SENTINEL = 'raise RuntimeError("mutation_probe sentinel: the tests imported this copy")\n'
 
 
@@ -92,7 +94,9 @@ def changed_paths(repo: Path, base: str) -> list[str]:
     untracked = git_out(repo, "ls-files", "-o", "--exclude-standard")
     if tracked is None or untracked is None:
         raise Undetermined("cannot determine: git could not list the changed files")
-    return sorted({p for p in (tracked + "\n" + untracked).splitlines() if p})
+    # bytecode and tool caches are not changes: an earlier gate's test run writes them, and
+    # in a repo without a .gitignore they show up as untracked "sources" to revert
+    return sorted({p for p in (tracked + "\n" + untracked).splitlines() if p and not GENERATED.search(p)})
 
 
 def copy_tree(repo: Path, dest: Path) -> None:
@@ -113,14 +117,12 @@ def run_tests(cmd: list[str], cwd: Path, timeout: int) -> tuple[int, float]:
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     t0 = time.monotonic()
     try:
-        p = subprocess.run(cmd, cwd=str(cwd), env=env, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=timeout)
-        rc = p.returncode
-    except subprocess.TimeoutExpired:
-        rc = -1          # a mutant that hangs is killed: the tests noticed something
+        # bounded: a mutant that loops (or allocates without end) is stopped with its WHOLE
+        # process tree — a plain timeout killed only `uv`/`sh` and orphaned the test runner
+        rc = run_bounded(cmd, cwd, timeout, env=env).returncode
     except OSError as e:
         raise Undetermined(f"cannot determine: the test command did not start ({e})") from None
-    return rc, time.monotonic() - t0
+    return rc, time.monotonic() - t0   # -1 = killed (hang/runaway): the tests noticed something
 
 
 def canaries(cmd: list[str], copy: Path, sources: list[str]) -> float:
@@ -165,7 +167,7 @@ def _sites(tree: ast.AST, lines: set[int]) -> list[tuple[str, int, int]]:
     for fn in funcs:
         for node in ast.walk(fn):
             for op, ok in (("compare", isinstance(node, ast.Compare) and type(node.ops[0]) in _CMP_SWAP),
-                           ("arith", isinstance(node, ast.BinOp) and type(node.op) in _BIN_SWAP),
+                           ("arith", isinstance(node, (ast.BinOp, ast.AugAssign)) and type(node.op) in _BIN_SWAP),
                            ("boolop", isinstance(node, ast.BoolOp)),
                            ("negate-if", isinstance(node, (ast.If, ast.While))),
                            ("return-none", isinstance(node, ast.Return) and node.value is not None
@@ -267,7 +269,7 @@ def probe_revert(repo: Path, base: str, cmd: list[str]) -> tuple[int, str]:
     return 0, "OK — the changed tests fail without the change: they depend on it."
 
 
-def probe_mutate(repo: Path, base: str, cmd: list[str], limit: int) -> tuple[int, str]:
+def probe_mutate(repo: Path, base: str, cmd: list[str], limit: int, mutant_timeout: int = 0) -> tuple[int, str]:
     changed = changed_paths(repo, base)
     sources = [p for p in changed if p.endswith(".py") and not TEST_PATH.search(p)
                and (repo / p).is_file()]
@@ -292,7 +294,7 @@ def probe_mutate(repo: Path, base: str, cmd: list[str], limit: int) -> tuple[int
             original = f.read_text(encoding="utf-8")
             try:
                 f.write_text(_apply(original, op, ordinal), encoding="utf-8")
-                rc, _ = run_tests(cmd, copy, timeout=max(60, int(took * 3)))
+                rc, _ = run_tests(cmd, copy, timeout=mutant_timeout or max(60, int(took * 3)))
             finally:
                 f.write_text(original, encoding="utf-8")
             if rc == 0:
@@ -315,6 +317,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--base")
     ap.add_argument("--test-cmd", help="test command (default: this interpreter's pytest)")
     ap.add_argument("--max-mutants", type=int, default=DEFAULT_MAX_MUTANTS)
+    ap.add_argument("--mutant-timeout", type=int, default=0,
+                    help="seconds per mutant run (default: 3x the clean run, at least 60)")
     a = ap.parse_args(argv)
     repo = Path(a.repo).resolve()
     cmd = a.test_cmd.split() if a.test_cmd else [python_exe(), "-m", "pytest", "-q", "-x",
@@ -326,7 +330,7 @@ def main(argv: list[str] | None = None) -> int:
             raise Undetermined(f"cannot determine: {repo} is not a git repository")
         base = branch_point(repo, a.target, a.base)
         code, msg = probe_revert(repo, base, cmd) if a.revert else \
-            probe_mutate(repo, base, cmd, max(1, a.max_mutants))
+            probe_mutate(repo, base, cmd, max(1, a.max_mutants), a.mutant_timeout)
     except Undetermined as e:
         print(str(e), file=sys.stderr)
         return 2
