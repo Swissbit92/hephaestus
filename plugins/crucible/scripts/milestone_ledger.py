@@ -167,6 +167,9 @@ def milestone_state(events: list[dict], m: str) -> dict:
             if ev.get("verdict") in PASSING:
                 st["passed"] = True
             elif ev.get("verdict") == "REJECT":
+                # a REJECT after a pass reopens the milestone: a regression found in final
+                # verification must count against the budget, not slip past a sticky PASS
+                st["passed"] = False
                 if ev.get("kind") == "setup":
                     st["setup"] += 1
                 else:

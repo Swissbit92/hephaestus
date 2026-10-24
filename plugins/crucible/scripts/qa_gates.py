@@ -42,7 +42,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from crucible_common import git_common_dir, git_out, python_exe, run, run_bounded, utf8_stdio  # noqa: E402
+from crucible_common import (  # noqa: E402
+    git_common_dir, git_out, pytest_command, python_exe, run, run_bounded, shell_join, utf8_stdio,
+)
 
 SCRIPTS = Path(__file__).resolve().parent
 TAIL_LINES = 15
@@ -126,13 +128,36 @@ def plan(repo: Path, final: bool) -> list[dict]:
         gates.insert(1, f'{py} "{(SCRIPTS / "coverage_delta.py").as_posix()}" --repo .')
     has_python_tests = any("pytest" in g for g in gates)
     if has_python_tests:
-        gates.append(f'{py} "{(SCRIPTS / "mutation_probe.py").as_posix()}" --revert --repo .')
+        pt = pytest_command(repo)
+        if pt is None:
+            # no interpreter here can run pytest: say so, never let "No module named pytest"
+            # (exit 1) read as failing tests
+            return [{"name": "tests", "lane": "serial", "cmd": "", "undetermined":
+                     "cannot determine: no interpreter here can run pytest (no project venv, "
+                     "the running Python lacks it, and uv is not installed)"}]
+        runner, collect = shell_join(pt), shell_join([*pt, "--collect-only", "-q", "-o", "addopts=",
+                                                      "-p", "no:cacheprovider"])
+        # every pytest-running gate uses the resolved interpreter, not the bare python3 token
+        # swap only the interpreter: a nested root's `cd <root> && ` prefix must survive
+        pyre = re.compile(r"\S*python[\w.]*\"?\s+-m pytest")
+        gates = [pyre.sub(lambda _m: runner, g, count=1) if pyre.search(g)
+                 else (f"{g} --collect-cmd {shlex_quote(collect)}" if "coverage_delta.py" in g else g)
+                 for g in gates]
+        probe = f'{py} "{(SCRIPTS / "mutation_probe.py").as_posix()}" --repo . --test-cmd {shlex_quote(shell_join([*pt, "-q", "-x", "-p", "no:cacheprovider"]))}'
+        gates.append(f"{probe} --revert")
         if final:
-            gates.append(f'{py} "{(SCRIPTS / "mutation_probe.py").as_posix()}" --mutate --repo .')
+            gates.append(f"{probe} --mutate")
     if (repo / "docs" / "INVARIANTS.md").exists():
         gates.append(f'{py} "{(SCRIPTS / "invariants_run.py").as_posix()}" --repo .')
     return [{"name": _name(g), "cmd": g, "lane": "static" if STATIC.search(g) else "serial"}
             for g in gates]
+
+
+def shlex_quote(s: str) -> str:
+    if sys.platform == "win32":
+        return subprocess.list2cmdline([s])
+    import shlex
+    return shlex.quote(s)
 
 
 _NAMES = (("coverage_delta.py", "coverage-delta"), ("--metric clones", "clones"),
@@ -155,6 +180,8 @@ def _name(cmd: str) -> str:
 
 
 def run_gate(repo: Path, gate: dict) -> dict:
+    if gate.get("undetermined"):
+        return {**gate, "exit": 2, "seconds": 0.0, "tail": [gate["undetermined"]]}
     started = time.monotonic()
     try:
         b = run_bounded(gate["cmd"], repo, GATE_TIMEOUT, shell=True)
@@ -163,6 +190,8 @@ def run_gate(repo: Path, gate: dict) -> dict:
             code = 2
     except OSError as e:
         code, out = 2, f"could not start: {e}"
+    if code == 1 and "No module named pytest" in out:
+        code, out = 2, out + "\n(pytest is not installed for that interpreter — nothing was tested)"
     if code == 1 and "Traceback (most recent call last)" in out:
         # a gate that CRASHED exits 1 too — but it measured nothing, so it must not read as
         # a finding ("new duplicates", "a violation"): could not determine, and say so

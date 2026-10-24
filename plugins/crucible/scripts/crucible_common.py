@@ -401,3 +401,34 @@ def run_bounded(cmd, cwd: Path | str | None, timeout: float, *, shell: bool = Fa
                else f"killed at {peak} MB resident (cap {limit} MB, CRUCIBLE_MEM_LIMIT_MB)")
         text_err += f"\n[crucible] {why} — the whole process tree was stopped\n"
     return Bounded(-1 if killed else proc.returncode, text_out, text_err, killed, peak)
+
+
+# --------------------------------------------------------------------------- a pytest that runs
+# `python3 -m pytest` is not a test run on a machine whose python3 has no pytest — and that
+# is the default on a Homebrew Python. It exits 1, "No module named pytest", which reads as
+# "the tests failed". Resolve an interpreter that can actually run the suite, in order: the
+# repo's own virtualenv, the interpreter running this script, then `uv run --with pytest`.
+# None means there is no way to run the tests here — a could-not-determine, not a failure.
+
+def _venv_python(repo: Path) -> list[Path]:
+    rel = ("Scripts/python.exe",) if sys.platform == "win32" else ("bin/python",)
+    return [Path(repo) / v / r for v in (".venv", "venv") for r in rel]
+
+
+def pytest_command(repo: Path) -> list[str] | None:
+    candidates = [str(p) for p in _venv_python(repo) if p.exists()] + [python_exe()]
+    for exe in candidates:
+        rc, _ = run([exe, "-c", "import pytest"], Path(repo), timeout=60)
+        if rc == 0:
+            return [exe, "-m", "pytest"]
+    if shutil.which("uv"):
+        project = [] if (Path(repo) / "pyproject.toml").exists() else ["--no-project"]
+        return ["uv", "run", "-q", *project, "--with", "pytest", "python", "-m", "pytest"]
+    return None
+
+
+def shell_join(argv: list[str]) -> str:
+    if sys.platform == "win32":
+        return subprocess.list2cmdline(argv)
+    import shlex
+    return shlex.join(argv)

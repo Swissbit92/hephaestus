@@ -286,3 +286,13 @@ def test_choices_made_alone_are_logged_and_reported(tmp_path):
     _run(r, "start", "M1")
     _run(r, "decide", "M1", "--note", "kept the old parser API; callers in two repos")
     assert "decided alone (M1): kept the old parser API" in _run(r, "report")[2]
+
+
+def test_a_reject_after_a_pass_reopens_the_milestone(repo):
+    """Final verification can find a regression in a milestone that already passed; that
+    round counts, and the milestone is open again until it passes again."""
+    _run(repo, "research", "M1", "--note", "docs")
+    assert _run(repo, "record", "M1", "--verdict", "PASS")[:2] == (0, "DONE")
+    code, first, out = _reject(repo, "tests")
+    assert (code, first) == (0, "PROCEED") and "fix round 1/3" in out
+    assert _run(repo, "record", "M1", "--verdict", "PASS")[:2] == (0, "DONE")

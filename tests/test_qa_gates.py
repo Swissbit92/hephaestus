@@ -207,3 +207,43 @@ def test_bare_pytest_tests_are_gated_even_when_the_detector_skips_the_repo(tmp_p
     repo = fixtures.build("qa_deleted_tests", tmp_path / "r")
     gates = [g["name"] for g in qg.plan(repo, final=False)]
     assert "tests" in gates and "coverage-delta" in gates
+
+
+def test_the_resolved_pytest_replaces_the_bare_interpreter_and_keeps_a_nested_prefix(tmp_path, monkeypatch):
+    """`python3 -m pytest` is not a test run where python3 has no pytest (a Homebrew
+    default). Every pytest gate uses the resolved command, and `cd <root> && ` survives."""
+    repo = fixtures.branched_repo(tmp_path / "r", {"README.md": "x\n"})
+    fixtures._write(repo, "svc/pyproject.toml", "[tool.pytest.ini_options]\n")
+    fixtures._write(repo, "svc/tests/test_a.py", "def test_a():\n    assert True\n")
+    monkeypatch.setattr(qg, "pytest_command", lambda r: ["/opt/venv/bin/python", "-m", "pytest"])
+    cmds = [g["cmd"] for g in qg.plan(repo, final=False)]
+    tests = next(c for c in cmds if c.endswith("-m pytest") or " -m pytest" in c and "coverage" not in c and "mutation" not in c)
+    assert tests.startswith("cd svc && /opt/venv/bin/python -m pytest")
+    cov = next(c for c in cmds if "coverage_delta.py" in c)
+    assert "--collect-cmd" in cov and "/opt/venv/bin/python -m pytest --collect-only" in cov
+    assert any("--test-cmd" in c and "/opt/venv/bin/python" in c for c in cmds if "mutation_probe" in c)
+
+
+def test_no_pytest_anywhere_is_could_not_determine_not_failing_tests(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(qg, "pytest_command", lambda r: None)
+    [gate] = qg.plan(repo, final=False)
+    result = qg.run_gate(repo, gate)
+    assert result["exit"] == 2 and "no interpreter here can run pytest" in result["tail"][0]
+
+
+def test_a_missing_pytest_module_is_never_a_test_failure(tmp_path):
+    gate = {"name": "tests", "lane": "serial",
+            "cmd": f'"{sys.executable}" -c "import sys; print(\'No module named pytest\'); sys.exit(1)"'}
+    assert qg.run_gate(tmp_path, gate)["exit"] == 2
+
+
+def test_pytest_command_prefers_the_repos_own_venv(tmp_path):
+    import crucible_common as cc
+    repo = tmp_path / "r"
+    venv_py = repo / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    venv_py.parent.mkdir(parents=True)
+    if sys.platform != "win32":
+        venv_py.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+        venv_py.chmod(0o755)
+        assert cc.pytest_command(repo)[0] == str(venv_py)
