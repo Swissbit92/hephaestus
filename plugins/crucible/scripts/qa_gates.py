@@ -116,6 +116,14 @@ def plan(repo: Path, final: bool) -> list[dict]:
     if p.returncode not in (0, 3):
         raise Undetermined(f"cannot determine the gates: detect_profile exited {p.returncode}")
     gates = [ln.strip() for ln in p.stdout.splitlines() if ln.strip()] if p.returncode == 0 else []
+    # detect_profile only gates a Python project that declares itself (pytest config, a
+    # manifest, or tests/ plus requirements.txt). A repo with bare pytest-style tests is
+    # skipped there — and develop used to cover it with an explicit coverage step that this
+    # runner replaced. So fall back here: pytest-style test files and no emitted test gate
+    # means the suite and the coverage delta run anyway.
+    if not any("pytest" in g for g in gates) and _has_pytest_tests(repo):
+        gates.insert(0, f"{py} -m pytest")
+        gates.insert(1, f'{py} "{(SCRIPTS / "coverage_delta.py").as_posix()}" --repo .')
     has_python_tests = any("pytest" in g for g in gates)
     if has_python_tests:
         gates.append(f'{py} "{(SCRIPTS / "mutation_probe.py").as_posix()}" --revert --repo .')
@@ -131,6 +139,11 @@ _NAMES = (("coverage_delta.py", "coverage-delta"), ("--metric clones", "clones")
           ("--metric ruff", "lint-delta"), ("--revert", "revert-probe"),
           ("--mutate", "mutation-probe"), ("invariants_run.py", "invariants"),
           ("-m pytest", "tests"), ("ruff format", "format"), ("mypy", "typecheck"))
+
+
+def _has_pytest_tests(repo: Path) -> bool:
+    files = git_out(repo, "ls-files", "-co", "--exclude-standard") or ""
+    return any(re.search(r"(^|/)(test_[^/]*|[^/]*_test)\.py$", f) for f in files.splitlines())
 
 
 def _name(cmd: str) -> str:

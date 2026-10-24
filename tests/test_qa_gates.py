@@ -198,3 +198,12 @@ def test_a_crashed_gate_is_undetermined_not_a_finding(tmp_path, monkeypatch):
     gate = {"name": "clones", "cmd": f'"{sys.executable}" -c "raise TypeError(1)"', "lane": "static"}
     result = qg.run_gate(tmp_path, gate)
     assert result["exit"] == 2 and "crashed" in result["tail"][-1]
+
+
+def test_bare_pytest_tests_are_gated_even_when_the_detector_skips_the_repo(tmp_path):
+    """A repo with only tests/ (no manifest) is not a project detect_profile gates — and the
+    old explicit coverage step that covered it is gone. The runner must still run the suite
+    and the coverage delta, or a deleted test ships unseen."""
+    repo = fixtures.build("qa_deleted_tests", tmp_path / "r")
+    gates = [g["name"] for g in qg.plan(repo, final=False)]
+    assert "tests" in gates and "coverage-delta" in gates

@@ -93,8 +93,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/integrate.py" recommend
 
 `RECOMMEND: pr (...)` — the target runs CI (read from the *target's* tree) or is protected:
 only a PR gets the change checked on the merged tree before it lands, so **lead with Open PR
-and say why**. `RECOMMEND: choose (...)` — no CI, or no remote (a PR is impossible): the
-options below stand as equals. Exit `2` = could not determine; say so. Then present four
+and say why**. `RECOMMEND: choose (...)` — no CI, or no remote (a PR is impossible): present the
+options below as equals and **do not recommend one** — "protection not checked" is not a
+reason to lean towards a PR. Exit `2` = could not determine; say so. Then present four
 options:
 
 1. **Merge** — fast-forward or `--no-ff` merge into the target (only if Phase 1 was green).

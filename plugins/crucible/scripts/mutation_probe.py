@@ -64,6 +64,7 @@ from crucible_common import (  # noqa: E402
 
 DEFAULT_MAX_MUTANTS = 6
 TEST_PATH = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|conftest\.py$)")
+GENERATED = re.compile(r"(^|/)(__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache)/|\.py[co]$")
 SENTINEL = 'raise RuntimeError("mutation_probe sentinel: the tests imported this copy")\n'
 
 
@@ -93,7 +94,9 @@ def changed_paths(repo: Path, base: str) -> list[str]:
     untracked = git_out(repo, "ls-files", "-o", "--exclude-standard")
     if tracked is None or untracked is None:
         raise Undetermined("cannot determine: git could not list the changed files")
-    return sorted({p for p in (tracked + "\n" + untracked).splitlines() if p})
+    # bytecode and tool caches are not changes: an earlier gate's test run writes them, and
+    # in a repo without a .gitignore they show up as untracked "sources" to revert
+    return sorted({p for p in (tracked + "\n" + untracked).splitlines() if p and not GENERATED.search(p)})
 
 
 def copy_tree(repo: Path, dest: Path) -> None:
