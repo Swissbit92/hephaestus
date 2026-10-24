@@ -359,8 +359,9 @@ def main(argv: list[str] | None = None) -> int:
         events = load(path)
         if a.cmd == "report":
             names = list((events[0].get("estimates") or {}).keys())
-            names += [e["milestone"] for e in events[1:]
-                      if e.get("milestone") and e["milestone"] not in names]
+            for e in events[1:]:      # each milestone once, in order of first appearance
+                if e.get("milestone") and e["milestone"] not in names:
+                    names.append(e["milestone"])
             for m in names:
                 _, line, human = evaluate(milestone_state(events, m), now_dt)
                 print(f"{line:<24} {human}")

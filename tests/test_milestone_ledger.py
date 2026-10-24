@@ -296,3 +296,11 @@ def test_a_reject_after_a_pass_reopens_the_milestone(repo):
     code, first, out = _reject(repo, "tests")
     assert (code, first) == (0, "PROCEED") and "fix round 1/3" in out
     assert _run(repo, "record", "M1", "--verdict", "PASS")[:2] == (0, "DONE")
+
+
+def test_report_lists_each_milestone_once(repo):
+    """A milestone without an estimate has several events; report once listed it per event."""
+    _run(repo, "start", "M9")
+    _run(repo, "research", "M9", "--note", "x")
+    _reject(repo, "tests", m="M9")
+    assert _run(repo, "report")[2].count("M9:") == 1
