@@ -5,181 +5,104 @@ allowed-tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "Agent"]
 
 # Ways of Working (WoW) — Development Workflow
 
-A disciplined workflow for implementation work. Every task is **classified**, then follows the matching tier. The point is to spend ceremony where it pays off (critical logic) and skip it where it doesn't (typos, cosmetics).
+Every task is **classified**, then follows its tier: ceremony where a subtle bug is
+expensive, none where it is not. `<...>` parts are the project's to fill in. The reasons
+behind each rule: [references/develop-rationale.md](references/develop-rationale.md).
 
-> Adapt the per-repo specifics (critical paths, test commands, alignment questions) to your project. The structure below is repo-agnostic; the bracketed `<...>` parts are yours to fill in.
+## 0. SCOPE
 
----
+Find the target from the paths in the task, then the working directory; ask if ambiguous.
+Several repos/packages → **CROSS-CUTTING** at the end.
 
-## 0. REPO / SCOPE DETECTION
+## 1. CLASSIFY
 
-Determine what the task targets:
+- **FULL** — the change touches **critical logic**: core domain logic, public APIs/schemas/data
+  contracts (column names, wire formats, table names), anything other code depends on, auth,
+  payments, migrations. Phases 0 → 1 → 2 → 2.5 → 3 → 4 → 5 → 6 → 6.5.
+- **LIGHT** — everything else (infra, CLI, docs, tests, config, non-critical refactors).
+  Phases 0 → 2.5 → 3 → 4 → 5 → 6 → 6.5 (no research, no architecture).
+- **TRIVIAL** — typos, 1-line fixes, formatting, comments. **No ceremony.** Just do it,
+  verify, done. No isolate/integrate (Phases 2.5/6.5 skipped).
 
-1. Check file paths mentioned in the task.
-2. Check the current working directory.
-3. If ambiguous, ask the user.
+## 2. PHASE 0 — CLASSIFY & ALIGN (all)
 
-If the task spans multiple repos/packages → see **CROSS-CUTTING TASKS** at the end.
-
----
-
-## 1. TASK CLASSIFICATION
-
-Classify before writing any code.
-
-### FULL workflow
-Triggers when the task modifies **critical logic** — the parts where a subtle bug is expensive or hard to detect. Define these for your project, e.g.:
-
-- Core domain logic / algorithms
-- Public APIs, schemas, data contracts (column names, wire formats, collection/table names)
-- Anything other code or repos depend on
-- Auth, payments, migrations, anything with a blast radius
-
-**Phases:** 0 → 1 → 2 → 2.5 → 3 → 4 → 5 → 6 → 6.5
-
-### LIGHT workflow
-Everything else: infrastructure, CLI cosmetics, docs, tests, config, reporting, refactoring non-critical code.
-
-**Phases:** 0 → 2.5 → 3 → 4 → 5 → 6 → 6.5 (skips Research and Architecture)
-
-### TRIVIAL
-Typos, 1-line fixes, formatting, comment updates.
-
-**No ceremony.** Just do it, verify, done. No isolate/integrate (Phases 2.5/6.5 skipped).
-
----
-
-## 2. PHASE 0 — CLASSIFY & ALIGN (all workflows)
-
-1. State the classification: `FULL`, `LIGHT`, or `TRIVIAL`.
-2. State the **target repo(s)/scope**.
-3. State alignment — how does this advance the project's goals? If it advances nothing obvious, justify it (tech debt, correctness, prerequisite).
-4. Create a task list with all phases (TaskCreate) — keep it visible throughout.
-5. Record the starting test count (e.g. `<your test runner --collect-only>`) — a live snapshot at the branch point; the QA gate re-derives it from the branch-point commit, not a memorized number.
+State the tier, the target repo(s)/scope, and how this advances the project's goals (or why
+it is worth doing anyway). Create a task list with all phases (TaskCreate) and keep it
+visible. Record the starting test count (`<your test runner --collect-only>`) — a snapshot;
+the gates re-derive the branch point themselves.
 
 **Gate:** user confirms classification and alignment before proceeding.
 
----
-
 ## 3. PHASE 1 — RESEARCH (FULL only)
 
-Understand the code and gather external best practices before designing.
+Start with the docs routing table, not candidate files ([why](references/develop-rationale.md#phase-1--start-with-the-routing-table)):
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/cms/scripts/triage.py" --repo .` — open only the one
+or two documents worth opening. Then launch in parallel (one message, several Agent calls):
+**Explore** (1 for focused work, 2–3 for broad) to trace the affected code and reusable
+patterns, and **one web-research** agent (`general-purpose`) for best practice, pitfalls,
+prior art. **Ask every agent for a report of at most ~600 words: facts with `file:line`
+and sources, no recommendations unless asked** — long reports cost context and bury the
+finding.
 
-**Start with the routing table, not with candidate files** ([why](references/develop-rationale.md#phase-1--start-with-the-routing-table)):
-
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/cms/scripts/triage.py" --repo .
-```
-
-Read it, pick the one or two documents worth opening, and open those.
-
-Then launch in parallel (single message, multiple Agent calls):
-
-| Agent | Type | Purpose |
-|-------|------|---------|
-| Explore (1–3) | `Explore` | Understand affected areas, trace execution paths, find reusable patterns |
-| Web research (1) | `general-purpose` | Best practices, known pitfalls, prior art for this kind of change |
-
-Use 1 Explore agent for focused changes, 2–3 for broad/uncertain scope.
-
-**Output before Phase 2:** patterns to reuse (with file paths), external best practices that apply, pitfalls to avoid, key design decisions to make.
-
----
+**Output:** patterns to reuse (paths), external practice that applies, pitfalls, the design
+decisions to make.
 
 ## 4. PHASE 2 — ARCHITECTURE & PLAN (FULL only)
 
-Design the blueprint, informed by Phase 1.
-
-Run a `Plan` agent. Feed it: Phase 1 exploration results, web-research findings, project alignment, and the user's constraints.
-
-It should produce: implementation milestones (ordered), files to create/modify (paths), existing utilities to reuse (paths) — and for anything new, why existing code could not serve — test strategy, and risk areas.
-
-If the change touches prompts, skills, agent instructions or anything else whose output a
-model produces, the prediction's check is an eval: invoke `eval-first` and freeze its
-baseline before implementing, with its pre-flight (determinism, interval, sample size).
+Run a `Plan` agent on the Phase 1 output, the alignment and the user's constraints, asking
+for at most ~1,200 words: ordered milestones, files to create/modify, existing utilities to
+reuse — and for anything new, why existing code could not serve — test strategy, risks. If
+the change touches prompts, skills, agent instructions or other model output, the
+prediction's check is an eval: invoke `eval-first` and freeze its baseline first.
 
 **Gate:** present the plan to the user for approval. Do NOT implement without explicit approval.
 
-### Set the fix budget (FULL + LIGHT)
-
-At approval — FULL after this gate, LIGHT at the Phase 0 confirmation — open the milestone
-ledger with the user's words and an estimate per milestone:
+**Fix budget (FULL + LIGHT).** At approval — FULL here, LIGHT at the Phase 0 confirmation —
+open the ledger with the user's words and an estimate per milestone:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/milestone_ledger.py" init --tier FULL \
   --estimate M1=<minutes> --estimate M2=<minutes> --user-said "<the user's approval, verbatim>"
 ```
 
-Each milestone gets 3 fix rounds (every REJECT counts, whatever its cause), 3 setup rounds
-for environment failures, and twice its estimate. Only the user changes these — at plan
-approval, or at a checkpoint ([why](references/develop-rationale.md#phase-2--why-a-fix-budget)).
+Each milestone gets 3 fix rounds (every REJECT counts), 3 setup rounds for environment
+failures, and twice its estimate; only the user changes these ([why](references/develop-rationale.md#phase-2--why-a-fix-budget)).
 
-### Record the prediction (FULL only)
-
-Once the plan is approved and before implementing, write down what this change is expected
-to do and what would settle it:
-
-**Run the check first, against the tree as it stands.** Then record what it showed:
+**Prediction (FULL).** Run the check against the tree as it stands, then record what it showed:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/predictions.py" record <branch-slug> \
-  --claim "<what this change should achieve, in falsifiable terms>" \
-  --check "<the command or observation that would settle it>" \
-  --baseline "<what that check shows RIGHT NOW, before the change>" \
-  --date <YYYY-MM-DD>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/predictions.py" record <branch-slug> --claim "<falsifiable>" \
+  --check "<what would settle it>" --baseline "<what it shows NOW>" --date <YYYY-MM-DD>
 ```
 
-Make it falsifiable or do not write it — the script refuses a prediction with no `--check`.
-**And run the check before you record it — a check you have never watched fail is not a
-check.** If it already passes on the unchanged tree, you do not have a baseline — you have a
-different check to write. The evidence behind both rules:
-[references/develop-rationale.md](references/develop-rationale.md#phase-2--why-record-a-prediction).
+A check you have never watched fail is not a check: if it already passes on the unchanged
+tree, write a different one ([why](references/develop-rationale.md#phase-2--why-record-a-prediction)).
 
----
+## 4.5 PHASE 2.5 — ISOLATE (FULL + LIGHT)
 
-## 4.5 PHASE 2.5 — ISOLATE (FULL + LIGHT; TRIVIAL skips)
+Invoke `start-branch`: it detects the integration target, **records it on the branch** in
+git config ([why](references/develop-rationale.md#phase-25--why-the-integration-target-is-recorded)),
+picks branch vs. worktree, names it, records a test baseline, and confirms a one-line plan.
+On decline, continue in place (6.5 then has nothing to finish). Branch logic stays in the skill.
 
-Put the work in its own workspace before touching code, so changes never land
-uncommitted on a shared or deploy branch.
+## 5. PHASE 3 — IMPLEMENT (all)
 
-Invoke the `start-branch` skill. It detects the repo's integration target (never
-hardcoded) and **records it on the branch** in git config, so later phases and the gate
-scripts read it instead of re-guessing ([why](references/develop-rationale.md#phase-25--why-the-integration-target-is-recorded)).
-It also chooses a plain branch vs. a worktree, names the branch in Conventional Branch form,
-records a clean test baseline, and confirms a one-line plan before anything is created.
+1. Break the work into 2–5 milestones; do one at a time, opening each with
+   `milestone_ledger.py start M<n>`.
+2. **FULL: each milestone opens with its own narrow research** — one lookup on the APIs,
+   libraries and prior art it touches — in parallel with its first build step, never only
+   after a failure. Record it: `milestone_ledger.py research M<n> --note "<what it changed>"`;
+   a PASS cannot close a FULL milestone without it.
+3. After each milestone → **Phase 4** immediately. Never batch milestones before QA.
 
-- **On confirm:** implement (Phase 3) in the isolated branch/worktree.
-- **On decline:** continue in place — no branch. Integration (Phase 6.5) then has nothing
-  to finish.
+Parallelize independent work (different modules, no shared state); serialize when files
+share structures or order matters. At most **5** agents at once (research included) unless
+the user sets another cap. No serial loops over independent expensive work where the
+runtime offers parallelism — flag one in QA.
 
-Keep all branch logic in the skill; this phase only invokes it.
+## 6. PHASE 4 — QA (after each milestone)
 
----
-
-## 5. PHASE 3 — IMPLEMENT (all workflows)
-
-1. Break work into 2–5 logical milestones.
-2. Implement one milestone at a time; open each with `milestone_ledger.py start M<n>`.
-3. **FULL: each milestone opens with its own narrow research** — the APIs, libraries and
-   prior art it touches — in parallel with its first build step, never only after a failure.
-   Record it: `milestone_ledger.py research M<n> --note "<what it changed>"`; a PASS cannot
-   close a FULL milestone without it.
-4. After each milestone → immediately run **Phase 4 (QA)**. Do NOT batch milestones before QA.
-5. Keep the task list current (TaskUpdate).
-
-### Concurrent agent teams (within a milestone)
-Parallelize when work is independent (different modules, no shared imports; tests vs. implementation in different files). Serialize when files share data structures, changes cascade, or order matters for correctness. Judgment call per task. At most **5** agents at once (milestone research included) unless the user sets another cap — detail is lost in every hand-off.
-
-### Performance discipline
-No serial loops over independent, expensive work where the runtime offers parallelism (pools, workers, batching); send shared data once, not per task. Flag one in QA.
-
----
-
-## 6. PHASE 4 — QA GATEKEEPER (after each milestone)
-
-Catch issues before they compound.
-
-### 4.0 Run the deterministic checks FIRST — yourself, in one call
+### 4.0 Deterministic checks — yourself, in one call
 
 Anything a script can decide, a script decides, and each gate runs once
 ([why](references/develop-rationale.md#phase-40--why-the-checks-are-scripts-run-by-you)):
@@ -189,12 +112,12 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/qa_gates.py"           # every QA round
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/qa_gates.py" --final   # a milestone's last round: also plants defects
 ```
 
-It runs what `detect_profile.py` finds for this repo (tests, coverage delta, duplicate-code
-and lint deltas), the revert probe and the invariants — read-only gates concurrently, test
-gates one at a time unless the repo declares them parallel-safe in `.crucible/qa.json`. It
-prints a line per gate, the tail of each failing one, and `QA-GATES: PASS|FAIL|UNDETERMINED|SKIP`,
-and stores the verdict for this exact tree. `0` pass · `1` a gate failed · `2` **could not
-determine, not a pass** · `3` nothing to gate (a SKIP). A failing gate's `1` means:
+It runs what `detect_profile.py` finds (tests, coverage delta, duplicate-code and lint
+deltas), the revert probe and the invariants — read-only gates concurrently, test gates one
+at a time unless `.crucible/qa.json` declares them parallel-safe — prints a line per gate,
+each failing gate's tail and `QA-GATES: PASS|FAIL|UNDETERMINED|SKIP`, and stores the verdict
+for this exact tree. `0` pass · `1` a gate failed · `2` **could not determine, not a pass** ·
+`3` nothing to gate (a SKIP). A gate's `1` means:
 
 | Gate | `1` = |
 |---|---|
@@ -205,28 +128,19 @@ determine, not a pass** · `3` nothing to gate (a SKIP). A failing gate's `1` me
 | mutation-probe | planted defects survived — each is a finding: kill it with a test, or show it equivalent |
 | invariants | a standing constraint no longer holds |
 
-Hand the gatekeeper the `QA-GATES` line, not an assignment: it reads the stored verdict
-(`qa_gates.py --show`) instead of re-running anything. Profile catalogue:
-[references/evidence-profiles.md](references/evidence-profiles.md).
+Catalogue: [references/evidence-profiles.md](references/evidence-profiles.md).
 
-### 4.1 Then review
+### 4.1 Review
 
-Use a `qa-gatekeeper` agent if your project provides one; otherwise do QA directly. Give it
-the Phase 4.0 results. **Re-check what any agent reports before passing it on:** a verdict
-is evidence to verify, not a conclusion — re-run the command behind each verdict-bearing
-claim (a result, a count, "no other occurrence") before it reaches the user or the ledger.
-Checks (all projects):
-
-1. All tests pass.
-2. No passing-test regression vs. the branch-point baseline (derived live, not a stated number) — fewer passing tests or a newly failing test is a regression; *more* tests (the milestone added them) is not.
-3. No coverage regression — from the Phase 4.0 exit code, not from judgement: delete one test and add another and the count is unchanged while the suite stays green.
-4. No orphaned code (stale references to renamed/deleted symbols) — and no *unreached* code: a control that is constructed but never called is not orphaned, it just does nothing.
-5. Lint clean (your linter).
-6. No security issues (no hardcoded secrets, no injection).
-7. Conventions followed (see the repo's CLAUDE.md).
-8. Performance check — no new serial loop over independent expensive work where parallelism is feasible.
-9. Claim provenance — no number, benchmark or behavioural claim that arrived from *outside this session* (another agent, another session, a person, a doc) is written into a test, a constant or a docstring as fact until derived here, from the source. A pinned wrong value acquires a guard.
-10. Every occurrence — a fix covers every instance of the defect's shape across the repo, worst case shown, not only the reported one (gatekeeper §4e).
+Use the `qa-gatekeeper` agent if the project has one, else review directly. Hand it the
+`QA-GATES` line — it reads the stored verdict (`qa_gates.py --show`), it does not re-run
+anything. **Re-check what any agent reports before passing it on:** re-run the command
+behind each verdict-bearing claim (a result, a count, "no other occurrence"). Beyond the
+gates: no orphaned or *unreached* code · no secrets or injection · the repo's conventions ·
+no new serial loop over independent expensive work · **claim provenance** — no number or
+behavioural claim from outside this session written into a test, constant or docstring as
+fact until derived here · **every occurrence** — a fix covers each instance of the defect's
+shape, worst case shown (gatekeeper §4e).
 
 **Verdicts go through the ledger.** Record each — `milestone_ledger.py record M<n> --verdict
 PASS|CONDITIONAL_PASS|REJECT --kind <failing gate>` (`setup` if the environment failed) — run
@@ -237,85 +151,40 @@ PASS|CONDITIONAL_PASS|REJECT --kind <failing gate>` (`setup` if the environment 
 - `STOP CHECKPOINT-*` → stop fixing. Ask the user: **ship** the best result, **continue**, or **restart** from the plan; record it with `ship|extend|restart M<n> --user-said "<their words>"`. Never choose for them.
 - `STOP RESEARCH-MISSING` → record the milestone's research. Exit `2` → could not determine, not a pass.
 
-After each verdict give the user one status line (`report`) and carry on — a progress report,
-not a question. Record the test count after each pass.
+After each verdict give the user one status line (`report`) and carry on — a progress
+report, not a question.
 
----
+## 7. PHASE 5 — DOCS (after each QA pass)
 
-## 7. PHASE 5 — DOCUMENTATION (after each QA pass)
+Update only what changed, through the `cms` skill for any `.md` edit: the repo's CLAUDE.md
+for new commands, modules, paths, conventions or version bumps; shared docs when a
+cross-repo rule or contract changed; test counts and versions when they changed.
 
-Keep docs current incrementally — update only what changed. Invoke the `cms` skill for any `.md` edits.
+## 8. PHASE 6 — COMPLETION
 
-Update the repo's **CLAUDE.md** if: new commands/flags, architecture changes (new modules, renamed paths, new patterns), new/changed test modules, version bumps, or new/changed conventions.
+1. Final suite green, no regression against the branch point (more tests is expected).
+2. Version bump (FULL): patch by default, minor for a designated feature; LIGHT only if notable.
+3. Lessons learned — persisted for a notable milestone or a critical mistake.
+4. Settle any answerable prediction (FULL), **honestly** — the ledger's value is its `wrong`
+   entries; leave the rest open for `curate`:
+   `predictions.py list` · `predictions.py verify <id> --verdict right|wrong|partial|unclear --evidence "<what the check showed>" --date <YYYY-MM-DD>`
+5. Tasks complete; summary (what was done, version, test count, open items); for FULL a
+   debrief — **Findings** with numbers, **Lessons**, **Recommendations**, **Path forward**.
 
-Update **root/shared docs** if cross-repo rules or shared contracts changed.
+## 8.5 PHASE 6.5 — INTEGRATE (FULL + LIGHT)
 
-Rules: incremental only; bump test counts and version numbers when they changed.
+After the version bump, invoke `finish-branch`: no green, no merge; it offers **merge /
+open PR / keep / discard**, recommends a PR where the target is protected or runs CI, and
+cleans up without losing unmerged work. Skip if nothing was isolated.
 
----
+## CROSS-CUTTING
 
-## 8. PHASE 6 — COMPLETION (after all milestones)
+Find every affected repo; classify at the **highest** tier among them; implement upstream
+producers before downstream consumers; QA each repo before the next; re-verify downstream.
 
-1. Verify the final suite is green with no passing-test regression vs. the branch-point baseline (more tests than baseline is expected, not a regression).
-2. Version bump (FULL only): patch by default; minor for a designated major feature. LIGHT: skip unless notable.
-3. Capture lessons learned (what worked, what didn't, what surprised) — persisted to memory/docs for a notable milestone or a critical mistake, else kept in the conversation.
+## CHECKLIST
 
-   **Then settle any prediction that is now answerable** (FULL only):
-
-   ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/predictions.py" list          # what is still open
-   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/predictions.py" verify <id> \
-     --verdict right|wrong|partial|unclear --evidence "<what the check showed>" --date <YYYY-MM-DD>
-   ```
-
-   Leave unanswerable ones open (`curate` picks them up); verify the rest **honestly** — the
-   ledger's value is its `wrong` entries, and a recorded claim cannot be edited to match.
-4. Mark all tasks complete (TaskUpdate).
-5. Summary to the user: what was done, version bump, test count, open items.
-6. Debrief (FULL only), in plain language — **Findings** (what the results actually showed, with numbers), **Lessons learned**, **Recommendations**, **Path forward** (next 1–3 priorities).
-
----
-
-## 8.5 PHASE 6.5 — INTEGRATE (FULL + LIGHT; TRIVIAL skips)
-
-Close out the isolated work. Skip if Phase 2.5 was declined (nothing was isolated) or for
-TRIVIAL tasks.
-
-Invoke the `finish-branch` skill: no green, no merge; it offers **merge / open PR / keep /
-discard**, defaults to a PR for protected targets, and cleans up without losing unmerged work.
-
-Run this after Phase 6's version bump so the bump commit is part of what integrates.
-
----
-
-## CROSS-CUTTING TASKS
-
-When a task spans multiple repos/packages:
-
-1. Identify ALL affected repos and the changes each needs.
-2. Classify at the **highest** tier across all of them.
-3. Implement in **dependency order** (upstream producers before downstream consumers).
-4. QA after each repo's changes — don't batch across repos.
-5. Verify downstream still works after upstream changes.
-
----
-
-## QUICK REFERENCE
-
-| Phase | Agents | Parallel? | When |
-|-------|--------|-----------|------|
-| 1 — Research | Explore (1–3) + web research (1) | Yes | FULL only |
-| 2 — Architecture | Plan (1) | After Phase 1 | FULL only |
-| 2.5 — Isolate | `start-branch` skill | Before Implement | FULL + LIGHT (TRIVIAL skips) |
-| 3 — Implement | Direct or concurrent teams | When independent | All |
-| 4.0 — Deterministic checks | none (you run them) | Before delegating | All |
-| 4.1 — QA | qa-gatekeeper or direct | After each milestone | All |
-| 5 — Docs | Direct (via `cms`) | After QA pass | All |
-| 6 — Completion | Direct | After all milestones | All |
-| 6.5 — Integrate | `finish-branch` skill | After Completion | FULL + LIGHT (TRIVIAL skips) |
-
-## CHECKLIST (every task)
-
-Before: target identified · classified · alignment stated · task list visible · starting test count recorded · work isolated via `start-branch` (FULL/LIGHT; target auto-detected + confirmed) — or isolation explicitly declined.
-During: milestone research recorded (FULL) · deterministic checks run by you (gates, coverage, probe) before each review · every verdict recorded in the ledger, checkpoints taken to the user · docs updated after each QA pass · task list current.
-After: final test count verified · version bumped (per tier) · lessons captured · tasks complete · branch integrated via `finish-branch` (merge/PR/keep/discard + safe cleanup, FULL/LIGHT) · debrief delivered (FULL only).
+Before: target · tier · alignment · task list · starting test count · isolated (or declined).
+During: milestone research (FULL) · `qa_gates.py` before each review · every verdict in the
+ledger, checkpoints taken to the user · docs after each pass.
+After: final suite · version · lessons · predictions settled · integrated · debrief (FULL).

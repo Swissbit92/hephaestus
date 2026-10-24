@@ -118,3 +118,13 @@ happens, so they are recomputed. The integration target does not drift, so recom
 can only *lose* a correction the user already made — which is why every script reads the
 target `start-branch` recorded (`branch.<b>.integrationTarget`) before falling back to a
 heuristic.
+
+**Claim provenance — why a received number is a finding.** The failure is invisible by
+construction: the number is plausible, the code around it is correct, and the tests pass —
+because they were written to match it. The pinned case is the worst one: the wrong value
+acquires a guard, and the guard is exactly what stops the next person questioning it.
+
+**Why the verdict is a token.** A verdict that has to be inferred from prose gets inferred
+differently by different readers, and by the same reader on different days. A fixed last
+line (`QA-VERDICT: …`) is what the evals and develop parse; the ~400-word cap keeps the
+report the user reads to the findings.
