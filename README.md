@@ -195,7 +195,7 @@ hephaestus/
     ├── crucible/                        # flagship craft tools (see plugins/crucible/README.md)
     │   ├── .claude-plugin/plugin.json   # manifest + cms & loop-harness PreToolUse hooks
     │   ├── skills/{cms,spar-with-me,grill-me,start-branch,sync-branch,finish-branch,skill-craft,eval-first,flag-gate,loop-harness,act-for-real,repo-audit,refactor-audit}/
-    │   ├── scripts/                     # detect_profile · evidence_gate · coverage_delta · metric_delta · mutation_probe · milestone_ledger · skill_lint · predictions
+    │   ├── scripts/                     # qa_gates · detect_profile · evidence_gate · coverage_delta · metric_delta · mutation_probe · milestone_ledger · integrate · skill_lint · predictions
     │   ├── commands/{develop,curate}.md
     │   └── agents/qa-gatekeeper.md
     ├── forge-unity/                    # Unity evidence + the .forge/adapter.json contract
