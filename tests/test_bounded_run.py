@@ -31,6 +31,8 @@ def _reap_markers():
     """Whatever a test started is killed at teardown, pass or fail — so a regression in the
     fix fails the test instead of leaving a runaway on the machine."""
     yield
+    if sys.platform == "win32":     # every marker-spawning test is POSIX_ONLY; no pkill there
+        return
     subprocess.run(["pkill", "-9", "-f", "bounded-[0-9a-f]{8}|incident-[0-9a-f]{8}|grow-[0-9a-f]{8}"],
                    capture_output=True)
 
