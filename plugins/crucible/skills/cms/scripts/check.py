@@ -24,6 +24,7 @@ import doc_age
 from common import (
     ARCHIVE_ALLOWLIST,
     ARCHIVE_PATTERNS,
+    DOC_BUDGET_BYTES,
     FRONTMATTER_EXEMPT,
     AI_SUMMARY_MAX_BYTES,
     AI_SUMMARY_AGGREGATE_WARN_BYTES,
@@ -237,6 +238,22 @@ def check_claude_md_size_trend(repo: Path) -> list[Finding]:
     entry["last_checked"] = date.today().isoformat()
     state[key] = entry
     save_state("size_history", state)
+    return findings
+
+
+def check_doc_budgets(repo: Path) -> list[Finding]:
+    """Warn when a long-lived history file outgrows its byte budget. Stateless; never an error."""
+    findings: list[Finding] = []
+    for rel, limit in DOC_BUDGET_BYTES.items():
+        path = repo / rel
+        if not path.is_file():
+            continue
+        size = path.stat().st_size
+        if size > limit:
+            findings.append(Finding(
+                "warning", str(path),
+                f"{rel} is {size:,} bytes (budget {limit:,}); move older entries to "
+                f"docs/archive/YYYY-MM/ and leave a pointer line"))
     return findings
 
 
@@ -598,6 +615,7 @@ def run_repo_check(repo: Path) -> list[Finding]:
     findings: list[Finding] = []
     findings.extend(check_required_files(repo))
     findings.extend(check_claude_md_size_trend(repo))
+    findings.extend(check_doc_budgets(repo))
     findings.extend(check_architecture_page(repo))
     findings.extend(check_flow_shaped_sections(repo))
     findings.extend(check_list_shaped_like_a_table(repo))

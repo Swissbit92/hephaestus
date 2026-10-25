@@ -114,6 +114,24 @@ be pushed directly — a fresh commit has no checks yet. The script detects this
 touching anything and prints the PR route, rather than bumping the manifest and tagging
 locally and then failing, which is the half-completed release its own comments warn about.
 
+**The changelog is cut as part of the release.** `[Unreleased]` in `CHANGELOG.md` must be
+moved under `## [<plugin>-v<x.y.z>] — date` (`scripts/changelog.py cut <plugin> <x.y.z>`);
+after 0.6.3 nobody did, and 115 KB of released work sat under one heading. `release.sh`
+checks this first, before the gates: if the heading is missing and this run will make the
+release commit it cuts it for you; if nothing will be committed (the PR route, tagging a
+merged commit) it refuses, because `main` cannot take a new commit — run the `cut` on the
+release branch with the version bump. It also refuses an empty `[Unreleased]`: write the
+entry first. Every run (dry or real) ends with a docs report: file sizes, `ARCHIVE DUE` in
+plain words when `CHANGELOG.md` passes 40 KB or `docs/LESSONS_LEARNED.md` passes 25 KB with
+entries older than 60 days, and dead-module candidates. It never blocks and never deletes.
+
+**Archive, don't delete.** When `ARCHIVE DUE` shows, run `scripts/changelog.py archive
+--apply` (keeps the newest 5 versions) or `archive-lessons --apply` as their own small PR.
+Entries move to `docs/archive/YYYY-MM/`; git keeps the history and the archive keeps the
+text. Removal candidates are name-based and low-confidence: a human decides, and each
+removal PR states its reason — a deleted test needs one, because the coverage-delta gate
+rejects a removal without it.
+
 **Notes are scoped by excluding sibling plugins, not by including the plugin's directory.**
 A release routinely lands work outside its own tree — a gate in `scripts/`, tests in
 `tests/`, an ADR in `docs/` — and the old `-- plugins/<name>` filter could see none of it:
@@ -127,3 +145,10 @@ all, the script says so on stderr rather than quietly emitting "Maintenance rele
 
 Markdown under any `docs/` directory carries cms frontmatter (the `cms` skill scaffolds and
 lints it). Root files (README, CLAUDE, CHANGELOG, CONTRIBUTING) do not.
+
+**An ADR is never deleted or rewritten when it is overtaken.** Change its `## Status` line
+and keep the text: `Superseded by ADR-NNN` when a newer record replaces the decision,
+`Deprecated` when the decision is being removed with no successor, and
+`Accepted (amended by ADR-NNN)` when only part is overturned (ADR-001 by ADR-002). Link
+both ways, and an ADR must never look current when it is not. A long superseded ADR may
+shrink to its context, the decision and a link to its replacement; git keeps the rest.

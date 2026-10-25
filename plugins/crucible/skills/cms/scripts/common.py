@@ -87,6 +87,13 @@ _BASE_ALLOWLIST = {
 # the rot the file exists to prevent. Retirement is a deliberate edit, never a timeout.
 FRONTMATTER_EXEMPT = {"README.md", "CLAUDE.md", "CHANGELOG.md", "SECURITY.md", "INVARIANTS.md"}
 
+# Long-lived, append-only history files and the size (bytes) past which they should be
+# archived. Bytes, not lines: the changelog was 87 KB in 120 lines, which a line-count
+# trend check could not see. Both files are on the archive allowlist (they are never moved
+# as whole files), so the remedy is moving older *entries* to docs/archive/YYYY-MM/.
+# scripts/changelog.py in this repo reads the same numbers; a test asserts they agree.
+DOC_BUDGET_BYTES = {"CHANGELOG.md": 40_000, "docs/LESSONS_LEARNED.md": 25_000}
+
 # Archive-candidate filename patterns (case-insensitive match on name).
 ARCHIVE_PATTERNS = [
     re.compile(r".*_MIGRATION\.md$", re.IGNORECASE),

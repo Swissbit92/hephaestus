@@ -192,6 +192,8 @@ cross-repo rule or contract changed; test counts and versions when they changed.
 
 1. Final suite green, no regression against the branch point (more tests is expected).
 2. Version bump (FULL): patch by default, minor for a designated feature; LIGHT only if notable.
+   The release cuts `[Unreleased]` under the new version and prints a docs report (`ARCHIVE DUE`,
+   removal candidates): act on it in its own PR, each removal stating its reason.
 3. Lessons learned — persisted for a notable milestone or a critical mistake.
 4. Settle any answerable prediction (FULL), **honestly** — the ledger's value is its `wrong`
    entries; leave the rest open for `curate`:

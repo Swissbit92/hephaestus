@@ -12,6 +12,33 @@ ai_summary: "Dated, append-only record of what this repo measured and got wrong,
 
 Append-only, dated entries. Newest first. Each entry: what happened, what we learned, how to apply going forward.
 
+## 2026-10-25 — The changelog nobody cut, found by measuring size, and a plan premise that was wrong (crucible 1.8.0)
+
+`CHANGELOG.md` held every release since 0.6.3 under one `[Unreleased]` heading: 119 KB, 104
+bullets, 33 tags. Nothing in `release.sh`, `CONTRIBUTING`, `develop` or `finish-branch`
+mentioned cutting it, the `cms` checks exempt the file, and the one size check counted lines
+of `CLAUDE.md` only. A step that lives in someone's head stopped happening the day nobody
+remembered it, and no gate could notice. It surfaced only because we asked how big the
+long-lived files were.
+
+- **The plan's premise was wrong, and research caught it.** The approved plan said "regroup
+  under version headings using the labels already in each entry". The research agent counted
+  them: 68 of 104 bullets carry no version label. A regroup by label would have run, looked
+  plausible and silently dropped two thirds. Grouping by the first tag containing the commit
+  that added each bullet (`git blame` plus `git tag --contains`) mapped 95 of 95 entries; all
+  104 bullets are still present (26 in `CHANGELOG.md`, 78 in the archive).
+- **Protected `main` decides where the step lives.** A cut inside `release.sh` at tag time
+  would be a commit to a branch that refuses commits. So the cut is a command run on the
+  release branch, `release.sh` only checks for it (and cuts for you when it will make the
+  release commit itself), and it checks first, before the two-minute gates.
+- **Measured:** `CHANGELOG.md` 119,320 -> 20,090 bytes. The prediction (under 40 KB, no
+  `ARCHIVE DUE`) held. The removal-candidate scan returned 0 on this repo, so its false
+  positive rate on a real tree is untested here.
+- **A mistake of mine, caught before release.** I recorded the M3 PASS from a background QA
+  run whose output file was empty: the run had not completed. Nothing was shipped on it; the
+  next foreground run covered the same tree and passed, and the verdict stands on that run.
+  Read the result before recording the verdict.
+
 ## 2026-10-25 — The task list vanished; the fix measured what the first guess missed (crucible 1.7.1)
 
 - **What:** `/crucible:develop` stopped showing its task list. The first guess was our own
