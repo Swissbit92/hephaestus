@@ -179,7 +179,9 @@ def _read(path: Path) -> str:
 
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8", newline="\n")
+    # open(), not Path.write_text(newline=): that keyword needs Python 3.10 and the floor is 3.9
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
 
 
 def _archive_path(root: Path, on: str, name: str) -> Path:
