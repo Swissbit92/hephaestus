@@ -2,7 +2,7 @@
 title: Lessons Learned
 status: active
 created: 2026-06-28
-last_reviewed_on: 2026-10-24
+last_reviewed_on: 2026-10-25
 review_in: 12 months
 applies_to: hephaestus
 ai_summary: "Dated, append-only record of what this repo measured and got wrong, newest first — including the two results that most constrain how work is done here: the qa-gatekeeper agent scoring 40/40 against a no-agent control that also scored 40/40, and 'placement beats wording' failing to reproduce when applied as a reordering. Read it before citing a skill's scenarios as evidence it earns its cost, before assuming a fix that sounds right will measure right, and before recording a lesson in the module that learned it rather than as a check."
@@ -11,6 +11,38 @@ ai_summary: "Dated, append-only record of what this repo measured and got wrong,
 # Lessons Learned
 
 Append-only, dated entries. Newest first. Each entry: what happened, what we learned, how to apply going forward.
+
+## 2026-10-25 — The task list vanished; the fix measured what the first guess missed (crucible 1.7.1)
+
+- **What:** `/crucible:develop` stopped showing its task list. The first guess was our own
+  cut: 1.7.0 shortened develop.md by 40% and lost "keep the task list current". Measuring
+  showed that was the smaller part. (1) Claude Code now ships the task tools off by default;
+  `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` in the settings `env` block brings them back. (2) Even with
+  the tools present, "create a task list" was one clause inside the Phase 0 paragraph, and
+  **1.6.1 skipped it as reliably as 1.7.0** (0/5 on Sonnet 5.5, 0/5 on Opus 5.5). It had been
+  working only because the model happened to follow a buried sentence.
+- **What we learned:**
+  - **Baseline the release that "worked" before blaming the change.** The 1.7.0 trim was
+    guilty of a real regression and of none of this one. A baseline on 1.6.1 took minutes and
+    turned a wrong story into the right one. `run_evals.py --plugin-root NAME=DIR` runs an
+    older release under the same harness, so baseline and candidate differ only in the plugin.
+  - **A requirement the user can see is a first step, not a clause.** The fix makes
+    `TaskCreate` the first tool call, with the exact title format; list shown at turn 1 went
+    0/5 to 5/5, kept current after the user confirms 0/3 to 6/6.
+  - **A check must look where the behaviour happens.** The first fallback check read the last
+    message; the checklist belongs in the first, so every version scored 0/5 for the wrong
+    reason. The harness now keeps all assistant text (`assistant_text_matching`).
+  - **A behaviour that only shows after the user answers needs a two-turn scenario.** A
+    single-turn run stops at the gate and can never see a later update (`followup`).
+  - **Say what ran.** The CLI's default model had changed to Sonnet while every earlier
+    baseline was Opus; pin `--model` when comparing, and record what ran.
+  - **Process, not product:** unquoted `$VAR` does not word-split in zsh, so a run silently
+    never started; and killing a script with `pkill` leaves its `claude` children running, the
+    exact orphan problem 1.7.0 fixed. Stop a run with `TaskStop` and then check
+    `pgrep -f 'claude -p'`.
+- **How to apply:** When a visible behaviour disappears, measure the last release that had it
+  before editing anything. Put anything the user is meant to see in an explicit first step
+  with its exact format. Pin the model when comparing results.
 
 ## 2026-10-24 — A timeout that kills only the child froze the machine; and three gates that hid a missing tool
 
