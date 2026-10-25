@@ -1,6 +1,6 @@
 ---
 description: "Structured development workflow — task classification, research, architecture, implementation with QA gates, and documentation updates. Use for implementation work in a target repo. Do NOT use for pure research/analysis or one-shot data exploration."
-allowed-tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "Agent"]
+allowed-tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "Agent", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"]
 ---
 
 # Ways of Working (WoW) — Development Workflow
@@ -8,6 +8,21 @@ allowed-tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "Agent"]
 Every task is **classified**, then follows its tier: ceremony where a subtle bug is
 expensive, none where it is not. `<...>` parts are the project's to fill in. The reasons
 behind each rule: [references/develop-rationale.md](references/develop-rationale.md).
+
+## FIRST — show the plan, before any other tool call
+
+Decide the tier (§1) from the task alone, then make `TaskCreate` your **first tool call**:
+one task per phase of that tier — FULL 0 · 1 · 2 · 2.5 · 3 · 4 · 5 · 6 · 6.5, LIGHT 0 · 2.5 ·
+3 · 4 · 5 · 6 · 6.5, TRIVIAL none. Every title ends with an estimate and the first also with
+the total: `Phase 0: Classify & align (~5 min) — total ~90 min`. The user watches this list
+to see progress and time left.
+
+Keep it current with `TaskUpdate`: **in_progress** when a phase starts, **completed** when its
+gate passes; add one task per milestone once the plan is set; when a milestone overruns, change
+its estimate and the total in the titles. If the task tools are not among your tools (or a
+call fails), print the same list as a plain checklist in your first message and re-print it
+with ticks at each gate — never skip it silently. If the user changes the tier, add or delete
+tasks to match.
 
 ## 0. SCOPE
 
@@ -29,8 +44,7 @@ Several repos/packages → **CROSS-CUTTING** at the end.
 ## 2. PHASE 0 — CLASSIFY & ALIGN (all)
 
 State the tier, the target repo(s)/scope, and how this advances the project's goals (or why
-it is worth doing anyway). Create a task list with all phases (TaskCreate) and keep it
-visible. Record the starting test count (`<your test runner --collect-only>`) — a snapshot;
+it is worth doing anyway). Record the starting test count (`<your test runner --collect-only>`) — a snapshot;
 the gates re-derive the branch point themselves.
 
 **Gate:** user confirms classification and alignment before proceeding.
@@ -106,6 +120,7 @@ On decline, continue in place (6.5 then has nothing to finish). Branch logic sta
    after a failure. Record it: `milestone_ledger.py research M<n> --note "<what it changed>"`;
    a PASS cannot close a FULL milestone without it.
 3. After each milestone → **Phase 4** immediately. Never batch milestones before QA.
+   Mark each milestone's task in_progress when you start it and completed when it passes.
 
 Parallelize independent work (different modules, no shared state); serialize when files
 share structures or order matters. At most **5** agents at once (research included) unless
@@ -181,7 +196,7 @@ cross-repo rule or contract changed; test counts and versions when they changed.
 4. Settle any answerable prediction (FULL), **honestly** — the ledger's value is its `wrong`
    entries; leave the rest open for `curate`:
    `predictions.py list` · `predictions.py verify <id> --verdict right|wrong|partial|unclear --evidence "<what the check showed>" --date <YYYY-MM-DD>`
-5. Tasks complete; summary (what was done, version, test count, open items); for FULL a
+5. Every task completed (`TaskUpdate`), with the actual time against the estimate; summary (what was done, version, test count, open items); for FULL a
    debrief — **Findings** with numbers, **Lessons**, **Recommendations**, **Path forward**.
 
 ## 8.5 PHASE 6.5 — INTEGRATE (FULL + LIGHT)
@@ -197,7 +212,7 @@ producers before downstream consumers; QA each repo before the next; re-verify d
 
 ## CHECKLIST
 
-Before: target · tier · alignment · task list · starting test count · isolated (or declined).
+Before: task list shown first · target · tier · alignment · starting test count · isolated (or declined).
 During: milestone research (FULL) · `qa_gates.py` before each review · every verdict in the
 ledger, checkpoints taken to the user · docs after each pass.
 After: final suite · version · lessons · predictions settled · integrated · debrief (FULL).
