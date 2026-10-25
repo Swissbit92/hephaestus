@@ -164,6 +164,7 @@ hephaestus/
 │   ├── release.sh                    # per-plugin version bump + tag + GitHub release
 │   │                                 # (notes exclude sibling plugins, not scope to one dir)
 │   ├── bump_version.py               # semver math (used by release.sh; unit-tested)
+│   ├── changelog.py                  # cut [Unreleased] per release; archive old entries; docs report
 │   ├── validate_manifests.py         # marketplace + plugin manifest agreement (CI gate)
 │   ├── check-public-safe.sh          # private-token guard (employer + third-party project)
 │   ├── python_floor.py               # the declared floor, enforced (grammar + f-strings + stdlib)
@@ -202,6 +203,8 @@ hephaestus/
 - Plugin code stays vendor-neutral and self-contained (the `cms` scripts are pure stdlib —
   no pip installs).
 - Every release bumps the plugin's `version` in `plugin.json` (the pin is what triggers
-  updates for installed users) — use `scripts/release.sh`.
+  updates for installed users) — use `scripts/release.sh`. It also requires `CHANGELOG.md`'s
+  `[Unreleased]` cut under `## [<plugin>-v<x.y.z>]` (`scripts/changelog.py cut`; on the PR
+  route, do it on the release branch) and prints an `ARCHIVE DUE` report: archive, don't delete.
 - Markdown under a `docs/` dir carries cms frontmatter; root files (README, CLAUDE,
   CHANGELOG, CONTRIBUTING) do not.

@@ -112,6 +112,10 @@ def repo(tmp_path):
     shutil.copy(REPO_ROOT / "scripts" / "checks" / "_python.sh",
                 r / "scripts" / "checks" / "_python.sh")
     shutil.copy(REPO_ROOT / "scripts" / "bump_version.py", r / "scripts" / "bump_version.py")
+    shutil.copy(REPO_ROOT / "scripts" / "changelog.py", r / "scripts" / "changelog.py")
+    (r / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- **alpha 0.2.0: a thing.**\n\n"
+        "## [alpha-v0.1.0] — 2026-01-01\n\n- first\n", encoding="utf-8")
     _manifest(r, "alpha", "0.1.0")
     _manifest(r, "beta", "0.1.0")
     _git(r, "add", "-A")
@@ -263,3 +267,48 @@ def test_the_script_runs_past_its_guards_when_the_version_is_unchanged(repo):
     assert "unbound variable" not in combined, \
         "a guard read a variable the script had not computed yet"
     assert "CUR" not in combined or "unbound" not in combined
+
+
+# ------------------------------------------------------------------ changelog step
+def _set_changelog(repo: Path, text: str) -> None:
+    """Rewrite CHANGELOG.md and commit it: release.sh refuses a dirty tree."""
+    (repo / "CHANGELOG.md").write_text(text, encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "--quiet", "-m", "docs: changelog")
+
+
+def _run(repo: Path, *args: str) -> "subprocess.CompletedProcess[str]":
+    return subprocess.run([BASH, "scripts/release.sh", *args], cwd=str(repo),
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=300)
+
+
+def test_dry_run_says_unreleased_will_be_cut_and_prints_the_docs_report(repo):
+    out = _notes(repo, "alpha", "0.2.0")
+    assert "[Unreleased] will be cut into [alpha-v0.2.0]" in out
+    assert "DOCS REPORT" in out and "CHANGELOG.md:" in out
+
+
+def test_dry_run_warns_but_does_not_fail_on_an_empty_unreleased(repo):
+    _set_changelog(repo, "# Changelog\n\n## [Unreleased]\n\n## [alpha-v0.1.0] — 2026-01-01\n\n- first\n")
+    out = _notes(repo, "alpha", "0.2.0")
+    assert "CHANGELOG: PROBLEM" in out and "empty" in out
+
+
+def test_a_real_run_refuses_before_the_gates_when_unreleased_is_empty(repo):
+    _set_changelog(repo, "# Changelog\n\n## [Unreleased]\n\n## [alpha-v0.1.0] — 2026-01-01\n\n- first\n")
+    proc = _run(repo, "alpha", "0.2.0")
+    assert proc.returncode != 0
+    assert "empty" in proc.stdout + proc.stderr
+    assert "running release gates" not in proc.stdout, "the cheap check must come first"
+
+
+def test_a_real_run_that_commits_nothing_demands_the_cut_on_the_release_branch(repo):
+    """Same version, heading absent: main cannot take a new commit, so the cut is refused here."""
+    _git(repo, "tag", "-d", "alpha-v0.1.0")
+    _set_changelog(repo, "# Changelog\n\n## [Unreleased]\n\n- something\n")
+    proc = _run(repo, "alpha", "0.1.0")
+    assert proc.returncode != 0
+    assert "cut it on the release branch" in proc.stdout + proc.stderr
+    assert "running release gates" not in proc.stdout
+
