@@ -61,6 +61,31 @@ TAG="${PLUGIN}-v$NEW"
 
 git rev-parse "$TAG" >/dev/null 2>&1 && die "tag $TAG already exists"
 
+# --- CHANGELOG: the release must have its own heading --------------------------
+# [Unreleased] is cut into `## [<tag>] — date` as part of the release, not left to memory:
+# after 0.6.3 nobody did, and 115 KB of released work ended up under one heading. Checked
+# BEFORE the gates and any mutation, because it is cheap and a missing entry is the more
+# likely failure than a red suite.
+#
+# Three cases. The heading exists (the cut was committed on the release branch, which is
+# how a protected `main` gets it): nothing to do. It does not exist and this run will make
+# the release commit (CUR != NEW): the cut happens below, with the manifest bump. It does
+# not exist and nothing will be committed (CUR == NEW, tagging a merged commit): `main`
+# cannot take a new commit, so the cut belongs on the release branch — refuse.
+CL="$REPO_ROOT/scripts/changelog.py"
+CUT_NEEDED=0
+if "$PY" "$CL" --root "$REPO_ROOT" check "$PLUGIN" "$NEW" >/dev/null 2>&1; then
+  CL_NOTE="CHANGELOG: [$TAG] heading present"
+elif [[ "$CUR" != "$NEW" ]] && _why="$("$PY" "$CL" --root "$REPO_ROOT" check "$PLUGIN" "$NEW" --cuttable 2>&1)"; then
+  CUT_NEEDED=1
+  CL_NOTE="CHANGELOG: [Unreleased] will be cut into [$TAG] with the release commit"
+else
+  _why="$("$PY" "$CL" --root "$REPO_ROOT" check "$PLUGIN" "$NEW" --cuttable 2>&1 || true)"
+  [[ "$CUR" == "$NEW" ]] && _why="CHANGELOG has no [$TAG] heading and this run commits nothing: cut it on the release branch (scripts/changelog.py cut $PLUGIN $NEW), merge, then re-run"
+  CL_NOTE="CHANGELOG: PROBLEM — $_why"
+  [[ "$DRY_RUN" == "1" ]] || die "$_why"
+fi
+
 # --- Refuse early if main will reject the push --------------------------------
 # Checked BEFORE any mutation, on purpose. `main` requires status checks and enforces them
 # on admins, so a freshly-created commit — which by definition has no checks yet — cannot
@@ -87,7 +112,8 @@ sys.exit(0 if (ctx and adm) else 1)" <<<"$_prot"; then
   push a release commit directly. Use the PR route instead:
 
     git switch -c release/${PLUGIN}-v\$NEW
-    # bump plugins/$PLUGIN/.claude-plugin/plugin.json by hand
+    # bump plugins/$PLUGIN/.claude-plugin/plugin.json by hand, and cut the changelog:
+    scripts/changelog.py cut $PLUGIN \$NEW
     git commit -am \"Release ${PLUGIN}-v\$NEW\" && git push -u origin HEAD
     gh pr create --base main && gh pr merge --merge   # after CI is green
     git switch main && git pull && scripts/release.sh $PLUGIN \$NEW   # tags the merged commit
@@ -158,6 +184,8 @@ echo "plugin:  $PLUGIN"
 echo "version: $CUR  ->  $NEW   (tag $TAG)"
 echo "notes:"
 echo "$NOTES" | sed 's/^/  /'
+echo "$CL_NOTE"
+"$PY" "$CL" --root "$REPO_ROOT" report || echo "note: docs report unavailable"
 
 if [[ "$DRY_RUN" == "1" ]]; then
   echo "--- dry run: nothing changed ---"
@@ -186,6 +214,11 @@ if command -v claude >/dev/null 2>&1; then
   claude plugin validate "$PLUGIN_DIR" >/dev/null \
     && echo "✔ plugin validates" \
     || die "plugin validation failed — check 'git diff'"
+fi
+
+if [[ "$CUT_NEEDED" == "1" ]]; then
+  "$PY" "$CL" --root "$REPO_ROOT" cut "$PLUGIN" "$NEW" || die "changelog cut failed — check 'git diff'"
+  git add "$REPO_ROOT/CHANGELOG.md"
 fi
 
 git add "$MANIFEST"

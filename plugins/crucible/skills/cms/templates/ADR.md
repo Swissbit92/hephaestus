@@ -19,7 +19,7 @@ What is the change we're making? State it in active voice.
 
 ## Status
 
-Proposed | Accepted | Deprecated | Superseded by ADR-NNN
+Proposed | Accepted | Accepted (amended by ADR-NNN) | Deprecated | Superseded by ADR-NNN
 
 ## Consequences
 
