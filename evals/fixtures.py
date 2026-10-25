@@ -708,6 +708,21 @@ def develop_full(repo: Path) -> Path:
     return repo
 
 
+def develop_light(repo: Path) -> Path:
+    """A small, additive LIGHT task in a repo with a real test: enough phases that a task
+    list earns its place, small enough that a confirmed second turn gets through them."""
+    _init(repo, default_branch="main")
+    _write(repo, "CLAUDE.md", "# mathx\n\n## Branch model\n- Integration branch: `dev`.\n")
+    _write(repo, "pyproject.toml", '[tool.pytest.ini_options]\npythonpath = ["."]\n')
+    _write(repo, "mathx.py", "def add(a, b):\n    return a + b\n")
+    _write(repo, "tests/test_mathx.py",
+           "from mathx import add\n\n\ndef test_add():\n    assert add(2, 3) == 5\n")
+    _commit_all(repo, "init")
+    _g(repo, "branch", "dev")
+    _g(repo, "switch", "dev")
+    return repo
+
+
 def develop_trivial(repo: Path) -> Path:
     """A one-word typo in prose — the workflow's own TRIVIAL example. TRIVIAL explicitly
     skips isolate/integrate, so no branch should be created and the fix should just land."""
@@ -1189,6 +1204,7 @@ FIXTURES = {
     "qa_wired_guard": qa_wired_guard,
     "qa_swallowed_write": qa_swallowed_write,
     "develop_full": develop_full,
+    "develop_light": develop_light,
     "develop_trivial": develop_trivial,
     "develop_at_fix_cap": develop_at_fix_cap,
     "develop_next_milestone": develop_next_milestone,

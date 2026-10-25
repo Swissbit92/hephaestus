@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 class ToolCall:
     name: str
     input: dict = field(default_factory=dict)
+    turn: int = 1            # which user turn made the call (a scenario's `followup` is turn 2)
 
 
 @dataclass
@@ -46,6 +47,9 @@ class RunResult:
     tool_calls: list[ToolCall] = field(default_factory=list)
     tool_results: list[ToolResult] = field(default_factory=list)
     final_text: str = ""
+    # Every assistant text block in order, not just the last message: an instruction aimed at
+    # "your first message" cannot be checked against a final summary.
+    assistant_texts: list[str] = field(default_factory=list)
     exit_ok: bool = True
     fixture_path: str = ""   # the run's working dir, for checks that read file content
     # What actually ran, from the CLI's init event — not the --model flag, which defaults

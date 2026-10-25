@@ -592,3 +592,80 @@ def test_parallel_evals_are_bounded_in_total_not_just_per_run(monkeypatch):
         assert jobs == expected
         assert jobs * run_evals.per_run_memory_cap(jobs) <= phys // 4
     assert run_evals.safe_jobs(1) == 1
+
+
+# --- task-list scenarios: per-turn checks, two-turn runs, a pinned plugin copy -----------------
+
+def test_tool_called_in_turn_separates_the_turns_and_filters_on_input():
+    from harness import scoring
+    from harness.model import RunResult, ToolCall
+    run = RunResult(tool_calls=[
+        ToolCall("TaskCreate", {"subject": "M1 (~40 min)"}, turn=1),
+        ToolCall("TaskUpdate", {"taskId": "1", "status": "completed"}, turn=2),
+        ToolCall("TaskUpdate", {"taskId": "2", "status": "pending"}, turn=2)])
+    ok = lambda **a: scoring.tool_called_in_turn(run, **a)[0]
+    assert ok(names=["TaskCreate"], turn=1)
+    assert not ok(names=["TaskCreate"], turn=2)                    # created in turn 1, not 2
+    assert ok(names=["TaskUpdate"], turn=2, input_pattern=r'"status": "completed"')
+    assert not ok(names=["TaskUpdate"], turn=1)                    # an update in turn 2 is not turn 1
+    assert not scoring.tool_called_in_turn(run, ["TaskUpdate"], 2, r'"status": "deleted"')[0]
+    assert "turn 2 called" in scoring.tool_called_in_turn(run, ["Nope"], 2)[1]
+
+
+def test_sum_usage_adds_two_turns_and_never_turns_a_missing_measure_into_zero():
+    from harness import runner
+    a = {"duration_ms": 1000, "cost_usd": 0.1, "num_turns": 2, "session_id": "s",
+         "tokens": {"input": 1, "output": 2, "cache_read": 3, "cache_creation": 4}}
+    b = {"duration_ms": 500, "cost_usd": 0.05, "num_turns": 1,
+         "tokens": {"input": 10, "output": 20, "cache_read": 30, "cache_creation": 40}}
+    s = runner._sum_usage(a, b)
+    assert (s["duration_ms"], s["num_turns"], s["session_id"]) == (1500, 3, "s")
+    assert s["cost_usd"] == pytest.approx(0.15) and s["tokens"]["output"] == 22
+    assert "cost_usd" not in runner._sum_usage(a, {"duration_ms": 5})   # absent stays absent
+
+
+def test_parse_stream_keeps_the_session_id_for_resuming():
+    import json
+    from harness import runner
+    init = {"type": "system", "subtype": "init", "session_id": "abc-123", "plugins": [], "model": "m"}
+    res = {"type": "result", "result": "ok", "duration_ms": 5}
+    usage = runner._parse_stream(json.dumps(init) + "\n" + json.dumps(res) + "\n")[-1]
+    assert usage["session_id"] == "abc-123" and usage["duration_ms"] == 5
+
+
+def test_plugin_root_override_validates_its_argument(tmp_path, capsys):
+    import run_evals
+    assert run_evals.main(["--plugin-root", "crucible", "--scenario", "x"]) == 2      # no NAME=DIR
+    assert run_evals.main(["--plugin-root", f"crucible={tmp_path}", "--scenario", "x"]) == 2
+    assert "plugin.json" in capsys.readouterr().err
+
+
+def test_plugin_root_override_is_recorded_in_the_report_meta(tmp_path):
+    import run_evals
+    run_evals.PLUGIN_ROOTS.clear()
+    assert "plugin_roots" not in run_evals.build_meta([], 1)
+    run_evals.PLUGIN_ROOTS["crucible"] = tmp_path
+    try:
+        assert run_evals.build_meta([], 1)["plugin_roots"] == {"crucible": str(tmp_path)}
+    finally:
+        run_evals.PLUGIN_ROOTS.clear()
+
+
+def test_assistant_text_matching_sees_every_message_not_only_the_last():
+    run = RunResult(final_text="Done. All green.",
+                    assistant_texts=["Plan:\n- [ ] Phase 2.5: isolate\n- [ ] Phase 4: QA\n", "Done. All green."])
+    assert scoring.assistant_text_matching(run, r"phase 2\.5")[0]
+    assert not scoring.final_text_matching(run, r"phase 2\.5")[0]       # the last message alone misses it
+    assert not scoring.assistant_text_matching(run, r"nothing like this")[0]
+
+
+def test_parse_stream_collects_assistant_text_in_order_and_survives_a_second_turn():
+    import json
+    from harness import runner
+    def ev(text):
+        return json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": text}]}}) + "\n"
+    res = json.dumps({"type": "result", "result": "two", "duration_ms": 1}) + "\n"
+    u1 = runner._parse_stream(ev("one") + ev("two") + res)[-1]
+    assert u1["_texts"] == ["one", "two"]
+    u2 = runner._parse_stream(ev("three") + res)[-1]
+    assert runner._sum_usage(u1, u2)["_texts"] == ["one", "two", "three"]

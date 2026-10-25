@@ -64,9 +64,15 @@ def make_cli_judge(model: str):
     return judge_fn
 
 
+# --plugin-root <name>=<dir>: measure another copy of a plugin (an older release exported
+# with `git archive`) under THIS harness, so a baseline and a candidate differ only in the
+# plugin — not in the runner, the checks or the memory caps.
+PLUGIN_ROOTS: dict[str, Path] = {}
+
+
 def _one_run(scenario: dict, model: str | None, judge_fn, bare: bool) -> tuple[list[Criterion], str, str, dict]:
     """One repetition in its own throwaway fixture: (criteria, model seen, CLI version, cost)."""
-    plugin_root = REPO_ROOT / "plugins" / scenario["plugin"]
+    plugin_root = PLUGIN_ROOTS.get(scenario["plugin"], REPO_ROOT / "plugins" / scenario["plugin"])
     with tempfile.TemporaryDirectory(prefix="eval-") as td:
         fixture_dir = fixtures.build(scenario["fixture"], Path(td) / "repo")
         env = {key: val.replace("{fixture}", str(fixture_dir))
@@ -80,7 +86,8 @@ def _one_run(scenario: dict, model: str | None, judge_fn, bare: bool) -> tuple[l
             scenario["prompt"], fixture_dir, plugin_root,
             model=model, env=env, allowed_tools=scenario.get("allowed_tools"),
             timeout=scenario.get("timeout", runner.DEFAULT_TIMEOUT),
-            bare=bare,
+            bare=bare, followup=scenario.get("followup"),
+            disallowed_tools=scenario.get("disallowed_tools"),
         )
         target_loaded = scenario["plugin"] in run.loaded_plugins
         criteria: list[Criterion] = [
@@ -123,7 +130,8 @@ def develop_fix_cap() -> str:
     enforces it — not restated here, where it could drift. "unbounded" before the ledger
     existed: a baseline frozen then measured a workflow with no cap at all, and saying so
     is what makes a later comparison honest about what changed."""
-    ledger = REPO_ROOT / "plugins" / "crucible" / "scripts" / "milestone_ledger.py"
+    root = PLUGIN_ROOTS.get("crucible", REPO_ROOT / "plugins" / "crucible")
+    ledger = root / "scripts" / "milestone_ledger.py"
     if not ledger.exists():
         return "unbounded"
     m = re.search(r"^DEFAULT_FIX_CAP\s*=\s*(\d+)", ledger.read_text(encoding="utf-8"), re.M)
@@ -155,6 +163,8 @@ def build_meta(summaries: list[dict], k: int) -> dict:
         "cli_versions": versions,
         "plugin_revision": plugin_revision(),
         "develop_fix_cap": develop_fix_cap(),
+        **({"plugin_roots": {n: str(d) for n, d in sorted(PLUGIN_ROOTS.items())}}
+           if PLUGIN_ROOTS else {}),
     }
 
 
@@ -202,7 +212,17 @@ def main(argv: list[str]) -> int:
                     help="run up to N repetitions (and scenarios) at once; default 1")
     ap.add_argument("--json", help="write the full JSON report here")
     ap.add_argument("--baseline", help="baseline JSON: compare against it; freeze if absent")
+    ap.add_argument("--plugin-root", action="append", default=[], metavar="NAME=DIR",
+                    help="run plugin NAME from DIR instead of plugins/NAME (e.g. an older "
+                         "release exported with git archive); repeatable")
     args = ap.parse_args(argv)
+    for spec in args.plugin_root:
+        name, sep, d = spec.partition("=")
+        if not sep or not (Path(d).expanduser() / ".claude-plugin" / "plugin.json").is_file():
+            print(f"error: --plugin-root wants NAME=DIR with DIR/.claude-plugin/plugin.json; got {spec!r}",
+                  file=sys.stderr)
+            return 2
+        PLUGIN_ROOTS[name] = Path(d).expanduser().resolve()
 
     if not runner.cli_available():
         print("error: `claude` CLI not found — the eval runner needs it.", file=sys.stderr)
