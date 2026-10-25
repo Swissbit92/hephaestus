@@ -7,6 +7,7 @@ on plain snapshots/tool-call lists, they unit-test with hand-built data — no g
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -277,6 +278,21 @@ def tool_not_called(run: RunResult, name: str) -> tuple[bool, str]:
     return (not called), f"{name} not called" if not called else f"{name} was called"
 
 
+def tool_called_in_turn(run: RunResult, names: list[str], turn: int = 1,
+                        input_pattern: str | None = None) -> tuple[bool, str]:
+    """Any of `names` was called in user turn `turn` (a scenario's `followup` is turn 2),
+    optionally with an input whose JSON matches `input_pattern` — e.g. a task-list update
+    that actually moves a status, not a no-op."""
+    rx = re.compile(input_pattern) if input_pattern else None
+    hits = [tc for tc in run.tool_calls if tc.turn == turn and tc.name in names
+            and (rx is None or rx.search(json.dumps(tc.input, sort_keys=True)))]
+    if hits:
+        return True, f"turn {turn}: {len(hits)} matching call(s) of {sorted({h.name for h in hits})}"
+    seen = sorted({tc.name for tc in run.tool_calls if tc.turn == turn})
+    want = f"{names}" + (f" with input /{input_pattern}/" if input_pattern else "")
+    return False, f"turn {turn}: no call of {want}; turn {turn} called {seen}"
+
+
 def bash_matching(run: RunResult, pattern: str) -> tuple[bool, str]:
     rx = re.compile(pattern)
     cmds = _bash_commands(run)
@@ -323,6 +339,7 @@ CHECKS = {
     "subagent_verdict": subagent_verdict,
     "tool_result_not_matching": tool_result_not_matching,
     "tool_called": tool_called,
+    "tool_called_in_turn": tool_called_in_turn,
     "tool_not_called": tool_not_called,
     "bash_matching": bash_matching,
     "bash_not_matching": bash_not_matching,

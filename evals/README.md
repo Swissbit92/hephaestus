@@ -198,6 +198,9 @@ Each entry in `scenarios.json` is a falsifiable behavioral claim:
 | develop/phase4-runs-the-delta-gates | Phase 4 runs the duplicate-code delta, which sees a pasted function the green suite cannot |
 | develop/ultra-stops-at-a-preregistered-checkpoint | an ULTRA run stops at the checkpoint its user registered in advance, instead of starting the next milestone |
 | develop/ultra-proceeds-past-an-unregistered-stop | twin: with the checkpoint later, finishing a milestone is not a stop — the run carries on into the next |
+| develop/task-list-shown-at-phase-0 | a task list is created in the first turn, before the user has confirmed anything, and each item carries an estimate |
+| develop/task-list-kept-current | after the user confirms, the list moves: a later turn updates a task to in_progress or completed (a two-turn run) |
+| develop/task-list-falls-back-to-text | with the task tools unavailable the phase list is printed as plain text, not skipped silently |
 | finish-branch/recommends-a-pr-when-the-target-has-ci | with CI on the target and a remote, the PR is recommended — and nothing is pushed until someone chooses |
 | finish-branch/no-pr-default-without-ci | control twin: same remote, no CI — no PR is recommended by default |
 | qa-gatekeeper/rejects-vacuous-assertion | wrong arithmetic behind `assert result is not None` → REJECT |

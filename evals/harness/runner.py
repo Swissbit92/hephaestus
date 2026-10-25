@@ -63,6 +63,18 @@ def _usage(ev: dict) -> dict:
     return out
 
 
+def _sum_usage(a: dict, b: dict) -> dict:
+    """Two turns' cost as one run's. A measure missing from either turn stays None — an
+    absent number must not average in as free (see RunResult)."""
+    out = {"session_id": a.get("session_id", "")}
+    for k in ("duration_ms", "cost_usd", "num_turns", "subagents"):
+        out[k] = a[k] + b[k] if a.get(k) is not None and b.get(k) is not None else None
+    ta, tb = a.get("tokens"), b.get("tokens")
+    out["tokens"] = ({k: (ta.get(k) or 0) + (tb.get(k) or 0) for k in {*ta, *tb}}
+                     if ta and tb else None)
+    return {k: v for k, v in out.items() if v is not None}
+
+
 def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[ToolCall],
                                         list[ToolResult], str, str, str, dict]:
     """Parse `--output-format stream-json` lines into (any_plugin_loaded, loaded_plugin_names,
@@ -100,6 +112,8 @@ def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[T
             plugin_loaded = bool(plugins) and not errors
             model = str(ev.get("model", "") or "")
             cli_version = str(ev.get("claude_code_version", "") or "")
+            if ev.get("session_id"):
+                usage["session_id"] = str(ev["session_id"])
         elif t == "assistant":
             for block in (ev.get("message", {}).get("content", []) or []):
                 if isinstance(block, dict) and block.get("type") == "tool_use":
@@ -113,7 +127,7 @@ def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[T
                     tool_results.append(ToolResult(name=name, text=_result_text(block)))
         elif t == "result":
             final_text = ev.get("result", "") or final_text
-            usage = _usage(ev)
+            usage = {**_usage(ev), **({"session_id": usage["session_id"]} if usage.get("session_id") else {})}
     return (plugin_loaded, loaded_plugins, skills, errors, tool_calls, tool_results, final_text,
             model, cli_version, usage)
 
@@ -128,12 +142,18 @@ def run_skill(
     env: dict | None = None,
     timeout: int = DEFAULT_TIMEOUT,
     bare: bool = False,
+    followup: str | None = None,
+    disallowed_tools: list[str] | None = None,
 ) -> RunResult:
     """Run one skill invocation via the `claude` CLI. Raises RuntimeError if the CLI is
     absent (callers should guard with cli_available()).
 
     bare=False (default) uses the logged-in credentials + config. bare=True is hermetic
     (ignores ~/.claude) but then needs ANTHROPIC_API_KEY in env for auth — use that for CI.
+
+    followup: a second user turn, sent with `--resume` into the same session once the first
+    turn ends — for behaviour that only shows after the user answers a gate. Its tool calls
+    carry turn=2; final_text is the last turn's; cost and duration are summed.
     """
     if not cli_available():
         raise RuntimeError("claude CLI not available")
@@ -142,32 +162,44 @@ def run_skill(
 
     before = world.snapshot(fixture_dir)
 
-    cmd = ["claude"]
-    if bare:
-        cmd.append("--bare")
-    cmd += [
-        "-p", prompt,
-        "--plugin-dir", str(plugin_root),
-        "--permission-mode", "acceptEdits",
-        "--allowedTools", " ".join(allowed),
-        "--output-format", "stream-json", "--verbose",
-    ]
-    if model:
-        cmd += ["--settings", json.dumps({"model": model})]
+    def invoke(prompt: str, resume: str | None) -> tuple[bool, tuple]:
+        cmd = ["claude"]
+        if bare:
+            cmd.append("--bare")
+        cmd += [
+            "-p", prompt,
+            "--plugin-dir", str(plugin_root),
+            "--permission-mode", "acceptEdits",
+            "--allowedTools", " ".join(allowed),
+            "--output-format", "stream-json", "--verbose",
+        ]
+        if disallowed_tools:
+            cmd += ["--disallowedTools", " ".join(disallowed_tools)]
+        if resume:
+            cmd += ["--resume", resume]
+        if model:
+            cmd += ["--settings", json.dumps({"model": model})]
+        # Bounded, never subprocess.run(timeout=): that kills only `claude`, and the Bash-tool
+        # children it started — a test suite, a mutant that loops — run on as orphans. Two such
+        # orphans once grew to ~100 GB each and froze the machine mid-eval.
+        b = run_bounded(cmd, fixture_dir, timeout, env=run_env)
+        return b.returncode == 0 and not b.killed, _parse_stream(b.stdout)
 
     run_env = {**os.environ, **(env or {})}
-    exit_ok = True
-    stdout = ""
     started = time.monotonic()
-    # Bounded, never subprocess.run(timeout=): that kills only `claude`, and the Bash-tool
-    # children it started — a test suite, a mutant that loops — run on as orphans. Two such
-    # orphans once grew to ~100 GB each and froze the machine mid-eval.
-    b = run_bounded(cmd, fixture_dir, timeout, env=run_env)
-    stdout = b.stdout
-    exit_ok = b.returncode == 0 and not b.killed
-
+    exit_ok, parsed = invoke(prompt, None)
     (plugin_loaded, loaded_plugins, skills, errors,
-     tool_calls, tool_results, final_text, model_seen, cli_version, usage) = _parse_stream(stdout)
+     tool_calls, tool_results, final_text, model_seen, cli_version, usage) = parsed
+    if followup and exit_ok and usage.get("session_id"):
+        exit_ok, (_, _, _, _, calls2, results2, text2, _, _, usage2) = invoke(followup, usage["session_id"])
+        for c in calls2:
+            c.turn = 2
+        tool_calls += calls2
+        tool_results += results2
+        final_text = text2 or final_text
+        usage = _sum_usage(usage, usage2)
+    elif followup:
+        exit_ok = False      # the second turn never ran: not a pass of anything it would test
     wall_ms = int((time.monotonic() - started) * 1000)
     after = world.snapshot(fixture_dir)
 

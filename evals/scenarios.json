@@ -521,6 +521,143 @@
       ]
     },
     {
+      "id": "develop/task-list-shown-at-phase-0",
+      "skill": "develop",
+      "plugin": "crucible",
+      "fixture": "develop_light",
+      "prompt": "/crucible:develop Add an is_even(n) function to mathx.py, with a test.",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "allowed_tools": [
+        "Bash",
+        "Read",
+        "Edit",
+        "Write",
+        "Glob",
+        "Grep",
+        "Agent",
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskList",
+        "TaskGet",
+        "TodoWrite"
+      ],
+      "checks": [
+        {
+          "check": "tool_called_in_turn",
+          "args": {
+            "names": [
+              "TaskCreate",
+              "TodoWrite"
+            ],
+            "turn": 1
+          }
+        },
+        {
+          "check": "tool_called_in_turn",
+          "args": {
+            "names": [
+              "TaskCreate",
+              "TodoWrite"
+            ],
+            "turn": 1,
+            "input_pattern": "~\\s*\\d+\\s*(min|m|h)\\b|\\(\\s*\\d+\\s*(min|m|h)\\b"
+          }
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "develop/task-list-kept-current",
+      "skill": "develop",
+      "plugin": "crucible",
+      "fixture": "develop_light",
+      "prompt": "/crucible:develop Add an is_even(n) function to mathx.py, with a test.",
+      "followup": "Yes, LIGHT is right and the plan is fine. Go ahead, and accept whatever the branch step proposes without asking me again.",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "allowed_tools": [
+        "Bash",
+        "Read",
+        "Edit",
+        "Write",
+        "Glob",
+        "Grep",
+        "Agent",
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskList",
+        "TaskGet",
+        "TodoWrite"
+      ],
+      "timeout": 900,
+      "checks": [
+        {
+          "check": "tool_called_in_turn",
+          "args": {
+            "names": [
+              "TaskCreate",
+              "TodoWrite"
+            ],
+            "turn": 1
+          }
+        },
+        {
+          "check": "tool_called_in_turn",
+          "args": {
+            "names": [
+              "TaskUpdate",
+              "TodoWrite"
+            ],
+            "turn": 2,
+            "input_pattern": "\"status\": \"(in_progress|completed)\""
+          }
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "develop/task-list-falls-back-to-text",
+      "skill": "develop",
+      "plugin": "crucible",
+      "fixture": "develop_light",
+      "prompt": "/crucible:develop Add an is_even(n) function to mathx.py, with a test.",
+      "kind": "compliance",
+      "gate_mode": "all",
+      "allowed_tools": [
+        "Bash",
+        "Read",
+        "Edit",
+        "Write",
+        "Glob",
+        "Grep",
+        "TodoWrite",
+        "Agent"
+      ],
+      "disallowed_tools": [
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskList",
+        "TaskGet",
+        "TodoWrite"
+      ],
+      "checks": [
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "(?im)^\\s*(?:[-*☐◻◼]|\\[ ?\\]|\\d+[.)])\\s.*(phase\\s*2\\.5|isolat).*\\n(?:.*\\n){0,8}?\\s*(?:[-*☐◻◼]|\\[ ?\\]|\\d+[.)])\\s.*(phase\\s*4|\\bQA\\b)"
+          }
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
       "id": "qa-gatekeeper/rejects-vacuous-assertion",
       "skill": "qa-gatekeeper",
       "plugin": "crucible",

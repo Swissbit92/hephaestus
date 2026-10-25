@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 class ToolCall:
     name: str
     input: dict = field(default_factory=dict)
+    turn: int = 1            # which user turn made the call (a scenario's `followup` is turn 2)
 
 
 @dataclass
