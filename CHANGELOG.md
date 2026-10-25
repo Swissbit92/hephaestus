@@ -4,6 +4,14 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Fixed
+
+- **crucible 1.7.1: `/crucible:develop` shows its task list again, with an estimate per phase and a total.** The list had gone missing for two reasons. The task tools (`TaskCreate`, `TaskUpdate`) are off by default in current Claude Code and come back with `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` in the `env` block of settings.json. And "create a task list" was one clause inside the Phase 0 paragraph, which both 1.6.1 and 1.7.0 skipped (0/5 on Sonnet 5.5, 0/5 on Opus 5.5; 1.7.0 also dropped "keep it current"). develop now opens with a **FIRST** step: `TaskCreate` is the first tool call, each title ends with an estimate, the first carries the total (`Phase 0: Classify & align (~5 min) — total ~90 min`), tasks go in_progress and completed at each gate, and the estimates are revised when a milestone overruns. With no task tool, the same list is printed as a checklist rather than skipped. Measured on the same scenarios: list at turn 1 **0/5 → 5/5** (Sonnet), 0/5 → 4/5 (Opus); kept current after the user confirms 0/3 → 6/6; plain-text fallback 0/5 (1.6.1) and 1/5 (1.7.0) → 5/5; the 8 existing develop scenarios unchanged.
+
+### Added
+
+- **Evals: two-turn runs and older releases.** A scenario can carry a `followup` (resumed in the same session; its tool calls are turn 2), `tool_called_in_turn` and `assistant_text_matching` assert on a given turn or any message, `disallowed_tools` removes a tool the scenario must work without, and `run_evals.py --plugin-root NAME=DIR` runs an older release under the same harness so a baseline and a candidate differ only in the plugin. Three `task-list-*` scenarios.
+
 ### Added
 
 - **crucible 1.7.0: `qa_gates.py` runs Phase 4.0 once, in one call.** It runs every deterministic gate for the repo: what `detect_profile` emits, the revert probe (plus `--mutate` with `--final`) and the invariants. Read-only gates run concurrently. Test-executing gates stay serial unless `.crucible/qa.json` declares the suite parallel-safe, because a suite with a fixed port goes flaky under concurrency, and a flaky REJECT spends a fix round. The output is one line per gate, the tail of each failing one, and `QA-GATES: PASS|FAIL|UNDETERMINED|SKIP`. The verdict is stored per tree content, and the gatekeeper reads it (`--show`) instead of re-running the suite. A gate that crashes counts as could-not-determine, never as a finding. Measured on a counting fixture: a QA round went from 7 test collections and 5 pytest sessions (2 full suites) to 2 collections and 4 sessions (1 full suite), and to 1 collection once the branch-point cache is warm.

@@ -649,3 +649,23 @@ def test_plugin_root_override_is_recorded_in_the_report_meta(tmp_path):
         assert run_evals.build_meta([], 1)["plugin_roots"] == {"crucible": str(tmp_path)}
     finally:
         run_evals.PLUGIN_ROOTS.clear()
+
+
+def test_assistant_text_matching_sees_every_message_not_only_the_last():
+    run = RunResult(final_text="Done. All green.",
+                    assistant_texts=["Plan:\n- [ ] Phase 2.5: isolate\n- [ ] Phase 4: QA\n", "Done. All green."])
+    assert scoring.assistant_text_matching(run, r"phase 2\.5")[0]
+    assert not scoring.final_text_matching(run, r"phase 2\.5")[0]       # the last message alone misses it
+    assert not scoring.assistant_text_matching(run, r"nothing like this")[0]
+
+
+def test_parse_stream_collects_assistant_text_in_order_and_survives_a_second_turn():
+    import json
+    from harness import runner
+    def ev(text):
+        return json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": text}]}}) + "\n"
+    res = json.dumps({"type": "result", "result": "two", "duration_ms": 1}) + "\n"
+    u1 = runner._parse_stream(ev("one") + ev("two") + res)[-1]
+    assert u1["_texts"] == ["one", "two"]
+    u2 = runner._parse_stream(ev("three") + res)[-1]
+    assert runner._sum_usage(u1, u2)["_texts"] == ["one", "two", "three"]

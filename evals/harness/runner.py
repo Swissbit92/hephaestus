@@ -66,13 +66,13 @@ def _usage(ev: dict) -> dict:
 def _sum_usage(a: dict, b: dict) -> dict:
     """Two turns' cost as one run's. A measure missing from either turn stays None — an
     absent number must not average in as free (see RunResult)."""
-    out = {"session_id": a.get("session_id", "")}
+    out = {"session_id": a.get("session_id", ""), "_texts": [*(a.get("_texts") or []), *(b.get("_texts") or [])]}
     for k in ("duration_ms", "cost_usd", "num_turns", "subagents"):
         out[k] = a[k] + b[k] if a.get(k) is not None and b.get(k) is not None else None
     ta, tb = a.get("tokens"), b.get("tokens")
     out["tokens"] = ({k: (ta.get(k) or 0) + (tb.get(k) or 0) for k in {*ta, *tb}}
                      if ta and tb else None)
-    return {k: v for k, v in out.items() if v is not None}
+    return {k: v for k, v in out.items() if v is not None and v != []}
 
 
 def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[ToolCall],
@@ -116,6 +116,8 @@ def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[T
                 usage["session_id"] = str(ev["session_id"])
         elif t == "assistant":
             for block in (ev.get("message", {}).get("content", []) or []):
+                if isinstance(block, dict) and block.get("type") == "text" and block.get("text"):
+                    usage.setdefault("_texts", []).append(block["text"])
                 if isinstance(block, dict) and block.get("type") == "tool_use":
                     tool_calls.append(ToolCall(name=block.get("name", ""), input=block.get("input", {}) or {}))
                     if block.get("id"):
@@ -127,7 +129,7 @@ def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[T
                     tool_results.append(ToolResult(name=name, text=_result_text(block)))
         elif t == "result":
             final_text = ev.get("result", "") or final_text
-            usage = {**_usage(ev), **({"session_id": usage["session_id"]} if usage.get("session_id") else {})}
+            usage = {**_usage(ev), **{k: usage[k] for k in ("session_id", "_texts") if usage.get(k)}}
     return (plugin_loaded, loaded_plugins, skills, errors, tool_calls, tool_results, final_text,
             model, cli_version, usage)
 
@@ -206,7 +208,7 @@ def run_skill(
     return RunResult(
         plugin_loaded=plugin_loaded, loaded_plugins=loaded_plugins, skills=skills,
         plugin_errors=errors, tool_calls=tool_calls, tool_results=tool_results,
-        final_text=final_text,
+        final_text=final_text, assistant_texts=usage.get("_texts", []),
         exit_ok=exit_ok, fixture_path=str(fixture_dir),
         model=model_seen, cli_version=cli_version, before=before, after=after,
         duration_ms=usage.get("duration_ms", wall_ms), cost_usd=usage.get("cost_usd"),

@@ -647,7 +647,7 @@
       ],
       "checks": [
         {
-          "check": "final_text_matching",
+          "check": "assistant_text_matching",
           "args": {
             "pattern": "(?im)^\\s*(?:[-*☐◻◼]|\\[ ?\\]|\\d+[.)])\\s.*(phase\\s*2\\.5|isolat).*\\n(?:.*\\n){0,8}?\\s*(?:[-*☐◻◼]|\\[ ?\\]|\\d+[.)])\\s.*(phase\\s*4|\\bQA\\b)"
           }

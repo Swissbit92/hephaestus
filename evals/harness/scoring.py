@@ -204,6 +204,16 @@ def final_text_not_matching(run: RunResult, pattern: str, ignore_case: bool = Tr
     return (not hit), f"final text free of /{pattern}/" if not hit else f"final text matched forbidden /{pattern}/"
 
 
+def assistant_text_matching(run: RunResult, pattern: str, ignore_case: bool = True) -> tuple[bool, str]:
+    """Any assistant message — not only the last — matches. For what the user is shown along
+    the way (a checklist in the first message), which a closing summary can bury."""
+    rx = re.compile(pattern, re.I if ignore_case else 0)
+    for i, t in enumerate(run.assistant_texts or [run.final_text], 1):
+        if rx.search(t):
+            return True, f"message {i} matched /{pattern[:60]}/"
+    return False, f"none of {len(run.assistant_texts)} assistant message(s) matched /{pattern[:80]}/"
+
+
 def _result_texts(run: RunResult, tool: str | None) -> list[str]:
     return [tr.text for tr in run.tool_results if tool is None or tr.name == tool]
 
@@ -338,6 +348,7 @@ CHECKS = {
     "tool_result_matching": tool_result_matching,
     "subagent_verdict": subagent_verdict,
     "tool_result_not_matching": tool_result_not_matching,
+    "assistant_text_matching": assistant_text_matching,
     "tool_called": tool_called,
     "tool_called_in_turn": tool_called_in_turn,
     "tool_not_called": tool_not_called,
