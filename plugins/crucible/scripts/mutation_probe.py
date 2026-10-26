@@ -63,6 +63,8 @@ from crucible_common import (  # noqa: E402
 )
 
 DEFAULT_MAX_MUTANTS = 6
+CANARY_TIMEOUT = 1800   # seconds for the clean full-suite run when nothing measured it
+QUICK_TIMEOUT = 300     # seconds for the changed tests alone, before that run
 TEST_PATH = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|conftest\.py$)")
 GENERATED = re.compile(r"(^|/)(__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache)/|\.py[co]$")
 SENTINEL = 'raise RuntimeError("mutation_probe sentinel: the tests imported this copy")\n'
@@ -125,12 +127,14 @@ def run_tests(cmd: list[str], cwd: Path, timeout: int) -> tuple[int, float]:
     return rc, time.monotonic() - t0   # -1 = killed (hang/runaway): the tests noticed something
 
 
-def canaries(cmd: list[str], copy: Path, sources: list[str]) -> float:
+def canaries(cmd: list[str], copy: Path, sources: list[str],
+             timeout: int = CANARY_TIMEOUT) -> float:
     """Both canaries; returns the clean run's duration for the per-mutant timeout."""
-    rc, took = run_tests(cmd, copy, timeout=1800)
+    rc, took = run_tests(cmd, copy, timeout=timeout)
     if rc != 0:
+        why = f"timed out after {timeout}s" if rc == -1 else f"exit {rc}"
         raise Undetermined(f"cannot determine: the tests do not pass in an unmodified copy "
-                           f"(exit {rc}), so no probe result would mean anything")
+                           f"({why}), so no probe result would mean anything")
     if not sources:
         return took     # nothing importable changed (config, data): no module to plant into
     for rel in sources:
@@ -269,8 +273,27 @@ def probe_revert(repo: Path, base: str, cmd: list[str]) -> tuple[int, str]:
     return 0, "OK — the changed tests fail without the change: they depend on it."
 
 
-def probe_mutate(repo: Path, base: str, cmd: list[str], limit: int, mutant_timeout: int = 0) -> tuple[int, str]:
+def fail_fast(cmd: list[str], copy: Path, tests: list[str]) -> None:
+    """The changed tests alone must pass in the copy, before the whole suite is run there.
+
+    The copy holds only git's files, so a suite that needs ignored data (a store, assets)
+    fails in it. The changed tests find that out in seconds; the full-suite canary found it
+    out after the whole run (1312 s in one repo)."""
+    if not tests:
+        return
+    rc, _ = run_tests(cmd + tests, copy, timeout=QUICK_TIMEOUT)
+    if rc not in (0, 5):          # 5 = nothing collected: no verdict either way
+        why = f"timed out after {QUICK_TIMEOUT}s" if rc == -1 else f"exit {rc}"
+        raise Undetermined(f"cannot determine: the changed tests do not pass in an unmodified "
+                           f"copy ({why}) — the copy holds only git's files, so tests that need "
+                           "ignored data cannot run in it; no probe result would mean anything")
+
+
+def probe_mutate(repo: Path, base: str, cmd: list[str], limit: int, mutant_timeout: int = 0,
+                 canary_timeout: int = 0) -> tuple[int, str]:
     changed = changed_paths(repo, base)
+    tests = [p for p in changed if TEST_PATH.search(p) and p.endswith(".py")
+             and (repo / p).is_file()]
     sources = [p for p in changed if p.endswith(".py") and not TEST_PATH.search(p)
                and (repo / p).is_file()]
     lines = changed_line_map(repo, base, sources)
@@ -288,7 +311,8 @@ def probe_mutate(repo: Path, base: str, cmd: list[str], limit: int, mutant_timeo
     with tempfile.TemporaryDirectory(prefix="mutprobe-") as td:
         copy = Path(td)
         copy_tree(repo, copy)
-        took = canaries(cmd, copy, sorted({c[0] for c in chosen}))
+        fail_fast(cmd, copy, tests)
+        took = canaries(cmd, copy, sorted({c[0] for c in chosen}), canary_timeout or CANARY_TIMEOUT)
         for rel, op, line, ordinal in chosen:
             f = copy / rel
             original = f.read_text(encoding="utf-8")
@@ -317,6 +341,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--base")
     ap.add_argument("--test-cmd", help="test command (default: this interpreter's pytest)")
     ap.add_argument("--max-mutants", type=int, default=DEFAULT_MAX_MUTANTS)
+    ap.add_argument("--canary-timeout", type=int, default=0,
+                    help=f"seconds for the clean full-suite run (default {CANARY_TIMEOUT}; "
+                         "qa_gates passes 3x the tests gate's measured time)")
     ap.add_argument("--mutant-timeout", type=int, default=0,
                     help="seconds per mutant run (default: 3x the clean run, at least 60)")
     a = ap.parse_args(argv)
@@ -330,7 +357,7 @@ def main(argv: list[str] | None = None) -> int:
             raise Undetermined(f"cannot determine: {repo} is not a git repository")
         base = branch_point(repo, a.target, a.base)
         code, msg = probe_revert(repo, base, cmd) if a.revert else \
-            probe_mutate(repo, base, cmd, max(1, a.max_mutants), a.mutant_timeout)
+            probe_mutate(repo, base, cmd, max(1, a.max_mutants), a.mutant_timeout, a.canary_timeout)
     except Undetermined as e:
         print(str(e), file=sys.stderr)
         return 2
