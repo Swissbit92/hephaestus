@@ -36,6 +36,8 @@ Usage:
   milestone_ledger.py start M1
   milestone_ledger.py research M1 --note "what was looked up, and what it changed"
   milestone_ledger.py record M1 --verdict REJECT --kind tests     # writes, then evaluates
+  milestone_ledger.py record M1 --verdict PASS --resolution fixed --resolution wrong
+                                                                  # one per review finding: fixed|wrong|intentional|noise
   milestone_ledger.py status M1                                   # evaluates only
   milestone_ledger.py diagnose M1 --note "the mechanism"
   milestone_ledger.py extend|restart|ship M1 --user-said "..."
@@ -89,6 +91,7 @@ VERDICTS = ("PASS", "CONDITIONAL_PASS", "REJECT")
 KINDS = ("tests", "coverage", "lint", "clones", "revert", "mutation", "invariant",
          "review", "security", "perf", "other", "setup")
 PASSING = ("PASS", "CONDITIONAL_PASS")
+RESOLUTIONS = ("fixed", "wrong", "intentional", "noise")   # how a review finding was settled
 
 
 class Undetermined(Exception):
@@ -268,6 +271,39 @@ def evaluate(st: dict, now: _dt.datetime) -> tuple[int, str, str]:
     return 0, "PROCEED", budget
 
 
+def findings_lines(events: list[dict], names: list[str]) -> list[str]:
+    """How review findings were settled, and how many verdicts each milestone needed.
+
+    Old ledgers carry no `resolutions`; they simply print nothing for it."""
+    lines, total = [], {}
+    for m in names:
+        counts = {}
+        for e in events:
+            if e.get("event") == "verdict" and e.get("milestone") == m:
+                for r in e.get("resolutions") or []:
+                    counts[r] = counts.get(r, 0) + 1
+        if counts:
+            lines.append(f"findings {m}: " + " · ".join(f"{k} {v}" for k, v in counts.items()))
+            for k, v in counts.items():
+                total[k] = total.get(k, 0) + v
+    if total:
+        n = sum(total.values())
+        lines.append(f"findings total: {n} — " + " · ".join(f"{r} {total[r]}" for r in RESOLUTIONS
+                                                          if r in total))
+    rounds = []
+    for m in names:
+        verdicts = [e["verdict"] for e in events
+                    if e.get("event") == "verdict" and e.get("milestone") == m]
+        passed = [i for i, v in enumerate(verdicts) if v in PASSING]
+        if passed:
+            rounds.append((m, passed[0] + 1))
+    if rounds:
+        mean = sum(n for _, n in rounds) / len(rounds)
+        lines.append("rounds to pass: " + " · ".join(f"{m} {n}" for m, n in rounds)
+                     + f" (mean {mean:.1f})")
+    return lines
+
+
 # --------------------------------------------------------------------------- CLI
 def _parse_estimates(items: list[str]) -> dict[str, int]:
     out = {}
@@ -314,6 +350,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("milestone")
     p.add_argument("--verdict", choices=VERDICTS)
     p.add_argument("--kind", choices=KINDS, default="other")
+    p.add_argument("--resolution", action="append", choices=RESOLUTIONS, default=[],
+                   help="how one review finding was settled (repeat once per finding)")
     for name in ("extend", "restart", "ship", "clear"):
         p = sub.add_parser(name)
         p.add_argument("milestone")
@@ -371,6 +409,8 @@ def main(argv: list[str] | None = None) -> int:
             for m in names:
                 _, line, human = evaluate(milestone_state(events, m), now_dt)
                 print(f"{line:<24} {human}")
+            for line in findings_lines(events, names):
+                print(line)
             for e in events:
                 if e["event"] == "decide":
                     print(f"decided alone ({e.get('milestone')}): {e.get('note')}")
@@ -409,8 +449,9 @@ def main(argv: list[str] | None = None) -> int:
             verdict = _need(a.verdict, "record needs --verdict PASS|CONDITIONAL_PASS|REJECT")
             if verdict in PASSING:
                 check_criteria(repo, events[0])
+            extra = {"resolutions": a.resolution} if a.resolution else {}
             append(path, {"event": "verdict", "milestone": m, "verdict": verdict,
-                          "kind": a.kind}, now)
+                          "kind": a.kind, **extra}, now)
             st = milestone_state(load(path), m)
 
         code, line, human = evaluate(st, now_dt)

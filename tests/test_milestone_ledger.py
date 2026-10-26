@@ -322,3 +322,28 @@ def test_init_is_quiet_when_every_estimate_is_short(tmp_path):
     fixtures._commit_all(r, "plan")
     code, _, out = _run(r, "init", "--tier", "FULL", "--estimate", "M1=15", "--user-said", "ok")
     assert code == 0 and "warning" not in out
+
+
+def test_resolutions_are_logged_per_milestone_and_totalled_in_the_report(repo):
+    assert _reject(repo, "tests")[0] == 0
+    assert _run(repo, "research", "M1", "--note", "looked it up")[0] == 0
+    code, *_ = _run(repo, "record", "M1", "--verdict", "PASS",
+                    "--resolution", "fixed", "--resolution", "fixed", "--resolution", "wrong")
+    assert code == 0
+    out = _run(repo, "report")[2]
+    assert "findings M1: fixed 2 · wrong 1" in out
+    assert "findings total: 3 — fixed 2 · wrong 1" in out
+    assert "rounds to pass: M1 2 (mean 2.0)" in out
+
+
+def test_report_without_resolutions_prints_no_findings_line_and_still_loads(repo):
+    """A ledger written before --resolution existed (no field on its verdicts) still reports."""
+    assert _run(repo, "research", "M1", "--note", "looked it up")[0] == 0
+    assert _run(repo, "record", "M1", "--verdict", "PASS")[0] == 0
+    out = _run(repo, "report")[2]
+    assert "findings" not in out and "rounds to pass: M1 1 (mean 1.0)" in out
+
+
+def test_an_unknown_resolution_is_refused(repo):
+    code, _, out = _run(repo, "record", "M1", "--verdict", "PASS", "--resolution", "ignored")
+    assert code == 2 and "invalid choice" in out
