@@ -4,6 +4,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [crucible-v1.8.2] — 2026-10-26
+
 ### Added
 
 - **crucible 1.8.2: the ledger logs how each review finding was settled, and the gatekeeper's summary is shorter.** `milestone_ledger.py record` takes `--resolution fixed|wrong|intentional|noise` once per review finding, and `report` prints the counts per milestone, a branch total and the rounds each milestone needed to pass (older ledgers, which carry no resolutions, load as before). It measures reviewer noise on our own rounds before anything heavier is built on a vendor's figures: Anthropic's [code-review post](https://claude.dev/blog/solving-code-review-at-anthropic/) measures the same thing, and diff-only re-review stays queued behind this data. `qa-gatekeeper` now opens its report with a count of findings, says plainly when there is nothing to fix, caps nits at 3 (none while anything blocks) and wants `file:line` evidence for every finding.
