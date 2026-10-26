@@ -173,7 +173,7 @@ fact until derived here · **every occurrence** — a fix covers each instance o
 shape, worst case shown (gatekeeper §4e).
 
 **Verdicts go through the ledger.** Record each — `milestone_ledger.py record M<n> --verdict
-PASS|CONDITIONAL_PASS|REJECT --kind <failing gate>` (`setup` if the environment failed) — run
+PASS|CONDITIONAL_PASS|REJECT --kind <failing gate>` (`setup` if the environment failed; add `--resolution fixed|wrong|intentional|noise` once per review finding) — run
 `status M<n>` before any further fix, and follow the first line printed:
 
 - `PROCEED` → after a REJECT, fix and re-run QA; after a pass, docs, then the next milestone.
