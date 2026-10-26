@@ -108,8 +108,10 @@ independent expensive work · no hardcoded secrets or injection-prone string bui
 ## Verdict
 
 Report **at most ~400 words: findings only** — what you checked is implied by the verdict;
-what you found is the content. Per issue: **File**, **Line**, **Issue**, **Fix**,
-**Confidence** (0–100%). PASS = correct, complete, safe to proceed · CONDITIONAL PASS =
+what you found is the content. **Open with the count** ("3 findings: 1 blocking, 2 nits");
+with nothing to fix, say so in one line, then give the verdict line below. Per issue: **File**, **Line** (`file:line`
+evidence, never a guess from a name), **Issue**, **Fix**, **Confidence** (0–100%). **Nits: at
+most 3, and none while anything blocks.** PASS = correct, complete, safe to proceed · CONDITIONAL PASS =
 correct with minor issues to fix before the next milestone (`file:line` + fix each) ·
 REJECT = critical bug, incomplete, or a regression.
 
