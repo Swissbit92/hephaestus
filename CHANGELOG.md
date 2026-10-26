@@ -4,6 +4,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [crucible-v1.8.1] — 2026-10-26
+
 ### Fixed
 
 - **crucible 1.8.1: estimates are minutes of agent work, and the mutation probe fails fast.** The Plan agent was never told what unit to size milestones in, so it used human project time (a milestone "0.5-0.75 day" took 3 h; a 20-25 h total was really ~2 h) and, because the ledger's time checkpoint is 2x the estimate, an inflated estimate quietly loosened it. `develop.md` Phase 2 now asks for whole minutes, 15 or less per milestone, and converts any day/hour figure first; `milestone_ledger.py init` warns on any estimate over 15. `mutation_probe.py --mutate` runs the changed tests alone in the copy first and exits 2 at once when they cannot pass there (the copy holds only git's files, so a suite needing ignored data failed only after the whole 1800 s run: 1312 s in one repo), and `qa_gates.py` caps the clean full-suite run at 3x the tests gate's measured time (`--canary-timeout`, floor 120 s).
