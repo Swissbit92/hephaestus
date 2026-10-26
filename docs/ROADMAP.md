@@ -94,6 +94,7 @@ Premortem: this fails if the profiles become a second-system generalization exer
 - [ ] **Clone gate: a declared allowlist for convention boilerplate.** Every new script's `main()`/argparse prologue and every test file's `_run` wrapper is flagged as a new clone and needs the same stated reason each time; noise that trains people to skip the gate.
 - [ ] **`mutation_probe` in repos whose suite needs git state.** The probe's copy has no `.git`, so a suite that inspects its own repository fails the canary (correctly: could-not-determine). A copy that carries a shallow `.git` would let such repos be probed.
 - [ ] **`--fast` test selection for fix rounds**, gated so a PASS still requires a full-suite verdict for the current tree.
+- [ ] **Diff-only re-review after the first QA round, with no repeat findings.** `qa-gatekeeper` re-reads the whole change every round; after round 1 it could review only what changed since and drop findings it already raised. Also log how each finding was resolved (fixed / wrong / intentional / didn't matter) so reviewer noise is measured, not guessed. Idea from Anthropic's [code-review post](https://claude.dev/blog/solving-code-review-at-anthropic/) (2026-10-15); its figures are unverified here, so measure on our own rounds first.
 
 ## Shipped
 
