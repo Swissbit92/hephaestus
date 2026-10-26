@@ -204,6 +204,17 @@ def run_gate(repo: Path, gate: dict) -> dict:
     return {**gate, "exit": code, "seconds": round(time.monotonic() - started, 1), "tail": tail}
 
 
+def with_canary_cap(gate: dict, done) -> dict:
+    """The mutation probe's clean full-suite run gets 3x what the tests gate just took, not a
+    flat half hour: a copy that cannot run the suite then fails in minutes, not after 1800 s."""
+    if "--mutate" not in gate["cmd"]:
+        return gate
+    took = [r["seconds"] for r in done if r["name"] == "tests" and r["exit"] == 0]
+    if not took or took[0] <= 0:
+        return gate
+    return {**gate, "cmd": f"{gate['cmd']} --canary-timeout {max(120, int(took[0] * 3))}"}
+
+
 def aggregate(results: list[dict]) -> int:
     codes = [r["exit"] for r in results]
     if not codes:
@@ -267,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
                 futures.update({pool.submit(run_gate, repo, g): g["cmd"] for g in serial})
             else:
                 for g in serial:          # the test lane: one at a time, alongside statics
-                    results[g["cmd"]] = run_gate(repo, g)
+                    results[g["cmd"]] = run_gate(repo, with_canary_cap(g, results.values()))
             for f in concurrent.futures.as_completed(futures):
                 results[futures[f]] = f.result()
         ordered = [results[g["cmd"]] for g in gates]

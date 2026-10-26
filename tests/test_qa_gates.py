@@ -247,3 +247,16 @@ def test_pytest_command_prefers_the_repos_own_venv(tmp_path):
         venv_py.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
         venv_py.chmod(0o755)
         assert cc.pytest_command(repo)[0] == str(venv_py)
+
+
+def test_the_mutation_probe_gets_three_times_the_measured_tests_time():
+    gate = {"name": "mutation-probe", "cmd": "probe --repo . --mutate", "lane": "serial"}
+    done = [{"name": "tests", "exit": 0, "seconds": 88.0}]
+    assert qg.with_canary_cap(gate, done)["cmd"].endswith("--canary-timeout 264")
+    assert qg.with_canary_cap(gate, [])["cmd"] == gate["cmd"]                      # nothing measured
+    red = [{"name": "tests", "exit": 1, "seconds": 5.0}]
+    assert qg.with_canary_cap(gate, red)["cmd"] == gate["cmd"]                     # only a green run counts
+    fast = [{"name": "tests", "exit": 0, "seconds": 2.0}]
+    assert qg.with_canary_cap(gate, fast)["cmd"].endswith("--canary-timeout 120")  # a floor
+    other = {"name": "revert-probe", "cmd": "probe --revert", "lane": "serial"}
+    assert qg.with_canary_cap(other, done) is other

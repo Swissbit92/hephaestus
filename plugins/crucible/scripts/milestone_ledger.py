@@ -74,6 +74,7 @@ DEFAULT_FIX_CAP = 3
 DEFAULT_SETUP_CAP = 3
 SAME_KIND_LIMIT = 2
 TIME_FACTOR = 2
+LONG_ESTIMATE_MIN = 15   # a milestone estimated longer than this should be split
 SCHEMA = 1
 
 TIERS = ("FULL", "LIGHT", "TRIVIAL", "ULTRA")
@@ -354,6 +355,11 @@ def main(argv: list[str] | None = None) -> int:
                           "user_said": said, **extra}, now)
             print(f"ledger ready: {path.as_posix()} · fix cap {a.fix_cap} · setup cap "
                   f"{a.setup_cap} · {len(estimates)} estimate(s)")
+            long_ones = [f"{m}={v}" for m, v in estimates.items() if v > LONG_ESTIMATE_MIN]
+            if long_ones:
+                print(f"warning: {', '.join(long_ones)} over {LONG_ESTIMATE_MIN} min — split the "
+                      f"milestone; the time checkpoint is {TIME_FACTOR}x the estimate, so a long "
+                      "estimate loosens it", file=sys.stderr)
             return 0
 
         events = load(path)
