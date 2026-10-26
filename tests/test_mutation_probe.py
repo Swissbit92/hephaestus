@@ -193,3 +193,29 @@ def test_bytecode_left_by_an_earlier_run_is_not_a_changed_source(tmp_path):
     assert any(repo.rglob("*.pyc"))
     code, out = _run(repo, "--revert")
     assert code == 3 and "only tests" in out, out
+
+
+# --------------------------------------------------------------------------- fail fast
+def test_mutate_fails_fast_when_the_changed_tests_need_data_the_copy_lacks(tmp_path):
+    """The copy holds only git's files. A suite needing ignored data must be caught by the
+    changed tests alone, before the (here: marker-writing) full suite is run in the copy."""
+    marker = tmp_path / "full-suite-ran"
+    slow = (f"def test_full_suite():\n    open({marker.as_posix()!r}, 'w').close()\n")
+    needs_data = ("from calc import clamp\n\n\n"
+                  "def test_reads_ignored_data():\n    assert open('store.txt').read() == 'x'\n")
+    repo = fixtures.branched_repo(tmp_path / "r", {**_BASE, ".gitignore": "store.txt\n",
+                                                   "tests/test_full.py": slow})
+    fixtures._write(repo, "store.txt", "x")
+    fixtures._write(repo, "calc.py", _FIXED)
+    fixtures._write(repo, "tests/test_calc.py", needs_data)
+    fixtures._commit_all(repo, "change")
+    code, out = _run(repo, "--mutate")
+    assert code == 2 and "changed tests do not pass in an unmodified copy" in out, out
+    assert not marker.exists(), "the full suite ran in the copy before the quick check failed"
+
+
+def test_canary_timeout_bounds_the_clean_full_suite_run(tmp_path):
+    base = {**_BASE, "tests/test_smoke.py": "import time\n\n\ndef test_ok():\n    time.sleep(8)\n"}
+    repo = _repo(tmp_path, base, {"calc.py": _FIXED, "tests/test_calc.py": _REAL_TEST})
+    code, out = _run(repo, "--mutate", "--canary-timeout", "2")
+    assert code == 2 and "timed out after 2s" in out, out

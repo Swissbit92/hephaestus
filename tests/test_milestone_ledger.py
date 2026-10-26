@@ -304,3 +304,21 @@ def test_report_lists_each_milestone_once(repo):
     _run(repo, "research", "M9", "--note", "x")
     _reject(repo, "tests", m="M9")
     assert _run(repo, "report")[2].count("M9:") == 1
+
+
+def test_init_warns_when_a_milestone_estimate_is_over_15_minutes(tmp_path):
+    fixtures._ledger_repo(tmp_path / "r")
+    r = tmp_path / "r"
+    fixtures._commit_all(r, "plan")
+    code, _, out = _run(r, "init", "--tier", "FULL", "--estimate", "M1=45", "--estimate", "M2=10",
+                        "--user-said", "plan approved")
+    assert code == 0 and "warning: M1=45 over 15 min" in out and "M2=10" not in out.split("warning")[-1]
+    assert "2x the estimate" in out
+
+
+def test_init_is_quiet_when_every_estimate_is_short(tmp_path):
+    fixtures._ledger_repo(tmp_path / "r")
+    r = tmp_path / "r"
+    fixtures._commit_all(r, "plan")
+    code, _, out = _run(r, "init", "--tier", "FULL", "--estimate", "M1=15", "--user-said", "ok")
+    assert code == 0 and "warning" not in out

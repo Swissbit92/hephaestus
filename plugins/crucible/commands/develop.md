@@ -67,7 +67,10 @@ decisions to make.
 
 Run a `Plan` agent on the Phase 1 output, the alignment and the user's constraints, asking
 for at most ~1,200 words: ordered milestones, files to create/modify, existing utilities to
-reuse — and for anything new, why existing code could not serve — test strategy, risks. If
+reuse — and for anything new, why existing code could not serve — test strategy, risks.
+**Size each milestone in whole minutes of agent work, from measured pace (the ledger's
+actuals), at 15 or less — split anything longer; never days or hours**; convert any
+day/hour figure before it reaches the task titles, the ETA or `--estimate`. If
 the change touches prompts, skills, agent instructions or other model output, the
 prediction's check is an eval: invoke `eval-first` and freeze its baseline first.
 
