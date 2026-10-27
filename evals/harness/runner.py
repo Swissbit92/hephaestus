@@ -127,6 +127,13 @@ def _parse_stream(stdout: str) -> tuple[bool, list[str], list[str], list, list[T
                 if isinstance(block, dict) and block.get("type") == "tool_result":
                     name = id_to_name.get(block.get("tool_use_id", ""), "")
                     tool_results.append(ToolResult(name=name, text=_result_text(block)))
+        elif t == "system" and ev.get("subtype") == "task_notification":
+            # A subagent runs in the background: its Agent tool_result is only a launch
+            # acknowledgement and the report arrives here, in `summary`. Without this the
+            # subagent's own output (its verdict line) is never seen.
+            name = id_to_name.get(ev.get("tool_use_id", ""), "")
+            if name and ev.get("summary"):
+                tool_results.append(ToolResult(name=name, text=str(ev["summary"])))
         elif t == "result":
             final_text = ev.get("result", "") or final_text
             usage = {**_usage(ev), **{k: usage[k] for k in ("session_id", "_texts") if usage.get(k)}}
