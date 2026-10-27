@@ -4,6 +4,16 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [crucible-v1.8.5] — 2026-10-27
+
+### Fixed
+
+- **`changelog.py archive-lessons` wrote a pointer link that did not resolve.** `LESSONS_LEARNED.md` lives in `docs/`, so the pointer now links `archive/` instead of `docs/archive/`; cms `check` had flagged it as a broken link.
+
+### Changed
+
+- **crucible 1.8.5: housekeeping, no plugin behaviour change.** `qa-gatekeeper/no-false-alarm-on-pinned-assertion` re-run at k=3 on `claude-sonnet-5-5` passed 3/3, so the 1.8.4 REJECT was k=1 noise and the prompt stays as is. `docs/LESSONS_LEARNED.md` archived 6 entries (23.2 KB to 10.9 KB of 25 KB) under `docs/archive/2026-10/`. `dev` is now branch-protected on GitHub (7 required checks, no force-push or deletion). ROADMAP records the decision rule for the diff-only re-review.
+
 ## [crucible-v1.8.4] — 2026-10-27
 
 ### Fixed
