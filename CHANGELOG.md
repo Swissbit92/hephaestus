@@ -4,6 +4,10 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Fixed
+
+- **crucible 1.8.3: smoke-test the eval path before the full run.** `develop.md` Phase 2 now says to run one scenario on the unchanged tree first (about 30 s): if the baseline already fails, the harness is broken and a full run measures nothing. In 1.8.2 the qa-gatekeeper evals were run in full on three trees (about 10 min) before it showed they fail the same way on `dev`.
+
 ## [crucible-v1.8.2] — 2026-10-26
 
 ### Added
