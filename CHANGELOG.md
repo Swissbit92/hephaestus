@@ -4,6 +4,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [crucible-v1.8.4] — 2026-10-27
+
 ### Fixed
 
 - **crucible 1.8.4: the eval harness reads a background subagent's report.** `Agent` now returns only a launch acknowledgement and the subagent's report arrives later as a `system/task_notification` event, which the harness ignored, so 7 of 9 `qa-gatekeeper` scenarios failed with "no QA-VERDICT line" while the agent was in fact ending with its verdict (checked in a raw stream). `_parse_stream` now records the notification's `summary` as the tool's result. The gatekeeper scenarios go from 2/9 to 8/9 (k=1); the remaining failure is a genuine REJECT on a clean twin, queued in the ROADMAP. No plugin behaviour changed.
