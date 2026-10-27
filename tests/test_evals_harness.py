@@ -669,3 +669,27 @@ def test_parse_stream_collects_assistant_text_in_order_and_survives_a_second_tur
     assert u1["_texts"] == ["one", "two"]
     u2 = runner._parse_stream(ev("three") + res)[-1]
     assert runner._sum_usage(u1, u2)["_texts"] == ["one", "two", "three"]
+
+
+def test_a_background_subagents_report_is_read_from_its_task_notification():
+    """Agent now returns a launch acknowledgement and the report arrives later as a
+    `system/task_notification`; without reading it the verdict line is never seen."""
+    import json
+    from harness import runner
+    events = [
+        {"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": "toolu_1", "name": "Agent", "input": {}}]}},
+        {"type": "user", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "toolu_1",
+             "content": [{"type": "text", "text": "Async agent launched successfully."}]}]}},
+        {"type": "system", "subtype": "task_notification", "tool_use_id": "toolu_1",
+         "summary": "3 findings.\n\nQA-VERDICT: REJECT"},
+        {"type": "system", "subtype": "task_notification", "tool_use_id": "toolu_unknown",
+         "summary": "QA-VERDICT: PASS"},
+    ]
+    results = runner._parse_stream("\n".join(json.dumps(e) for e in events))[5]
+    assert [(r.name, r.text) for r in results] == [
+        ("Agent", "Async agent launched successfully."),
+        ("Agent", "3 findings.\n\nQA-VERDICT: REJECT")]      # an unmatched id is ignored
+    ok, why = scoring.subagent_verdict(RunResult(tool_results=results), allowed=["REJECT"])
+    assert ok and "REJECT" in why
