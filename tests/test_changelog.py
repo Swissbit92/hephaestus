@@ -181,3 +181,9 @@ def test_doc_budget_is_stateless(tmp_path, monkeypatch):
     (tmp_path / "CHANGELOG.md").write_text("x" * 41_000, encoding="utf-8")
     check.check_doc_budgets(tmp_path)
     assert saved == []
+
+
+def test_the_lessons_pointer_link_resolves_from_inside_docs():
+    """LESSONS_LEARNED.md lives in docs/, so its link to the archive is relative to docs/."""
+    assert "(archive/)" in cl.POINTER_LESSONS and "(docs/archive/)" not in cl.POINTER_LESSONS
+    assert "(docs/archive/)" in cl.POINTER_CHANGELOG       # CHANGELOG.md is at the root

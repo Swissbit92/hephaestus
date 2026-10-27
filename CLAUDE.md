@@ -27,6 +27,7 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
   `main` is where it is published.
 - **Work happens on short-lived feature branches** named Conventional-Branch style:
   `<type>/<short-description>` in kebab-case — `feature/…`, `bugfix/…`, `hotfix/…`, `chore/…`.
+- **`dev` is branch-protected** (the same 7 required checks as `main`, no force-push or deletion; admins not enforced) — a PR or a merge whose checks are green.
 - **Integrate via merge or PR into `dev`.** Never commit feature work directly to `dev` or
   `main`. Promote `dev` → `main` as a separate, deliberate step once the work is verified
   **on the merged tree** — a branch that passes alone and a merge that passes are different

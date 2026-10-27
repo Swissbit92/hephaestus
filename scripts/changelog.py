@@ -44,7 +44,7 @@ LESSONS_AGE_DAYS = 60
 LESSONS_KEEP_NEWEST = 3
 
 POINTER_CHANGELOG = "> Older releases are archived: see the `CHANGELOG.md` files under [docs/archive/](docs/archive/)."
-POINTER_LESSONS = "> Older entries are archived: see the `LESSONS_LEARNED.md` files under [docs/archive/](docs/archive/)."
+POINTER_LESSONS = "> Older entries are archived: see the `LESSONS_LEARNED.md` files under [docs/archive/](archive/)."
 
 _REPO_METRICS = "plugins/crucible/skills/repo-audit/scripts/repo_metrics.py"
 _VERSION_HEAD = re.compile(r"^## \[(?P<name>[^\]]+)\](?: — (?P<date>\d{4}-\d{2}-\d{2}))?\s*$")
