@@ -72,7 +72,9 @@ reuse — and for anything new, why existing code could not serve — test strat
 actuals), at 15 or less — split anything longer; never days or hours**; convert any
 day/hour figure before it reaches the task titles, the ETA or `--estimate`. If
 the change touches prompts, skills, agent instructions or other model output, the
-prediction's check is an eval: invoke `eval-first` and freeze its baseline first.
+prediction's check is an eval: invoke `eval-first` and freeze its baseline first. Smoke-test
+the eval path before the full run: one scenario on the unchanged tree (~30 s) — if that
+baseline already fails, the harness is broken and a full run measures nothing.
 
 **Gate:** present the plan to the user for approval. Do NOT implement without explicit approval.
 
