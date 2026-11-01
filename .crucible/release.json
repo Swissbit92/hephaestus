@@ -18,7 +18,8 @@
     "{branch}",
     "--title",
     "Release {plugin} v{version}",
-    "--fill"
+    "--body-file",
+    ".github/pull_request_template.md"
   ],
   "pr_view": [
     "gh",

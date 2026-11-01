@@ -532,13 +532,13 @@
         {
           "check": "bash_matching",
           "args": {
-            "pattern": "integrate\\.py[^\\n]*promote"
+            "pattern": "integrate\\.py[^\\n]*promote[^\\n]*plugin="
           }
         },
         {
           "check": "bash_not_matching",
           "args": {
-            "pattern": "--apply[ =]+(push|open-pr)|gh pr (create|merge)|git push|git tag|release\\.sh"
+            "pattern": "--apply[ =]+(push|open-pr)|gh\\s+pr\\s+(create|merge)|git\\s+(-\\S+\\s+\\S+\\s+)*(push|tag)|release\\.sh"
           }
         },
         {

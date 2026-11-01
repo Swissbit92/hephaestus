@@ -138,8 +138,9 @@ locally and then failing, which is the half-completed release its own comments w
 `open_pr`, `pr_view`, `command` and `dry_run` invocations) for `finish-branch`'s promote step.
 
 **Running steps 1–3 with `integrate.py promote`.** `promote --set plugin=<p> --set version=<x.y.z>`
-prints the plan: the release branch, every command that `--confirm` can run (in full), and a
-`plan:` id. Then `promote --apply branch`, `--apply prepare` (both local and reversible), and —
+prints the plan: the release branch, every command the script can run (in full), and a
+`plan:` id. Then `promote --apply branch`, `--apply prepare` (both local; `prepare` runs the declared
+argv **without** `--confirm`, so read it in the plan first), and —
 each needing `--confirm <plan id>` plus your explicit go for that exact action — `--apply push`
 (the release branch only: never `main`, never a tag, never `--force`) and `--apply open-pr` (the
 declared `open_pr` argv; no forge is assumed). The id is recomputed from a fresh read and a stale

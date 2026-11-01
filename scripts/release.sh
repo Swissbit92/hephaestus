@@ -273,6 +273,11 @@ fail() {
   if [[ "$PREPARE" == "1" ]]; then
     git reset -q -- "$MANIFEST" "$REPO_ROOT/CHANGELOG.md" 2>/dev/null || true
     git checkout -- "$MANIFEST" "$REPO_ROOT/CHANGELOG.md" 2>/dev/null || true
+    # The two commands above swallow their own errors (a stale .git/index.lock makes both fail),
+    # so check the result instead of assuming it.
+    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+      die "$1 — restore incomplete: the tree is not clean (another git process, or a stale .git/index.lock?). Check 'git status'; nothing was committed"
+    fi
     die "$1 — the manifest and changelog were restored; nothing was committed"
   fi
   die "$1 — check 'git diff', then 'git checkout -- .' before retrying"

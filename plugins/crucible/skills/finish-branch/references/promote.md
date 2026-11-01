@@ -27,14 +27,18 @@ command `--confirm` can make the script run, in full** (`push`, `open_pr`, `pr_v
 | `open-pr` | the declared `open_pr` argv | the branch is not on origin at its tip | `pr_view` already finds a PR |
 
 `prepare` must leave exactly one new commit **on that branch** and a clean tree; the script re-reads
-HEAD and the branch tip afterwards. Every step reads state, acts, then reads state again — a
+HEAD and the branch tip afterwards. Neither local step needs `--confirm`, and `prepare` runs the
+declared argv — in this repo `scripts/release.sh`, which a merged PR can edit. "Local, reversible"
+describes what the shipped `release.sh` does, not something the script can enforce for an arbitrary
+argv: the plan prints that argv in full and is the only review point before it runs. Every step reads state, acts, then reads state again — a
 success is a fresh read, never an exit code (`act-for-real`).
 
 ## The plan id is a staleness guard, not authorization
 
 It is a hash of the facts a step acts on (the `from`/`to` shas and their `origin/` shas, the branch
-and its tip, the version, every declared argv). `push` and `open-pr` recompute it from a fresh
-read; a mismatch is **exit 4** with both ids shown. Anyone can compute it, including the agent, so
+and its tip, the version, every declared argv). `push` and `open-pr` recompute it from the current refs
+(local branches and the remote-tracking refs as of the last fetch — `branch` fetches; `push` re-reads
+origin with `ls-remote` before and after); a mismatch is **exit 4** with both ids shown. Anyone can compute it, including the agent, so
 it does not prove the user agreed to anything. The authorization is the user's go, in the
 conversation, for **that exact action** ("push `release/x-v1.2.3` to origin"); a go for one plan is
 never spent on another, and an earlier "go ahead" is not a go. Because the id covers the branch
@@ -51,6 +55,10 @@ any non-zero exit = could not determine (exit 2).** An error must never read as 
 lookup opens a duplicate. Key it on the head branch (`{branch}`), so a different PR cannot satisfy it.
 For GitHub: `gh pr list --head {branch} --base {to} --state open --json url --jq '.[0].url // empty'`
 (`gh pr view` exits 1 both for "none" and for failures, which is why it is not used).
+`--state open` means the lookup sees only an open PR: once it is merged or closed, `open-pr` would try
+again, so run it before the merge. This repo's `open_pr` passes `--body-file
+.github/pull_request_template.md`, so the release PR carries the review-gate checklist (`--fill`
+would fill the body from the commits and ignore the template).
 
 ## What is deliberately not here
 

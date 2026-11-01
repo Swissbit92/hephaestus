@@ -373,3 +373,23 @@ def test_a_failed_changelog_cut_puts_the_tree_back(release_branch, tmp_path):
     after = _snapshot(release_branch)
     assert "PARTIAL WRITE" not in after["changelog"], "the half-written changelog must be put back"
     assert after == before
+
+
+@_POSIX_ONLY
+def test_a_restore_that_cannot_finish_says_so_instead_of_claiming_it_did(release_branch, tmp_path):
+    """`fail()` swallowed the errors of its own `git reset` / `git checkout` and then printed
+    'restored'. With the index locked neither can run, the manifest stays modified, and the
+    message must not claim otherwise."""
+    (tmp_path / "bin").mkdir()
+    claude = tmp_path / "bin" / "claude"
+    claude.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    claude.chmod(0o755)
+    lock = release_branch / ".git" / "index.lock"
+    lock.write_text("", encoding="utf-8")
+    try:
+        proc = _run_real(release_branch, tmp_path, "alpha", "0.2.0", "--prepare")
+    finally:
+        lock.unlink()
+    out = _out(proc)
+    assert proc.returncode != 0 and "restore incomplete" in out, out
+    assert "were restored" not in out

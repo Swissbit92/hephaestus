@@ -27,7 +27,7 @@ declaration and no detected tool is a SKIP, not a guess.
               push      push that branch to origin — never main, never a tag, never --force
               open-pr   run the declared `open_pr` argv (no forge is assumed)
               `push` and `open-pr` act outside this checkout, so they need `--confirm ID` where
-              ID is the `plan:` line `promote` printed. The id is recomputed from a fresh read
+              ID is the `plan:` line `promote` printed. The id is recomputed from the current refs
               and a stale one is refused (exit 4). It is a STALENESS guard, not authorization:
               anyone can compute it. The user's explicit go for that exact action is the
               authorization, and a go for one plan is never spent on another. Merging, tagging
