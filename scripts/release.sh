@@ -87,6 +87,14 @@ if [[ "$PREPARE" == "1" ]]; then
     || die "--prepare needs a local '$TARGET' branch to check this branch against (git fetch origin $TARGET:$TARGET)"
   git merge-base --is-ancestor "$TARGET" HEAD \
     || die "--prepare: '$branch' does not contain '$TARGET' — cut the release branch off '$TARGET', or merge '$TARGET' into it, so the release PR carries everything that is on '$TARGET'"
+  # The check above is against the LOCAL $TARGET, which passes vacuously when it is behind
+  # origin: the release PR would then omit work already merged there. Best-effort fetch (an
+  # offline run just compares what it last saw), then hold the branch to origin/$TARGET too.
+  git fetch -q origin "$TARGET" >/dev/null 2>&1 || true
+  if git rev-parse --verify --quiet "refs/remotes/origin/$TARGET" >/dev/null; then
+    git merge-base --is-ancestor "origin/$TARGET" HEAD \
+      || die "--prepare: origin/$TARGET has commits '$branch' lacks (your local '$TARGET' is behind it) — update '$TARGET', then cut the release branch again or merge origin/$TARGET into this one"
+  fi
 # A dry run changes nothing, so it may preview from any branch (crucible's promote step runs
 # it before integration has reached main); a real release must start from main.
 elif [[ "$branch" != "main" ]]; then
@@ -303,6 +311,7 @@ fi
 # first time this script was used by a second session — a stale base manufactured by the
 # release process itself, which is the exact failure `start-branch` gained a guard for.
 # $TARGET is read from .crucible/release.json at the top of the script.
+LEVEL_FAILED=0
 if git show-ref --verify --quiet "refs/heads/$TARGET"; then
   if git merge-base --is-ancestor "$TARGET" main; then
     git branch -f "$TARGET" main
@@ -310,8 +319,16 @@ if git show-ref --verify --quiet "refs/heads/$TARGET"; then
       && echo "✔ $TARGET fast-forwarded to main and pushed" \
       || echo "note: $TARGET fast-forwarded locally; push it when convenient"
   else
-    # dev has commits main does not — fast-forwarding would silently discard them.
-    echo "note: '$TARGET' has commits not in main; left alone. Merge main into it yourself." >&2
+    # dev has commits main does not — fast-forwarding would silently discard them. This is
+    # the one failure the dev-based route creates (dev moved after the release branch was
+    # cut), so it is reported at the END as a warning with a non-zero exit, not as a note
+    # followed by a tick: a quiet miss leaves dev behind main and the next release
+    # double-bumps or conflicts.
+    LEVEL_FAILED=1
   fi
 fi
 echo "✔ released $TAG"
+if [[ "$LEVEL_FAILED" == "1" ]]; then
+  echo "WARNING: '$TARGET' was NOT levelled with main. It has commits main does not contain (it moved after the release branch was cut), so the version bump never reached it. The release itself is published. Before anyone forks from '$TARGET', merge main into it (through a PR if it is protected), and push." >&2
+  exit 1
+fi

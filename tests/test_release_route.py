@@ -15,13 +15,15 @@ only prove two copies agree.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-from test_release_notes import BASH, RELEASE_SH, _git, repo  # noqa: F401  (repo is a fixture)
+from test_release_notes import BASH, RELEASE_SH, _commit, _git, repo  # noqa: F401  (repo is a fixture)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -189,3 +191,97 @@ def test_develop_phase_6_5_points_at_finish_branch_promote_phase():
     develop = _read("plugins/crucible/commands/develop.md")
     section = develop[develop.index("PHASE 6.5"):]
     assert re.search(r"finish-branch.{0,80}Phase 5|Phase 5.{0,80}finish-branch", section, re.S)
+
+
+# ------------------------------------------- PR-review findings: stale dev, quiet level-up
+# A real release run needs its gates and `gh`; the fixture stubs them so the run reaches the
+# part under test (the push and the level-up of dev) instead of dying at a gate.
+_POSIX_ONLY = pytest.mark.skipif(sys.platform == "win32",
+                                 reason="stubs `gh` on PATH with a shell script")
+
+
+@pytest.fixture
+def world(repo, tmp_path):  # noqa: F811
+    """`repo` + passing gate stubs + a bare origin carrying main and dev."""
+    _commit(repo, "scripts/check-public-safe.sh", "#!/bin/sh\nexit 0\n", "stub: public-safe gate")
+    _commit(repo, "scripts/validate_manifests.py", "raise SystemExit(0)\n", "stub: manifest gate")
+    _commit(repo, "tests/test_ok.py", "def test_ok():\n    assert True\n", "stub: a passing test")
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "--bare", "-q", "-b", "main", str(origin)], check=True,
+                   capture_output=True)
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "branch", "dev")
+    _git(repo, "push", "-q", "origin", "main", "dev")
+    _git(repo, "config", "user.email", "t@example.invalid")
+    _git(repo, "config", "user.name", "T")
+    _git(repo, "config", "commit.gpgsign", "false")
+    return repo
+
+
+def _run_real(repo_dir: Path, tmp_path: Path, *args: str) -> "subprocess.CompletedProcess[str]":
+    """release.sh with `gh` stubbed to a no-op and the interpreter that has pytest."""
+    stub = tmp_path / "bin"
+    stub.mkdir(exist_ok=True)
+    gh = stub / "gh"
+    gh.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    gh.chmod(0o755)
+    env = dict(os.environ, PATH=str(stub) + os.pathsep + os.environ["PATH"], PYTHON=sys.executable)
+    return subprocess.run([BASH, "scripts/release.sh", *args], cwd=str(repo_dir), env=env,
+                          capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          timeout=300)
+
+
+def _rev(repo_dir: Path, ref: str) -> str:
+    return subprocess.run(["git", "rev-parse", ref], cwd=str(repo_dir), capture_output=True,
+                          text=True, encoding="utf-8").stdout.strip()
+
+
+def _prepared_and_merged(world, tmp_path):
+    """Cut a release branch off dev, --prepare it, merge it into main with a merge commit."""
+    _git(world, "switch", "-c", "release/alpha-v0.2.0", "dev")
+    proc = _run_real(world, tmp_path, "alpha", "0.2.0", "--prepare")
+    assert proc.returncode == 0, _out(proc)
+    _git(world, "switch", "main")
+    _git(world, "merge", "--no-ff", "-q", "-m", "Merge release/alpha-v0.2.0", "release/alpha-v0.2.0")
+
+
+@_POSIX_ONLY
+def test_prepare_refuses_when_origin_dev_has_work_the_branch_lacks(world, tmp_path):
+    """A local `dev` behind `origin/dev` passes the local ancestry check, and the release PR
+    would then silently omit merged work."""
+    _git(world, "switch", "-c", "release/alpha-v0.2.0", "dev")
+    _git(world, "switch", "-c", "someone-elses-work", "dev")
+    _commit(world, "later.txt", "x\n", "work merged to dev by someone else")
+    _git(world, "push", "-q", "origin", "someone-elses-work:dev")
+    _git(world, "switch", "release/alpha-v0.2.0")
+    proc = _run_real(world, tmp_path, "alpha", "0.2.0", "--prepare")
+    assert proc.returncode != 0
+    out = _out(proc)
+    assert "origin/dev" in out and "--prepare" in out
+    assert _tags(world) == ["alpha-v0.1.0"]
+
+
+@_POSIX_ONLY
+def test_a_release_levels_dev_when_nothing_moved(world, tmp_path):
+    _prepared_and_merged(world, tmp_path)
+    proc = _run_real(world, tmp_path, "alpha", "0.2.0")
+    assert proc.returncode == 0, _out(proc)
+    assert "alpha-v0.2.0" in _tags(world)
+    assert _rev(world, "dev") == _rev(world, "main"), "dev must be level with main afterwards"
+
+
+@_POSIX_ONLY
+def test_a_release_that_cannot_level_dev_says_so_and_fails(world, tmp_path):
+    """dev moved after the release branch was cut, so main does not contain it. The release
+    itself is published, but the integration branch is NOT levelled: that must be loud
+    (non-zero, a WARNING) and not a note followed by a tick."""
+    _prepared_and_merged(world, tmp_path)
+    _git(world, "switch", "dev")
+    _commit(world, "later.txt", "x\n", "dev moved after the release branch was cut")
+    _git(world, "switch", "main")
+    proc = _run_real(world, tmp_path, "alpha", "0.2.0")
+    out = _out(proc)
+    assert "alpha-v0.2.0" in _tags(world), "the release itself is still published"
+    assert proc.returncode != 0, out
+    assert "WARNING" in out and "dev" in out and "NOT levelled" in out
+    assert _rev(world, "dev") != _rev(world, "main")

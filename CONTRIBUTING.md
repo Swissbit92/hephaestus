@@ -122,13 +122,17 @@ locally and then failing, which is the half-completed release its own comments w
 1. `git switch -c release/<plugin>-v<x.y.z> dev` — cut the release branch off `dev`, not off `main`.
 2. `scripts/release.sh <plugin> <bump> --prepare` — bumps `plugin.json`, cuts the changelog
    and makes one `Release <tag>` commit. It refuses `main`, `dev` itself, a detached HEAD, a
-   branch that does not contain `dev`, and an unchanged version; it never tags or pushes.
+   branch that does not contain `dev` (or `origin/dev`, which it fetches — a local `dev`
+   that is behind would otherwise pass), and an unchanged version; it never tags or pushes.
 3. Push, then `gh pr create --base main`. Review, and wait for green CI.
 4. Merge with a **merge commit (never a squash)**: a squash gives `main` a commit `dev` does
    not contain, so `dev` and `main` drift apart and the post-release fast-forward stops being
    possible.
 5. `git switch main && git pull && scripts/release.sh <plugin> <x.y.z>` tags the merged
-   commit, publishes the release and fast-forwards `dev` to `main`.
+   commit, publishes the release and fast-forwards `dev` to `main`. If `dev` moved after the
+   release branch was cut, `main` does not contain it and `dev` cannot be fast-forwarded: the
+   release is still published, but the script ends with a `WARNING` and a **non-zero exit** —
+   merge `main` into `dev` (through a PR, it is protected) before anyone forks from it.
 
 `.crucible/release.json` declares the same route (`from`, `to`, `via`, and the `prepare`,
 `command` and `dry_run` invocations) for `finish-branch`'s promote step.
