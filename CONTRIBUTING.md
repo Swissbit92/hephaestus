@@ -135,7 +135,16 @@ locally and then failing, which is the half-completed release its own comments w
    merge `main` into `dev` (through a PR, it is protected) before anyone forks from it.
 
 `.crucible/release.json` declares the same route (`from`, `to`, `via`, and the `prepare`,
-`command` and `dry_run` invocations) for `finish-branch`'s promote step.
+`open_pr`, `pr_view`, `command` and `dry_run` invocations) for `finish-branch`'s promote step.
+
+**Running steps 1–3 with `integrate.py promote`.** `promote --set plugin=<p> --set version=<x.y.z>`
+prints the plan: the release branch, every command that `--confirm` can run (in full), and a
+`plan:` id. Then `promote --apply branch`, `--apply prepare` (both local and reversible), and —
+each needing `--confirm <plan id>` plus your explicit go for that exact action — `--apply push`
+(the release branch only: never `main`, never a tag, never `--force`) and `--apply open-pr` (the
+declared `open_pr` argv; no forge is assumed). The id is recomputed from a fresh read and a stale
+one is refused (exit 4); it is a staleness guard, **not** authorization — an agent can compute it.
+There is no merge step and no tag step: merging is your decision, and step 5 is `release.sh`.
 
 **The changelog is cut as part of the release.** `[Unreleased]` in `CHANGELOG.md` must be
 moved under `## [<plugin>-v<x.y.z>] — date` (`scripts/changelog.py cut <plugin> <x.y.z>`);

@@ -315,3 +315,61 @@ def test_a_real_run_on_protected_main_prints_the_dev_based_route_and_changes_not
     status = subprocess.run(["git", "status", "--porcelain"], cwd=str(world),
                             capture_output=True, text=True, encoding="utf-8").stdout
     assert status == "", "the refusal must leave the manifest and changelog untouched"
+
+
+# ------------------------------------------------ --prepare restores the tree when it fails
+# `--prepare` writes the manifest, then validates the plugin, then cuts the changelog, then
+# commits. A failure after the first write used to leave a dirty tree and a message telling
+# the operator to clean it up. It now puts back exactly the two files it touched.
+_CHANGELOG_WRAPPER = '''import os, subprocess, sys
+here = os.path.dirname(os.path.abspath(__file__))
+if "cut" in sys.argv[1:]:                      # fail like a cut that died half way
+    root = sys.argv[sys.argv.index("--root") + 1]
+    with open(os.path.join(root, "CHANGELOG.md"), "a", encoding="utf-8") as f:
+        f.write("PARTIAL WRITE\\n")
+    sys.exit(1)
+sys.exit(subprocess.call([sys.executable, os.path.join(here, "changelog_real.py"), *sys.argv[1:]]))
+'''
+
+
+def _snapshot(repo_dir: Path) -> dict:
+    return {
+        "head": _rev(repo_dir, "HEAD"),
+        "status": subprocess.run(["git", "status", "--porcelain"], cwd=str(repo_dir), capture_output=True,
+                                 text=True, encoding="utf-8").stdout,
+        "manifest": (repo_dir / "plugins" / "alpha" / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"),
+        "changelog": (repo_dir / "CHANGELOG.md").read_text(encoding="utf-8"),
+        "tags": _tags(repo_dir),
+    }
+
+
+@_POSIX_ONLY
+def test_a_failed_plugin_validation_puts_the_tree_back(release_branch, tmp_path):
+    (tmp_path / "bin").mkdir()
+    claude = tmp_path / "bin" / "claude"
+    claude.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    claude.chmod(0o755)
+    before = _snapshot(release_branch)
+    proc = _run_real(release_branch, tmp_path, "alpha", "0.2.0", "--prepare")
+    out = _out(proc)
+    assert proc.returncode != 0 and "plugin validation failed" in out, out
+    assert "restored" in out, "the refusal must say the tree was put back"
+    assert _snapshot(release_branch) == before, "the manifest, changelog, index and HEAD are as they were"
+
+
+@_POSIX_ONLY
+def test_a_failed_changelog_cut_puts_the_tree_back(release_branch, tmp_path):
+    scripts = release_branch / "scripts"
+    (scripts / "changelog_real.py").write_text((scripts / "changelog.py").read_text(encoding="utf-8"),
+                                               encoding="utf-8")
+    (scripts / "changelog.py").write_text(_CHANGELOG_WRAPPER, encoding="utf-8")
+    _git(release_branch, "add", "-A")
+    _git(release_branch, "commit", "-q", "-m", "test: a changelog cut that fails half way")
+    before = _snapshot(release_branch)
+    proc = _run_real(release_branch, tmp_path, "alpha", "0.2.0", "--prepare")
+    out = _out(proc)
+    assert proc.returncode != 0 and "changelog cut failed" in out, out
+    assert "restored" in out
+    after = _snapshot(release_branch)
+    assert "PARTIAL WRITE" not in after["changelog"], "the half-written changelog must be put back"
+    assert after == before

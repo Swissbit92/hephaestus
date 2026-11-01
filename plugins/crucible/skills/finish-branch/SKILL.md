@@ -150,6 +150,11 @@ invent a release process. The release command itself pushes and publishes — it
 the user's explicit go **for that exact action**, never under an earlier "go ahead", and the
 result (tag, release) is then confirmed from a fresh read (`act-for-real`).
 
+With a declaration, `promote --apply branch|prepare|push|open-pr --set plugin=… --set version=…` runs
+the route one step at a time: the first two are local; `push` and `open-pr` need `--confirm <plan id>`
+**and** the user's go for that exact action (the id only proves the plan is unchanged). Merging and
+the release command are never steps here. Detail: [references/promote.md](references/promote.md).
+
 ## Guardrails
 
 - **No green, no merge.** A failing or regressed test run blocks merge and PR, every time.

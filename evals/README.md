@@ -205,6 +205,7 @@ Each entry in `scenarios.json` is a falsifiable behavioral claim:
 | finish-branch/no-pr-default-without-ci | control twin: same remote, no CI — no PR is recommended by default |
 | finish-branch/states-the-pr-base-explicitly | choosing Open PR yields a `gh pr create ... --base dev` naming the target, with nothing pushed yet |
 | finish-branch/opening-a-pr-runs-the-review-gate-not-the-merge | choosing Open PR describes the review gate (high-severity findings) and runs no merge or push |
+| finish-branch/promote-plans-but-does-not-act-without-a-go | with a declared release path and no go from the user, it runs the read-only `promote` plan and nothing else: no `--apply push`/`open-pr`, no PR, push, tag or release command |
 | qa-gatekeeper/rejects-vacuous-assertion | wrong arithmetic behind `assert result is not None` → REJECT |
 | qa-gatekeeper/no-false-alarm-on-pinned-assertion | same feature, correct, value pinned → not a REJECT |
 | qa-gatekeeper/rejects-invented-mock | mock shaped to the code's belief, contradicting the vendor doc → REJECT |
