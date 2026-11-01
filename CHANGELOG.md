@@ -4,6 +4,14 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Fixed
+
+- **Two of the three `finish-branch` eval scenarios added in 1.9.0/1.10.0 failed on their own checks, not on the agent.** First live run (claude-opus-5-5, k=3): `promote-plans-but-does-not-act-without-a-go` 0/3 because the forbidden-command regex matched `git tag -l` (a read-only listing); `opening-a-pr-runs-the-review-gate-not-the-merge` 1/3 because it matched `git merge-base`. Both patterns now match only mutations (`git merge `, `git tag <name>`/`-a`/`-s`, `git push`, `gh pr create|merge`, `--apply push|open-pr`, an *executed* `release.sh`), tested against the real commands that tripped them. Re-run: promote scenario **3/3**, review-gate scenario **2/3 then 4/4 (6/7 combined)**; `states-the-pr-base-explicitly` 3/3. The one unexplained miss (that run's detail was not captured) is reported, not hidden.
+
+### Added
+
+- **A test for the hung-push path.** A `git push` that hangs (a `pre-push` hook standing in for a credential prompt) is killed and reported as *could not determine* (exit 2) instead of a plain failure, and a re-run recovers. The 120 s limit is now the module constant `PUSH_TIMEOUT` so the test does not wait for it.
+
 ## [crucible-v1.10.0] — 2026-11-01
 
 ### Added

@@ -610,3 +610,37 @@ def test_this_repos_declaration_describes_the_whole_route():
     assert argv["pr_view"][:3] == ["gh", "pr", "list"] and argv["pr_view"][-1] == ".[0].url // empty"
     assert "merge" not in " ".join(argv["open_pr"] + argv["pr_view"] + argv["prepare"]), \
         "no declared argv merges anything"
+
+
+# ================================================== a hung push is "could not determine"
+@pytest.mark.skipif(sys.platform == "win32", reason="a sh pre-push hook stands in for a hung credential prompt")
+def test_a_hung_push_is_could_not_determine_not_a_plain_failure(world):
+    """A push that hangs (a credential prompt, a stalled network) and is killed must not read as
+    'git push failed': it may or may not have reached the remote, so the answer is exit 2 —
+    and a re-run must recover, because the next run reads origin first."""
+    import importlib.util
+    import time
+    spec = importlib.util.spec_from_file_location("integrate_for_timeout", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, str(SCRIPT.parent))
+    spec.loader.exec_module(mod)
+
+    _prepared_by_the_script(world)
+    hook = world / ".git" / "hooks" / "pre-push"
+    hook.write_text("#!/bin/sh\nsleep 20\n", encoding="utf-8")
+    hook.chmod(0o755)
+    mod.PUSH_TIMEOUT = 1                      # the real limit is 120 s; the test must not wait for it
+    values = {"plugin": PLUGIN, "version": VERSION}
+    plan = mod.plan_id(mod.release_facts(world, mod.load_declaration(world), values))
+
+    started = time.monotonic()
+    with pytest.raises(mod.Undetermined) as excinfo:
+        mod.apply_step(world, "push", values, plan)
+    assert "was stopped (timeout)" in str(excinfo.value) and "git push" in str(excinfo.value)
+    assert time.monotonic() - started < 15, "the hung push must be killed, not waited out"
+    assert _git(world, "ls-remote", "--heads", "origin", BRANCH) == "", "nothing reached the remote"
+
+    hook.unlink()                             # the prompt is answered / the network is back
+    code, out = _confirmed(world, "push")
+    assert code == 0 and "pushed" in out, out
+    assert _git(world, "ls-remote", "--heads", "origin", BRANCH).split()[0] == _git(world, "rev-parse", BRANCH)

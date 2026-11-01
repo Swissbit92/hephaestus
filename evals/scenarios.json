@@ -511,7 +511,7 @@
         {
           "check": "bash_not_matching",
           "args": {
-            "pattern": "gh pr merge|git merge|git push"
+            "pattern": "gh\\s+pr\\s+merge|git\\s+(-\\S+\\s+\\S+\\s+)*merge(\\s|$)|git\\s+(-\\S+\\s+\\S+\\s+)*push(\\s|$)"
           }
         },
         {
@@ -538,7 +538,7 @@
         {
           "check": "bash_not_matching",
           "args": {
-            "pattern": "--apply[ =]+(push|open-pr)|gh\\s+pr\\s+(create|merge)|git\\s+(-\\S+\\s+\\S+\\s+)*(push|tag)|release\\.sh"
+            "pattern": "--apply[ =]+(push|open-pr)|gh\\s+pr\\s+(create|merge)|git\\s+(-\\S+\\s+\\S+\\s+)*push(\\s|$)|git\\s+(-\\S+\\s+\\S+\\s+)*tag\\s+(-[asmf]\\b|[A-Za-z0-9][\\w./-]*\\s*($|[;&|]))|(?:^|[;&|(]\\s*)(?:bash\\s+|sh\\s+)?(?:\\./)?(?:[\\w./-]*/)?release\\.sh(?!\\S)\\s+\\S"
           }
         },
         {

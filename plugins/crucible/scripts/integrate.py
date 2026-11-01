@@ -366,6 +366,11 @@ def step_prepare(repo: Path, decl: dict, f: dict) -> tuple[int, str]:
 
 
 # --------------------------------------------------------------------------- apply: external steps
+# Seconds a `git push` may take before it is killed. A module constant (not a literal at the call)
+# so a test can shorten it instead of waiting two minutes for a hung credential prompt.
+PUSH_TIMEOUT = 120
+
+
 def _remote_branch(repo: Path, branch: str) -> str:
     """The sha `origin` has for refs/heads/<branch> ('' if none) — a fresh read, never a cache."""
     rc, out = run(["git", "ls-remote", "--heads", "origin", f"refs/heads/{branch}"], repo, timeout=60)
@@ -394,7 +399,7 @@ def step_push(repo: Path, decl: dict, f: dict) -> tuple[int, str]:
         return 1, (f"refused: origin/{branch} ({remote[:7]}) is not an ancestor of the local {branch} "
                    f"({tip[:7]}). This step never force-pushes; inspect the difference yourself.")
     rc, out = _run_declared(repo, ["git", "push", "-u", "origin", f"refs/heads/{branch}:refs/heads/{branch}"],
-                            "`git push`")
+                            "`git push`", timeout=PUSH_TIMEOUT)
     if rc != 0:
         return 1, f"`git push` failed:\n{_tail(out)}"
     after = _remote_branch(repo, branch)
