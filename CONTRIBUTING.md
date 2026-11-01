@@ -11,10 +11,11 @@ Thanks for sharpening the workshop. A few rules keep the marketplace clean and r
   porting a pattern from a private source, re-author it from scratch: **patterns in, private
   content out.**
 - **`main` stays releasable.** Do feature work on short-lived branches and integrate via
-  merge or PR. See the branch model in [CLAUDE.md](CLAUDE.md).
+  PR into `dev`; a release is a separate PR from a release branch cut off `dev` into `main`.
+  See the branch model in [CLAUDE.md](CLAUDE.md).
 - **Tests green.** `pytest -q` must pass with no regression before you open a PR. CI
   (`.github/workflows/ci.yml`) runs the suite + `validate_manifests.py` +
-  `check-public-safe.sh` on every push/PR to `main`. The live skill-eval tier is a
+  `check-public-safe.sh` on every push/PR to `main` and `dev`. The live skill-eval tier is a
   separate, opt-in CI job (needs an `ANTHROPIC_API_KEY` secret) — see the workflow comments
   and `evals/README.md`.
 - **Skills make behavioral claims → add an eval.** When a skill gains a falsifiable
@@ -101,9 +102,11 @@ scripts/release.sh <plugin> minor            # 0.1.0 -> 0.2.0
 scripts/release.sh <plugin> major            # 0.1.0 -> 1.0.0
 scripts/release.sh <plugin> 1.2.3            # explicit version
 scripts/release.sh <plugin> patch --dry-run  # preview, change nothing
+scripts/release.sh <plugin> patch --prepare  # on a release branch cut off dev: bump + changelog + one commit
 ```
 
-It refuses to run unless you're on `main` with a clean tree, **runs the release gates**
+Apart from `--prepare` (below, which refuses `main` and skips the gates; they run at the
+tagging step), it refuses to run unless you're on `main` with a clean tree, **runs the release gates**
 (`pytest`, `check-public-safe.sh`, `validate_manifests.py` — ADR-002 promoted the middle
 one to a release gate and the script did not run it), validates the plugin, then commits,
 tags `<plugin>-v<x.y.z>`, pushes, creates a GitHub release, and **fast-forwards `dev` to
@@ -113,6 +116,26 @@ tags `<plugin>-v<x.y.z>`, pushes, creates a GitHub release, and **fast-forwards 
 be pushed directly — a fresh commit has no checks yet. The script detects this *before*
 touching anything and prints the PR route, rather than bumping the manifest and tagging
 locally and then failing, which is the half-completed release its own comments warn about.
+
+**The release route** (nothing is edited by hand):
+
+1. `git switch -c release/<plugin>-v<x.y.z> dev` — cut the release branch off `dev`, not off `main`.
+2. `scripts/release.sh <plugin> <bump> --prepare` — bumps `plugin.json`, cuts the changelog
+   and makes one `Release <tag>` commit. It refuses `main`, `dev` itself, a detached HEAD, a
+   branch that does not contain `dev` (or `origin/dev`, which it fetches — a local `dev`
+   that is behind would otherwise pass), and an unchanged version; it never tags or pushes.
+3. Push, then `gh pr create --base main`. Review, and wait for green CI.
+4. Merge with a **merge commit (never a squash)**: a squash gives `main` a commit `dev` does
+   not contain, so `dev` and `main` drift apart and the post-release fast-forward stops being
+   possible.
+5. `git switch main && git pull && scripts/release.sh <plugin> <x.y.z>` tags the merged
+   commit, publishes the release and fast-forwards `dev` to `main`. If `dev` moved after the
+   release branch was cut, `main` does not contain it and `dev` cannot be fast-forwarded: the
+   release is still published, but the script ends with a `WARNING` and a **non-zero exit** —
+   merge `main` into `dev` (through a PR, it is protected) before anyone forks from it.
+
+`.crucible/release.json` declares the same route (`from`, `to`, `via`, and the `prepare`,
+`command` and `dry_run` invocations) for `finish-branch`'s promote step.
 
 **The changelog is cut as part of the release.** `[Unreleased]` in `CHANGELOG.md` must be
 moved under `## [<plugin>-v<x.y.z>] — date` (`scripts/changelog.py cut <plugin> <x.y.z>`);

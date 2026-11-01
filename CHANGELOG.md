@@ -4,6 +4,21 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added
+
+- **`release.sh --prepare`: the release commit is made by the script, on a branch cut off `dev`.** On a release branch that contains `dev`, it bumps `plugin.json`, cuts the changelog and makes one `Release <tag>` commit; it never tags or pushes, and it refuses `main`, `dev` itself, a detached HEAD, a branch missing `dev`, an unchanged version, an unknown flag and `--dry-run` together. The PR-route text no longer tells you to edit the manifest by hand. Route: branch off `dev` → `--prepare` → PR into `main` → merge commit, never a squash → re-run on `main` to tag.
+- **`finish-branch` spells out `gh pr create --base <target>` and a PR review gate** (`references/pr-review.md`): review the PR's diff, post the findings on it, merge only on the user's go with no unresolved high-severity finding and green required checks. It applies to a branch that skipped `develop`. Merge is marked as rejected or check-skipping on a protected or CI-running target.
+- **`release.sh` no longer lets the dev-based route fail quietly.** `--prepare` also refuses a branch missing `origin/dev` (a local `dev` that is behind used to pass the ancestry check, so a release PR could omit merged work), and a release that cannot level `dev` (it moved after the release branch was cut) ends with a `WARNING` and a non-zero exit instead of a `note:` followed by `✔ released`. Tested with a real run against a bare origin and stubbed gates.
+- **`.github/pull_request_template.md`** with AI-assistance disclosure, verification evidence and review findings. **Two eval scenarios** (`finish-branch/states-the-pr-base-explicitly`, `.../opening-a-pr-runs-the-review-gate-not-the-merge`); both are live-only and not yet measured.
+
+### Changed
+
+- **`.crucible/release.json` declares `prepare`**, and `integrate.py` validates it like `command` and `dry_run` instead of ignoring a malformed one. CLAUDE.md, CONTRIBUTING.md and README.md describe the dev-based route; `develop.md` Phase 6.5 points at `finish-branch` Phase 5.
+
+### Fixed
+
+- **A test that the mutation probe could never pass.** `test_bytecode_left_by_an_earlier_run_is_not_a_changed_source` needs `.pyc` files but inherited the probe's `PYTHONDONTWRITEBYTECODE=1`, so `qa_gates.py --final` reported UNDETERMINED for any change touching a Python function. It now clears the variable for its own run.
+
 ## [crucible-v1.8.5] — 2026-10-27
 
 ### Fixed

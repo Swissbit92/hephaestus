@@ -28,10 +28,22 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
 - **Work happens on short-lived feature branches** named Conventional-Branch style:
   `<type>/<short-description>` in kebab-case — `feature/…`, `bugfix/…`, `hotfix/…`, `chore/…`.
 - **`dev` is branch-protected** (the same 7 required checks as `main`, no force-push or deletion; admins not enforced) — a PR or a merge whose checks are green.
-- **Integrate via merge or PR into `dev`.** Never commit feature work directly to `dev` or
-  `main`. Promote `dev` → `main` as a separate, deliberate step once the work is verified
-  **on the merged tree** — a branch that passes alone and a merge that passes are different
-  claims, and `main` moving underneath a long-lived branch is not hypothetical here.
+- **Integrate via PR into `dev`** (a squash or a merge commit; CI runs on `dev` too). Never
+  commit feature work directly to `dev` or `main`. Review the PR before merging: finish-branch
+  reviews it and blocks the merge unless there is no unresolved high-severity finding and CI
+  is green; the merge itself is the maintainer's go.
+- **A release is cut off `dev`, as its own PR into `main`.** Promote `dev` → `main` as a
+  separate, deliberate step once the work is verified **on the merged tree** — a branch that
+  passes alone and a merge that passes are different claims, and `main` moving underneath a
+  long-lived branch is not hypothetical here. The route (`scripts/release.sh` prints it too):
+  1. `git switch -c release/<plugin>-v<x.y.z> dev` — cut the release branch off `dev`.
+  2. `scripts/release.sh <plugin> <bump> --prepare` — bumps `plugin.json`, cuts the
+     changelog, makes one commit. Never tags or pushes, so there is no hand-edit.
+  3. Push and `gh pr create --base main`; review and green CI first.
+  4. Merge it with a **merge commit (never a squash)** — a squash gives `main` a commit that
+     `dev` does not contain, and `dev` and `main` drift apart.
+  5. On `main`: `scripts/release.sh <plugin> <x.y.z>` tags the merged commit, publishes it and
+     fast-forwards `dev` to `main`.
 - Tags are per-plugin: `<plugin>-v<x.y.z>` (e.g. `crucible-v0.2.0`), cut from `main`.
 
 > The `start-branch` / `finish-branch` skills detect this model from this file — keep the

@@ -99,7 +99,13 @@ reason to lean towards a PR. Exit `2` = could not determine; say so. Then presen
 options:
 
 1. **Merge** — fast-forward or `--no-ff` merge into the target (only if Phase 1 was green).
-2. **Open PR** — push the branch and open a pull request against the target.
+   On a protected or CI-running target a direct merge is rejected or skips the checks: say so
+   next to this option, so the user chooses it knowingly.
+2. **Open PR** — push the branch and open it: `gh pr create --base <target> --head <branch>`.
+   Then run the PR review gate: review the PR's diff, post the findings on the PR, and merge
+   only on the user's go, with no unresolved high-severity finding and green required checks
+   ([references/pr-review.md](references/pr-review.md)). It applies to every branch, including
+   one that skipped `develop`.
 3. **Keep** — leave the branch as-is for later.
 4. **Discard** — delete the branch and its work.
 
