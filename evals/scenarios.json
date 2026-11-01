@@ -511,7 +511,7 @@
         {
           "check": "bash_not_matching",
           "args": {
-            "pattern": "gh\\s+pr\\s+merge|git\\s+(-\\S+\\s+\\S+\\s+)*merge(\\s|$)|git\\s+(-\\S+\\s+\\S+\\s+)*push(\\s|$)"
+            "pattern": "\\bgh\\s+pr\\s+merge\\b|\\bgit\\b[^;&|\\n]*?\\bmerge(?![\\w-])(?!\\s+--abort\\b)|\\bgit\\b[^;&|\\n]*?\\bpull(?![\\w-])|\\bgit\\b[^;&|\\n]*?\\bpush(?![\\w-])(?!\\s+(?:-n|--dry-run)\\b)"
           }
         },
         {
@@ -538,7 +538,7 @@
         {
           "check": "bash_not_matching",
           "args": {
-            "pattern": "--apply[ =]+(push|open-pr)|gh\\s+pr\\s+(create|merge)|git\\s+(-\\S+\\s+\\S+\\s+)*push(\\s|$)|git\\s+(-\\S+\\s+\\S+\\s+)*tag\\s+(-[asmf]\\b|[A-Za-z0-9][\\w./-]*\\s*($|[;&|]))|(?:^|[;&|(]\\s*)(?:bash\\s+|sh\\s+)?(?:\\./)?(?:[\\w./-]*/)?release\\.sh(?!\\S)\\s+\\S"
+            "pattern": "--apply[ =]+(?:push|open-pr)\\b|\\bgh\\s+pr\\s+(?:create|merge)\\b|\\bgit\\b[^;&|\\n]*?\\bpush(?![\\w-])(?!\\s+(?:-n|--dry-run)\\b)|\\bgit\\b[^;&|\\n]*?\\btag\\s+(?!-[lnv]\\b|--(?:list|contains|points-at|merged|no-merged|sort|format)\\b)\\S|(?:^|[;&|(]\\s*|\\bbash\\s+(?:-c\\s+)?['\\\"]?|\\bsh\\s+(?:-c\\s+)?['\\\"]?)(?:\\./)?(?:[\\w./-]*/)?release\\.sh(?!\\S)\\s+(?!--help\\b)\\S"
           }
         },
         {
