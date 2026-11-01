@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -188,8 +189,12 @@ def test_bytecode_left_by_an_earlier_run_is_not_a_changed_source(tmp_path):
     """An earlier gate's test run writes __pycache__; in a repo with no .gitignore that is
     untracked, and the probe once treated it as a source change to revert."""
     repo = _repo(tmp_path, _BASE, {"tests/test_more.py": "def test_more():\n    assert True\n"})
+    # The probe runs the suite with PYTHONDONTWRITEBYTECODE=1, which this test inherits when
+    # it is itself run by the probe (qa_gates --final); with it set no .pyc is ever written
+    # and the assertion below fails for a reason that has nothing to do with the code.
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONDONTWRITEBYTECODE"}
     subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"], cwd=repo,
-                   capture_output=True)
+                   capture_output=True, env=env)
     assert any(repo.rglob("*.pyc"))
     code, out = _run(repo, "--revert")
     assert code == 3 and "only tests" in out, out

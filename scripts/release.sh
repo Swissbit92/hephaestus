@@ -16,8 +16,19 @@
 #   scripts/release.sh <plugin> major            # 0.1.0 -> 1.0.0
 #   scripts/release.sh <plugin> 1.2.3            # set an explicit version
 #   scripts/release.sh <plugin> patch --dry-run  # show what would happen, change nothing
+#   scripts/release.sh <plugin> patch --prepare  # on a release branch cut off dev: bump the
+#                                                # manifest, cut the changelog, make ONE commit.
+#                                                # Never tags or pushes.
 #
 # <plugin> is a directory name under plugins/ (e.g. crucible).
+#
+# The route (main is protected, so a release reaches it through a PR):
+#   1. git switch -c release/<plugin>-v<X.Y.Z> dev      # cut off dev, the integration branch
+#   2. scripts/release.sh <plugin> <bump> --prepare      # bump + changelog cut + one commit
+#   3. push, then gh pr create --base main               # review, CI green
+#   4. merge it with a MERGE COMMIT, never a squash      # a squash leaves dev behind main
+#   5. git switch main && git pull && scripts/release.sh <plugin> <X.Y.Z>   # tags, publishes,
+#      and fast-forwards dev to main
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -25,13 +36,24 @@ cd "$REPO_ROOT"
 
 die() { echo "error: $*" >&2; exit 1; }
 
+USAGE="usage: scripts/release.sh <plugin> <patch|minor|major|X.Y.Z> [--dry-run | --prepare]"
 PLUGIN="${1:-}"
 BUMP="${2:-}"
 DRY_RUN=0
-[[ "${3:-}" == "--dry-run" ]] && DRY_RUN=1
-
-[[ -n "$PLUGIN" ]] || die "usage: scripts/release.sh <plugin> <patch|minor|major|X.Y.Z> [--dry-run]"
-[[ -n "$BUMP" ]] || die "usage: scripts/release.sh <plugin> <patch|minor|major|X.Y.Z> [--dry-run]"
+PREPARE=0
+[[ -n "$PLUGIN" ]] || die "$USAGE"
+[[ -n "$BUMP" ]] || die "$USAGE"
+shift 2
+# An unknown flag is an error, not a no-op: `--prepar` silently ignored would fall through
+# to a real release attempt.
+for _arg in "$@"; do
+  case "$_arg" in
+    --dry-run) DRY_RUN=1 ;;
+    --prepare) PREPARE=1 ;;
+    *) die "unknown option '$_arg' — $USAGE" ;;
+  esac
+done
+[[ "$DRY_RUN" == "1" && "$PREPARE" == "1" ]] && die "--prepare and --dry-run are mutually exclusive: --prepare makes the release commit, --dry-run changes nothing"
 
 PLUGIN_DIR="$REPO_ROOT/plugins/$PLUGIN"
 MANIFEST="$PLUGIN_DIR/.claude-plugin/plugin.json"
@@ -46,10 +68,29 @@ MANIFEST="$PLUGIN_DIR/.claude-plugin/plugin.json"
 
 # --- Preconditions -----------------------------------------------------------
 branch="$(git rev-parse --abbrev-ref HEAD)"
+# The integration branch releases are cut from, as declared in .crucible/release.json
+# ("from"); dev when undeclared. Read once, up here, because --prepare needs it to check the
+# release branch and the post-release fast-forward below needs it to level the branch again.
+# (This used to read branch.dev.integrationTarget — a key nothing writes — and printed dev
+# on both arms of the conditional, so it never read anything.)
+TARGET="$("$PY" -c 'import json,sys
+try: print(json.load(open(sys.argv[1])).get("from") or "dev")
+except Exception: print("dev")' "$REPO_ROOT/.crucible/release.json")"
+if [[ "$PREPARE" == "1" ]]; then
+  # --prepare is the one mutating mode that runs OFF main: it makes the release commit on a
+  # branch that will be merged into main by PR.
+  # Not on main, not on $TARGET itself (the ancestor check below is trivially true there, and
+  # the release commit would land on the integration branch), not on a detached HEAD.
+  [[ "$branch" != "main" && "$branch" != "$TARGET" && "$branch" != "HEAD" ]] \
+    || die "--prepare runs on a release branch cut off '$TARGET', not on '$branch' — git switch -c release/${PLUGIN}-v<version> $TARGET"
+  git rev-parse --verify --quiet "refs/heads/$TARGET" >/dev/null \
+    || die "--prepare needs a local '$TARGET' branch to check this branch against (git fetch origin $TARGET:$TARGET)"
+  git merge-base --is-ancestor "$TARGET" HEAD \
+    || die "--prepare: '$branch' does not contain '$TARGET' — cut the release branch off '$TARGET', or merge '$TARGET' into it, so the release PR carries everything that is on '$TARGET'"
 # A dry run changes nothing, so it may preview from any branch (crucible's promote step runs
 # it before integration has reached main); a real release must start from main.
-if [[ "$branch" != "main" ]]; then
-  [[ "$DRY_RUN" == "1" ]] || die "must be on 'main' (currently on '$branch')"
+elif [[ "$branch" != "main" ]]; then
+  [[ "$DRY_RUN" == "1" ]] || die "must be on 'main' (currently on '$branch') — to prepare a release commit on a release branch, use --prepare"
   echo "note: dry run from '$branch' — a real release must be cut from 'main'" >&2
 fi
 [[ -z "$(git status --porcelain)" ]] || die "working tree not clean — commit or stash first"
@@ -59,6 +100,8 @@ CUR="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])
 NEW="$("$PY" "$REPO_ROOT/scripts/bump_version.py" "$CUR" "$BUMP")" || die "version bump failed"
 TAG="${PLUGIN}-v$NEW"
 
+[[ "$PREPARE" != "1" || "$CUR" != "$NEW" ]] \
+  || die "--prepare: $PLUGIN is already at $NEW, so there is no release commit to make (to tag a merged release, run without --prepare on main)"
 git rev-parse "$TAG" >/dev/null 2>&1 && die "tag $TAG already exists"
 
 # --- CHANGELOG: the release must have its own heading --------------------------
@@ -98,7 +141,7 @@ fi
 # carries the target version — the normal case after the bump has been merged through a
 # PR — nothing needs pushing to `main` and only the tag does, which is not protected.
 # Refusing there would block the very path this message tells people to use.
-if [[ "$DRY_RUN" != "1" && "$CUR" != "$NEW" ]] && command -v gh >/dev/null 2>&1; then
+if [[ "$DRY_RUN" != "1" && "$PREPARE" != "1" && "$CUR" != "$NEW" ]] && command -v gh >/dev/null 2>&1; then
   _prot="$(gh api "repos/{owner}/{repo}/branches/main/protection" 2>/dev/null || true)"
   if [[ -n "$_prot" ]] \
      && grep -q '"enforce_admins"' <<<"$_prot" \
@@ -111,12 +154,12 @@ sys.exit(0 if (ctx and adm) else 1)" <<<"$_prot"; then
     die "main requires status checks and enforces them on admins, so this script cannot
   push a release commit directly. Use the PR route instead:
 
-    git switch -c release/${PLUGIN}-v\$NEW
-    # bump plugins/$PLUGIN/.claude-plugin/plugin.json by hand, and cut the changelog:
-    scripts/changelog.py cut $PLUGIN \$NEW
-    git commit -am \"Release ${PLUGIN}-v\$NEW\" && git push -u origin HEAD
-    gh pr create --base main && gh pr merge --merge   # after CI is green
-    git switch main && git pull && scripts/release.sh $PLUGIN \$NEW   # tags the merged commit
+    git switch -c release/${PLUGIN}-v$NEW $TARGET     # cut off $TARGET, not off main
+    scripts/release.sh $PLUGIN $NEW --prepare         # bumps the manifest, cuts the changelog, one commit
+    git push -u origin HEAD
+    gh pr create --base main --head release/${PLUGIN}-v$NEW   # review, CI green
+    gh pr merge --merge                               # a MERGE COMMIT — never squash (a squash leaves $TARGET behind main)
+    git switch main && git pull && scripts/release.sh $PLUGIN $NEW   # tags the merged commit and levels $TARGET
 
   Nothing has been changed. Re-running after the merge takes the already-at-version
   branch below and tags HEAD."
@@ -132,7 +175,10 @@ fi
 # These run before the version bump, so a failure leaves the tree exactly as it was found.
 # --dry-run skips them deliberately: a preview that takes two minutes is a preview nobody
 # uses, and it changes nothing anyway.
-if [[ "$DRY_RUN" != "1" ]]; then
+# --prepare skips them too: it only makes the commit that goes into a PR, whose required CI
+# checks run on that PR, and the run on main that tags the merged commit runs these gates
+# before anything is published.
+if [[ "$DRY_RUN" != "1" && "$PREPARE" != "1" ]]; then
   echo "running release gates…"
   # A missing pytest is not a red suite; saying "red" sends the releaser looking for a
   # failing test that does not exist.
@@ -213,11 +259,11 @@ PY
 if command -v claude >/dev/null 2>&1; then
   claude plugin validate "$PLUGIN_DIR" >/dev/null \
     && echo "✔ plugin validates" \
-    || die "plugin validation failed — check 'git diff'"
+    || die "plugin validation failed — check 'git diff', then 'git checkout -- .' before retrying"
 fi
 
 if [[ "$CUT_NEEDED" == "1" ]]; then
-  "$PY" "$CL" --root "$REPO_ROOT" cut "$PLUGIN" "$NEW" || die "changelog cut failed — check 'git diff'"
+  "$PY" "$CL" --root "$REPO_ROOT" cut "$PLUGIN" "$NEW" || die "changelog cut failed — check 'git diff', then 'git checkout -- .' before retrying"
   git add "$REPO_ROOT/CHANGELOG.md"
 fi
 
@@ -231,6 +277,14 @@ if git diff --cached --quiet; then
   echo "note: manifest already at $NEW — nothing to commit; tagging HEAD"
 else
   git commit -q -m "Release $TAG"
+fi
+if [[ "$PREPARE" == "1" ]]; then
+  # Stop before the tag and the push: this commit is not released until the PR carrying it
+  # is merged into main and the script is re-run there.
+  echo "✔ prepared $TAG on '$branch' — one commit, no tag, nothing pushed"
+  echo "next: git push -u origin HEAD && gh pr create --base main --head $branch"
+  echo "      merge it with a MERGE COMMIT (never squash), then on main: scripts/release.sh $PLUGIN $NEW"
+  exit 0
 fi
 git tag -a "$TAG" -m "$PLUGIN $NEW"
 git push -q origin main
@@ -248,12 +302,7 @@ fi
 # and the following release either conflicts or double-bumps. Observed in the wild the
 # first time this script was used by a second session — a stale base manufactured by the
 # release process itself, which is the exact failure `start-branch` gained a guard for.
-# The integration branch this repo promotes FROM, as declared in .crucible/release.json
-# ("from"); dev when undeclared. (This line used to read branch.dev.integrationTarget — a key
-# nothing writes — and printed dev on both arms of the conditional, so it never read anything.)
-TARGET="$("$PY" -c 'import json,sys
-try: print(json.load(open(sys.argv[1])).get("from") or "dev")
-except Exception: print("dev")' "$REPO_ROOT/.crucible/release.json")"
+# $TARGET is read from .crucible/release.json at the top of the script.
 if git show-ref --verify --quiet "refs/heads/$TARGET"; then
   if git merge-base --is-ancestor "$TARGET" main; then
     git branch -f "$TARGET" main

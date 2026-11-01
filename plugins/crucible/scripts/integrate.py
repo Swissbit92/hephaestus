@@ -118,7 +118,7 @@ def load_declaration(repo: Path) -> dict | None:
             problems.append(f"'{key}' must be a non-empty branch name")
     if data.get("via", "pr") not in ("pr", "merge"):
         problems.append("'via' must be \"pr\" or \"merge\"")
-    for key in ("command", "dry_run"):
+    for key in ("prepare", "command", "dry_run"):
         if key in data and (not isinstance(data[key], list) or not data[key]
                             or not all(isinstance(x, str) for x in data[key])):
             problems.append(f"'{key}' must be a non-empty list of strings")

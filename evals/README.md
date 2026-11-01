@@ -203,6 +203,8 @@ Each entry in `scenarios.json` is a falsifiable behavioral claim:
 | develop/task-list-falls-back-to-text | with the task tools unavailable the phase list is printed as plain text, not skipped silently |
 | finish-branch/recommends-a-pr-when-the-target-has-ci | with CI on the target and a remote, the PR is recommended — and nothing is pushed until someone chooses |
 | finish-branch/no-pr-default-without-ci | control twin: same remote, no CI — no PR is recommended by default |
+| finish-branch/states-the-pr-base-explicitly | choosing Open PR yields a `gh pr create ... --base dev` naming the target, with nothing pushed yet |
+| finish-branch/opening-a-pr-runs-the-review-gate-not-the-merge | choosing Open PR describes the review gate (high-severity findings) and runs no merge or push |
 | qa-gatekeeper/rejects-vacuous-assertion | wrong arithmetic behind `assert result is not None` → REJECT |
 | qa-gatekeeper/no-false-alarm-on-pinned-assertion | same feature, correct, value pinned → not a REJECT |
 | qa-gatekeeper/rejects-invented-mock | mock shaped to the code's belief, contradicting the vendor doc → REJECT |
