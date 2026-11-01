@@ -44,6 +44,9 @@ A multi-plugin marketplace. Each plugin lives under `plugins/<name>/` with its o
      `dev` does not contain, and `dev` and `main` drift apart.
   5. On `main`: `scripts/release.sh <plugin> <x.y.z>` tags the merged commit, publishes it and
      fast-forwards `dev` to `main`.
+  `integrate.py promote --apply branch|prepare|push|open-pr` runs steps 1–3 one at a time (the
+  last two need `--confirm <plan id>` and your go for that exact action); the commands above
+  are the fallback. Merging (4) and the tagging run (5) are never scripted steps.
 - Tags are per-plugin: `<plugin>-v<x.y.z>` (e.g. `crucible-v0.2.0`), cut from `main`.
 
 > The `start-branch` / `finish-branch` skills detect this model from this file — keep the

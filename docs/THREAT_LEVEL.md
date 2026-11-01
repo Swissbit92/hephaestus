@@ -43,6 +43,7 @@ Untrusted: anything an LLM emits, anything retrieved, any non-first-party plugin
 | **R**epudiation | Low | git history; `[executed]/[inspected]/[assumed]` claim tagging | partial |
 | **I**nformation disclosure | **Yes** | no secrets committed (verified: 517 blobs, all refs, 0 hits); `check-public-safe.sh` linter; `tests/test_seam.py`. **Repo privacy is deliberately NOT counted here** — it would evaporate on publication ([ADR-002](decisions/002-publish-hephaestus-publicly-retiring-the-private-distribution-non-goal.md)), and a control that disappears when the repo changes state was never really the control. | active |
 | **D**enial of service | **Yes** | runaway loops bounded by `--max-turns`/budget ceilings + `loop-cost`/`loop-audit` | Phase 3 |
+| **T**ampering (release path) | Low | `integrate.py promote --apply` runs argvs read from `.crucible/release.json` — a file a merged PR can edit. Controls: the plan prints every argv the script can run, in full — `prepare` too, which runs **without** `--confirm`, so the plan is the review point for it; `push`/`open-pr` need a current plan id (a staleness guard) **and** the user's go for that exact action; `push` is one explicit refspec, never `main`/tags/`--force`; there is no merge, tag or publish step; argvs never go through a shell | partial |
 | **E**levation of privilege | **Yes** | agent issuing a live order w/o confirmation → hard-blocked by safety gate; injection-guard blocks RAG-triggered tool calls | Phase 1 (`safety-middleware`, `kucoin-safety-gate`) |
 
 ## Top risks

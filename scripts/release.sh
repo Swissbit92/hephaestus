@@ -265,14 +265,32 @@ with open(p, 'w', encoding="utf-8") as f:
     f.write('\n')
 PY
 
+# --prepare made its first write above (the manifest). A failure from here on used to leave a
+# dirty tree and a message asking the operator to clean up. --prepare starts from a clean tree
+# (checked at the top), so putting back exactly the two files it can have touched is exact; it
+# is deliberately NOT `git checkout -- .`, which would also discard anything else.
+fail() {
+  if [[ "$PREPARE" == "1" ]]; then
+    git reset -q -- "$MANIFEST" "$REPO_ROOT/CHANGELOG.md" 2>/dev/null || true
+    git checkout -- "$MANIFEST" "$REPO_ROOT/CHANGELOG.md" 2>/dev/null || true
+    # The two commands above swallow their own errors (a stale .git/index.lock makes both fail),
+    # so check the result instead of assuming it.
+    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+      die "$1 — restore incomplete: the tree is not clean (another git process, or a stale .git/index.lock?). Check 'git status'; nothing was committed"
+    fi
+    die "$1 — the manifest and changelog were restored; nothing was committed"
+  fi
+  die "$1 — check 'git diff', then 'git checkout -- .' before retrying"
+}
+
 if command -v claude >/dev/null 2>&1; then
   claude plugin validate "$PLUGIN_DIR" >/dev/null \
     && echo "✔ plugin validates" \
-    || die "plugin validation failed — check 'git diff', then 'git checkout -- .' before retrying"
+    || fail "plugin validation failed"
 fi
 
 if [[ "$CUT_NEEDED" == "1" ]]; then
-  "$PY" "$CL" --root "$REPO_ROOT" cut "$PLUGIN" "$NEW" || die "changelog cut failed — check 'git diff', then 'git checkout -- .' before retrying"
+  "$PY" "$CL" --root "$REPO_ROOT" cut "$PLUGIN" "$NEW" || fail "changelog cut failed"
   git add "$REPO_ROOT/CHANGELOG.md"
 fi
 
@@ -285,7 +303,7 @@ git add "$MANIFEST"
 if git diff --cached --quiet; then
   echo "note: manifest already at $NEW — nothing to commit; tagging HEAD"
 else
-  git commit -q -m "Release $TAG"
+  git commit -q -m "Release $TAG" || fail "the release commit failed (a hook?)"
 fi
 if [[ "$PREPARE" == "1" ]]; then
   # Stop before the tag and the push: this commit is not released until the PR carrying it

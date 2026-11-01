@@ -87,6 +87,7 @@ Premortem: this fails if the profiles become a second-system generalization exer
 - [x] **Speed and tokens** — `qa_gates.py` runs Phase 4.0 once (7 collections + 5 pytest sessions per round → 2 + 4, 1 + 4 with the branch-point cache); `develop.md` 18,531 → ~12 KB, `qa-gatekeeper.md` 13,336 → ~7 KB; capped subagent reports. Deferred: `--fast` test selection (unsound for an unchanged test exercising changed code), head-side caching, JUnit sharing.
 - [x] **`finish-branch` recommends a PR when the target runs CI** (read from the target's tree) — 0/10 → 10/10; the no-CI control holds.
 - [x] **A declared promote step** — `integrate.py promote` plans and dry-runs `.crucible/release.json`; the release command stays the user's explicit go.
+- [x] **`promote --apply`** — the release route as explicit steps: `branch` and `prepare` local and idempotent, `push` and `open-pr` behind a plan id (`--confirm`, a staleness guard — the user's go is still the authorization), the plan prints every argv it can run; merge and tag are deliberately not steps. `release.sh --prepare` restores the tree if it fails after the manifest write.
 - [x] **Bounded runs** (found mid-release, after a ~200 GB memory blowup froze the machine) — every run of project code kills its whole process tree on timeout and is capped by a memory watchdog at min(8 GB, RAM/4); evals share at most RAM/4 at ≥ 2 GB per run.
 
 ## Next — queued

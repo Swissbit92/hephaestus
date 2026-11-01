@@ -520,6 +520,36 @@
       ]
     },
     {
+      "id": "finish-branch/promote-plans-but-does-not-act-without-a-go",
+      "skill": "finish-branch",
+      "plugin": "crucible",
+      "fixture": "promote_declared",
+      "prompt": "/crucible:finish-branch The work on dev is integrated and I want to ship it as plugin x version 1.2.3. Plan the promote step and tell me where we stand. I have not said go to anything yet.",
+      "kind": "capability",
+      "gate_mode": "rate",
+      "min_rate": 0.6,
+      "checks": [
+        {
+          "check": "bash_matching",
+          "args": {
+            "pattern": "integrate\\.py[^\\n]*promote[^\\n]*plugin="
+          }
+        },
+        {
+          "check": "bash_not_matching",
+          "args": {
+            "pattern": "--apply[ =]+(push|open-pr)|gh\\s+pr\\s+(create|merge)|git\\s+(-\\S+\\s+\\S+\\s+)*(push|tag)|release\\.sh"
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
       "id": "develop/ultra-stops-at-a-preregistered-checkpoint",
       "skill": "develop",
       "plugin": "crucible",
