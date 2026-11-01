@@ -4,6 +4,15 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Fixed
+
+- **Release notes no longer list the release commit itself.** `release.sh` filtered merges and co-author trailers but not the `Release <tag>` commit that `--prepare` makes, so crucible 1.9.0's notes opened with `- Release crucible-v1.9.0`.
+- **`--prepare`'s "does not contain dev" refusals mention `git fetch --unshallow`**, since a shallow clone fails the ancestry check for lack of history, not for missing work.
+
+### Changed
+
+- **Follow-ups from the #41 review.** The PR route die text is now exercised by a real run against a stubbed protected `main` (it was asserted from the script's source); added tests for a missing local `dev`, the detached-HEAD case on its own, and the exact "already at" refusal; removed a dead helper and an always-true assertion. `finish-branch`'s `pr-review.md` lists when "could not determine" applies (no remote or `gh`, no reviewer, unreadable or absent required checks, a check still pending). The review-gate eval regex now needs `high-severity` or `unresolved`, and the `--base` one tolerates a line break; the PR template says the review is posted only if the gate ran.
+
 ## [crucible-v1.9.0] — 2026-11-01
 
 ### Added

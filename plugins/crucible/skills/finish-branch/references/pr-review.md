@@ -10,9 +10,16 @@ A PR is merged only when **both** hold, read fresh at merge time:
 1. **No unresolved high-severity finding** from the review pass below.
 2. **The target's required checks are green** on the PR's head commit.
 
-Either one missing is *not met*, not "probably fine". If the review could not run (no reviewer
-available, the diff could not be read) or the checks could not be read, that is *could not
-determine* — say so and stop; never fold it into a pass.
+Either one missing is *not met*, not "probably fine". If the review could not run or the checks
+could not be read, that is *could not determine* — say which, treat the gate as not met, and ask
+the user how to proceed; never fold it into a pass. Concretely, it is *could not determine* when:
+
+- there is no remote, no `gh`, or `gh` is not authenticated, so the PR cannot be opened or read;
+- the review could not run: no reviewer is available, or the PR's diff could not be read;
+- the checks cannot be read, or the target **declares no required checks at all** — "green
+  required checks" is then vacuously true, so state that there is nothing to wait for and let
+  the user decide, rather than counting it as green;
+- a check is still pending: that is *not yet*, not green.
 
 ## Running the review
 

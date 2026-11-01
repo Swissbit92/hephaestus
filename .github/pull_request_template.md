@@ -24,7 +24,7 @@ Reviewed by (a person):
 
 ## Review findings
 
-<!-- finish-branch posts the review here. Merge only with no unresolved high-severity finding. -->
+<!-- The PR review gate (finish-branch, references/pr-review.md) posts the review here; tick the boxes only if it actually ran. Merge only with no unresolved high-severity finding. -->
 
 - [ ] Review pass run on this PR's diff, findings posted on the PR
 - [ ] No unresolved high-severity finding (or each is dismissed with a written reason)

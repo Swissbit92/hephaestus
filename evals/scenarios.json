@@ -481,7 +481,7 @@
         {
           "check": "final_text_matching",
           "args": {
-            "pattern": "(?is)gh pr create[^\\n]*--base[ =]dev"
+            "pattern": "(?is)gh pr create[\\s\\S]{0,60}--base[ =]dev"
           }
         },
         {
@@ -505,7 +505,7 @@
         {
           "check": "final_text_matching",
           "args": {
-            "pattern": "(?is)review[^.\\n]{0,160}(high|severity|finding)"
+            "pattern": "(?is)review[^.\\n]{0,160}(high[- ]severity|unresolved)"
           }
         },
         {
