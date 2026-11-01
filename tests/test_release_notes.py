@@ -134,6 +134,23 @@ def _notes(repo: Path, plugin: str, version: str) -> str:
 
 
 # --------------------------------------------------------------------------- the gap
+def test_a_release_commit_is_not_listed_in_the_notes(repo):
+    """`--prepare` commits `Release <tag>`; listing it in the notes of that same release is
+    noise (it is the bump, not something that shipped)."""
+    _commit(repo, "scripts/real.py", "x = 1\n", "feat: a real change")
+    _commit(repo, "scripts/bump.py", "y = 1\n", "Release alpha-v0.1.1")
+    # Another plugin's release commit also touches the root CHANGELOG, so the pathspec does
+    # not exclude it: the filter has to, or releasing alpha narrates beta's release.
+    _commit(repo, "scripts/bump2.py", "z = 1\n", "Release beta-v0.3.0")
+    # ...but only the exact `Release <tag>` subject: a real commit that starts the same way
+    # must still be reported.
+    _commit(repo, "scripts/real2.py", "w = 1\n", "Release my-plugin-v2 support for the new loader")
+    out = _notes(repo, "alpha", "0.2.0")
+    assert "feat: a real change" in out
+    assert "Release alpha-v0.1.1" not in out and "Release beta-v0.3.0" not in out
+    assert "Release my-plugin-v2 support for the new loader" in out
+
+
 def test_work_outside_the_plugin_directory_is_reported(repo):
     """The regression: a gate in scripts/ and a note in docs/ used to be invisible."""
     _commit(repo, "scripts/new_gate.py", "x = 1\n", "feat: a gate that lives in scripts")
