@@ -220,13 +220,17 @@ scripts/release.sh <plugin> minor            # 0.1.0 -> 0.2.0
 scripts/release.sh <plugin> major            # 0.1.0 -> 1.0.0
 scripts/release.sh <plugin> 1.2.3            # explicit version
 scripts/release.sh <plugin> patch --dry-run  # preview, change nothing
+scripts/release.sh <plugin> patch --prepare  # on a release branch cut off dev: bump + changelog + one commit
 ```
 
 `<plugin>` is a directory under `plugins/` (e.g. `crucible`). Each plugin versions
-independently under its own tag namespace `<plugin>-v<x.y.z>`. The script refuses to run
-unless you're on `main` with a clean tree, validates the plugin, then commits, tags,
-pushes, and creates a GitHub release with notes drawn from that plugin's commits since its
-last tag. The version math lives in `scripts/bump_version.py` (unit-tested).
+independently under its own tag namespace `<plugin>-v<x.y.z>`. Because `main` is protected,
+a release reaches it through a PR: `--prepare` makes the release commit on a branch cut off
+`dev`, the PR is merged with a merge commit, and the script is then re-run on `main` (clean
+tree) to validate the plugin, tag, push, and create a GitHub release with notes drawn from
+that plugin's commits since its last tag. The full route is in
+[CONTRIBUTING.md](CONTRIBUTING.md#releasing). The version math lives in
+`scripts/bump_version.py` (unit-tested).
 
 ## Contributing
 

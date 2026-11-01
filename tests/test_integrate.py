@@ -102,6 +102,22 @@ def test_a_malformed_declaration_is_undetermined(tmp_path):
     assert code == 2 and "'to'" in out and "'via'" in out
 
 
+def test_a_malformed_prepare_command_is_undetermined_not_ignored(tmp_path):
+    """`prepare` is declared beside `command` and `dry_run`; a typo there must not be silent."""
+    repo = fixtures.branched_repo(tmp_path / "r", {"README.md": "x\n"})
+    _declare(repo, {"from": "dev", "to": "main", "prepare": "scripts/release.sh --prepare"})
+    code, out = _run(repo, "promote")
+    assert code == 2 and "'prepare'" in out
+
+    # One string among non-strings is still malformed: every element must be a string.
+    _declare(repo, {"from": "dev", "to": "main", "prepare": ["scripts/release.sh", 3]})
+    code, out = _run(repo, "promote")
+    assert code == 2 and "'prepare'" in out
+    _declare(repo, {"from": "dev", "to": "main", "prepare": []})
+    code, out = _run(repo, "promote")
+    assert code == 2 and "'prepare'" in out
+
+
 def test_an_undeclared_repo_is_a_skip_not_a_guess(tmp_path):
     repo = fixtures.branched_repo(tmp_path / "r", {"README.md": "x\n"})
     code, out = _run(repo, "promote")

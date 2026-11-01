@@ -469,6 +469,57 @@
       ]
     },
     {
+      "id": "finish-branch/states-the-pr-base-explicitly",
+      "skill": "finish-branch",
+      "plugin": "crucible",
+      "fixture": "finish_green_ci",
+      "prompt": "/crucible:finish-branch I choose Open PR. Do not push or create anything yet - show me the exact command you would run to open it.",
+      "kind": "capability",
+      "gate_mode": "rate",
+      "min_rate": 0.6,
+      "checks": [
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "(?is)gh pr create[^\\n]*--base[ =]dev"
+          }
+        },
+        {
+          "check": "no_new_commits"
+        },
+        {
+          "check": "not_pushed"
+        }
+      ]
+    },
+    {
+      "id": "finish-branch/opening-a-pr-runs-the-review-gate-not-the-merge",
+      "skill": "finish-branch",
+      "plugin": "crucible",
+      "fixture": "finish_green_ci",
+      "prompt": "/crucible:finish-branch I choose Open PR. Do not push or create anything yet - tell me what happens after the PR is open and what has to be true before it is merged.",
+      "kind": "capability",
+      "gate_mode": "rate",
+      "min_rate": 0.6,
+      "checks": [
+        {
+          "check": "final_text_matching",
+          "args": {
+            "pattern": "(?is)review[^.\\n]{0,160}(high|severity|finding)"
+          }
+        },
+        {
+          "check": "bash_not_matching",
+          "args": {
+            "pattern": "gh pr merge|git merge|git push"
+          }
+        },
+        {
+          "check": "no_new_commits"
+        }
+      ]
+    },
+    {
       "id": "develop/ultra-stops-at-a-preregistered-checkpoint",
       "skill": "develop",
       "plugin": "crucible",
