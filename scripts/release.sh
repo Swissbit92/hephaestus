@@ -227,7 +227,7 @@ done
 # about what shipped, and the commits it brought in are already in the range.
 NOTES="$(git log ${RANGE:+"$RANGE"} --no-merges --pretty='- %s' -- "${PATHSPEC[@]}" 2>/dev/null \
          | grep -vi '^- Co-Authored' | grep -vi '^- Claude-Session' \
-         | grep -v '^- Release [A-Za-z0-9_.-]*-v[0-9]' || true)"
+         | grep -v '^- Release [A-Za-z0-9_.-]*-v[0-9][A-Za-z0-9_.+-]*$' || true)"
 if [[ -z "$NOTES" ]]; then
   # Say which of the two this is. "Maintenance release" reads as a deliberate choice, and
   # for three releases it was silently covering for a filter that matched nothing.

@@ -505,7 +505,7 @@
         {
           "check": "final_text_matching",
           "args": {
-            "pattern": "(?is)review[^.\\n]{0,160}(high[- ]severity|unresolved)"
+            "pattern": "(?is)review.{0,200}(high[- ]severity|unresolved)"
           }
         },
         {

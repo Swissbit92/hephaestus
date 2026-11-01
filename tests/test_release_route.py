@@ -290,7 +290,11 @@ def test_a_release_that_cannot_level_dev_says_so_and_fails(world, tmp_path):
     assert _rev(world, "dev") != _rev(world, "main")
 
 
-_PROTECTED_MAIN = ('if [ "$1" = api ]; then echo \'{"required_status_checks": {"contexts": ["checks"]}, '
+# Answers ONLY the branch-protection endpoint release.sh actually queries; any other
+# `gh api` call gets nothing, so the script switching to a different endpoint turns the
+# protected-main test red instead of being silently satisfied.
+_PROTECTED_MAIN = ('if [ "$1" = api ] && [ "$2" = "repos/{owner}/{repo}/branches/main/protection" ]; then '
+                   'echo \'{"required_status_checks": {"contexts": ["checks"]}, '
                    '"enforce_admins": {"enabled": true}}\'; fi; exit 0')
 
 
