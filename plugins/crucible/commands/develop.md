@@ -211,7 +211,7 @@ cross-repo rule or contract changed; test counts and versions when they changed.
 After the version bump, invoke `finish-branch`: no green, no merge; it offers **merge /
 open PR / keep / discard**, recommends a PR where the target is protected or runs CI, and
 cleans up without losing unmerged work. Skip if nothing was isolated. Integration is not
-release: to ship, `finish-branch` Phase 5 (promote) plans the release path the repo declares.
+release: to ship, `finish-branch` Phase 5 (promote) plans the release path the repo declares and can run its local steps (`references/promote.md`).
 
 ## CROSS-CUTTING
 

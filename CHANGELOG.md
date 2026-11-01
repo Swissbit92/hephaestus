@@ -4,6 +4,22 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [crucible-v1.10.0] — 2026-11-01
+
+### Added
+
+- **`integrate.py promote --apply`: the release route as explicit steps.** `branch` (cut `release/<plugin>-v<version>` off `from`) and `prepare` (the declared `prepare` argv, exactly one new commit) are local, reversible and idempotent; `push` (that one ref by explicit refspec: never `main`, never a tag, never `--force`) and `open-pr` (the declared `open_pr` argv, no forge assumed, idempotent via a declared `pr_view`, read back before it claims success) act outside the checkout and need `--confirm <plan id>`. `promote` prints the plan with **every command `--confirm` can run, in full**, and a `plan:` id (a hash of the `from`/`to` shas, the branch and its tip, the version and every declared argv). A stale id is refused with a new exit code, 4. The id is a staleness guard, **not** authorization: an agent can compute it, and the user's go for that exact action is what authorizes. There is deliberately no merge, tag or publish step. New optional `release.json` keys `open_pr` and `pr_view` (contract: exit 0 + output = a PR exists, exit 0 + no output = none, non-zero = unknown). Reference: `finish-branch/references/promote.md`; one eval scenario (live-only, unrun).
+
+### Fixed
+
+- **`release.sh --prepare` restores the tree when it fails after the manifest write** (a failed `claude plugin validate`, a changelog cut that dies half way, a failing commit hook). It put back nothing before and printed advice; it now resets exactly the two files it touched and says so. Never `git checkout -- .`.
+- **Release notes no longer list the release commit itself.** `release.sh` filtered merges and co-author trailers but not the `Release <tag>` commit that `--prepare` makes, so crucible 1.9.0's notes opened with `- Release crucible-v1.9.0`. The filter matches only the exact `Release <tag>` subject (another plugin's release commit also touches the root CHANGELOG and is dropped too; a real commit like `Release my-plugin-v2 support…` is kept).
+- **`--prepare`'s "does not contain dev" refusals mention `git fetch --unshallow`**, since a shallow clone fails the ancestry check for lack of history, not for missing work.
+
+### Changed
+
+- **Follow-ups from the #41 review.** The PR route die text is now exercised by a real run against a stubbed protected `main` (it was asserted from the script's source); added tests for a missing local `dev`, the detached-HEAD case on its own, and the exact "already at" refusal; removed a dead helper and an always-true assertion. `finish-branch`'s `pr-review.md` lists when "could not determine" applies (no remote or `gh`, no reviewer, unreadable or absent required checks, a check still pending). The "no required checks declared" case is now *not met by default* and a still-running check is *not yet*, outside the could-not-determine list. The protected-`main` test's `gh` stub answers only the endpoint the script queries. The review-gate eval regex now needs `high-severity` or `unresolved` (and allows a full stop in between), and the `--base` one tolerates a line break; the PR template says the review is posted only if the gate ran.
+
 ## [crucible-v1.9.0] — 2026-11-01
 
 ### Added

@@ -540,6 +540,15 @@ def test_the_control_twin_differs_only_by_ci(tmp_path):
     assert subprocess.run(["git", "-C", str(repo), "remote"], capture_output=True, text=True).stdout.strip() == "origin"
 
 
+def test_the_promote_fixture_declares_the_route_and_has_a_remote(tmp_path):
+    import json as _json
+    repo = fixtures.build("promote_declared", tmp_path / "r")
+    decl = _json.loads((repo / ".crucible" / "release.json").read_text(encoding="utf-8"))
+    assert (decl["from"], decl["to"]) == ("dev", "main") and {"prepare", "open_pr", "pr_view", "command"} <= set(decl)
+    assert subprocess.run(["git", "-C", str(repo), "remote"], capture_output=True, text=True).stdout.strip() == "origin"
+    assert world.snapshot(repo).branch == "dev"
+
+
 def test_ultra_fixtures_register_their_checkpoint_in_the_ledger(tmp_path):
     for name, cp in (("develop_ultra_checkpoint", ["M1"]), ("develop_ultra_proceeds", ["M2"])):
         repo = fixtures.build(name, tmp_path / name)

@@ -30,11 +30,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 pytestmark = pytest.mark.skipif(BASH is None, reason="no bash that actually runs")
 
 
-def _pending(milestone: str):
-    """TEMPORARY, removed milestone by milestone: strict, so a case that passes early fails."""
-    return pytest.mark.xfail(strict=True, reason=f"lands in {milestone}")
-
-
 def _run(repo_dir: Path, *args: str) -> "subprocess.CompletedProcess[str]":
     return subprocess.run([BASH, "scripts/release.sh", *args], cwd=str(repo_dir),
                           capture_output=True, text=True, encoding="utf-8",
@@ -88,7 +83,7 @@ def test_prepare_refuses_main(repo):
     assert "--prepare" in _out(proc), "the refusal must name --prepare, not the generic main rule"
 
 
-def test_prepare_refuses_dev_itself_and_a_detached_head(repo):
+def test_prepare_refuses_dev_itself(repo):
     """dev trivially contains dev, so only an explicit guard keeps the release commit off it."""
     _git(repo, "branch", "dev")
     _git(repo, "switch", "dev")
@@ -99,9 +94,23 @@ def test_prepare_refuses_dev_itself_and_a_detached_head(repo):
                            capture_output=True, text=True, encoding="utf-8").stdout.strip()
     assert count == "0", "no release commit may land on dev"
 
+
+def test_prepare_refuses_a_detached_head(repo):
+    """A release commit on a detached HEAD belongs to no branch and is lost on the next switch."""
+    _git(repo, "branch", "dev")
     _git(repo, "switch", "--detach", "dev")
     proc = _run(repo, "alpha", "0.2.0", "--prepare")
     assert proc.returncode != 0 and "--prepare" in _out(proc)
+    assert _tags(repo) == ["alpha-v0.1.0"]
+
+
+def test_prepare_needs_a_local_dev_to_check_against(repo):
+    """With no local `dev` there is nothing to prove the branch contains; say how to get one."""
+    _git(repo, "switch", "-c", "release/alpha-v0.2.0")
+    proc = _run(repo, "alpha", "0.2.0", "--prepare")
+    assert proc.returncode != 0
+    assert "needs a local 'dev'" in _out(proc) and "git fetch origin dev:dev" in _out(proc)
+    assert _tags(repo) == ["alpha-v0.1.0"]
 
 
 def test_prepare_refuses_a_branch_that_does_not_contain_dev(repo):
@@ -117,6 +126,7 @@ def test_prepare_refuses_a_branch_that_does_not_contain_dev(repo):
     assert proc.returncode != 0
     out = _out(proc)
     assert "--prepare" in out and "dev" in out
+    assert "git fetch --unshallow" in out, "a shallow clone fails this check for lack of history"
     assert _tags(repo) == ["alpha-v0.1.0"]
 
 
@@ -136,21 +146,13 @@ def test_prepare_with_an_unchanged_version_is_refused(release_branch):
     """Nothing to commit means nothing to prepare; say so instead of making an empty commit."""
     proc = _run(release_branch, "alpha", "0.1.0", "--prepare")
     assert proc.returncode != 0
-    assert "--prepare" in _out(proc)
+    assert "already at 0.1.0" in _out(proc), "the refusal must say why, not just name the flag"
+    assert "no release commit to make" in _out(proc)
 
 
 # ------------------------------------------------- (b) one route, stated in three places
 def _read(rel: str) -> str:
     return (REPO_ROOT / rel).read_text(encoding="utf-8")
-
-
-def test_release_sh_pr_route_uses_prepare_not_a_hand_edit():
-    src = RELEASE_SH.read_text(encoding="utf-8")
-    route = src[src.index("PR route"):src.index("# --- Release gates")]
-    assert "--prepare" in route
-    assert "by hand" not in route
-    assert "--base main" in route
-    assert "squash" in route.lower(), "the route must say not to squash the release PR"
 
 
 @pytest.mark.parametrize("doc", ["CLAUDE.md", "CONTRIBUTING.md"])
@@ -167,7 +169,6 @@ def test_release_json_declares_the_prepare_command():
     decl = json.loads(_read(".crucible/release.json"))
     assert decl["from"] == "dev" and decl["to"] == "main"
     assert "--prepare" in decl.get("prepare", []), "release.json has no prepare command"
-    assert "--prepare" in RELEASE_SH.read_text(encoding="utf-8")
 
 
 # ----------------------------------------------- (c) finish-branch, template, develop link
@@ -218,12 +219,14 @@ def world(repo, tmp_path):  # noqa: F811
     return repo
 
 
-def _run_real(repo_dir: Path, tmp_path: Path, *args: str) -> "subprocess.CompletedProcess[str]":
-    """release.sh with `gh` stubbed to a no-op and the interpreter that has pytest."""
+def _run_real(repo_dir: Path, tmp_path: Path, *args: str,
+              gh_body: str = "exit 0") -> "subprocess.CompletedProcess[str]":
+    """release.sh with `gh` stubbed (a no-op unless `gh_body` says otherwise) and the
+    interpreter that has pytest."""
     stub = tmp_path / "bin"
     stub.mkdir(exist_ok=True)
     gh = stub / "gh"
-    gh.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    gh.write_text(f"#!/bin/sh\n{gh_body}\n", encoding="utf-8")
     gh.chmod(0o755)
     env = dict(os.environ, PATH=str(stub) + os.pathsep + os.environ["PATH"], PYTHON=sys.executable)
     return subprocess.run([BASH, "scripts/release.sh", *args], cwd=str(repo_dir), env=env,
@@ -285,3 +288,108 @@ def test_a_release_that_cannot_level_dev_says_so_and_fails(world, tmp_path):
     assert proc.returncode != 0, out
     assert "WARNING" in out and "dev" in out and "NOT levelled" in out
     assert _rev(world, "dev") != _rev(world, "main")
+
+
+# Answers ONLY the branch-protection endpoint release.sh actually queries; any other
+# `gh api` call gets nothing, so the script switching to a different endpoint turns the
+# protected-main test red instead of being silently satisfied.
+_PROTECTED_MAIN = ('if [ "$1" = api ] && [ "$2" = "repos/{owner}/{repo}/branches/main/protection" ]; then '
+                   'echo \'{"required_status_checks": {"contexts": ["checks"]}, '
+                   '"enforce_admins": {"enabled": true}}\'; fi; exit 0')
+
+
+@_POSIX_ONLY
+def test_a_real_run_on_protected_main_prints_the_dev_based_route_and_changes_nothing(world, tmp_path):
+    """The die text only fires when `main` requires checks and enforces them on admins. Drive
+    it for real with a stubbed `gh api`, instead of reading the script's source."""
+    before = _rev(world, "HEAD")
+    proc = _run_real(world, tmp_path, "alpha", "0.2.0", gh_body=_PROTECTED_MAIN)
+    out = _out(proc)
+    assert proc.returncode != 0
+    assert "git switch -c release/alpha-v0.2.0 dev" in out, "the branch is cut off dev, not main"
+    assert "release.sh alpha 0.2.0 --prepare" in out
+    assert "gh pr create --base main" in out
+    assert "MERGE COMMIT" in out and "never squash" in out
+    assert "by hand" not in out
+    assert _rev(world, "HEAD") == before and _tags(world) == ["alpha-v0.1.0"]
+    status = subprocess.run(["git", "status", "--porcelain"], cwd=str(world),
+                            capture_output=True, text=True, encoding="utf-8").stdout
+    assert status == "", "the refusal must leave the manifest and changelog untouched"
+
+
+# ------------------------------------------------ --prepare restores the tree when it fails
+# `--prepare` writes the manifest, then validates the plugin, then cuts the changelog, then
+# commits. A failure after the first write used to leave a dirty tree and a message telling
+# the operator to clean it up. It now puts back exactly the two files it touched.
+_CHANGELOG_WRAPPER = '''import os, subprocess, sys
+here = os.path.dirname(os.path.abspath(__file__))
+if "cut" in sys.argv[1:]:                      # fail like a cut that died half way
+    root = sys.argv[sys.argv.index("--root") + 1]
+    with open(os.path.join(root, "CHANGELOG.md"), "a", encoding="utf-8") as f:
+        f.write("PARTIAL WRITE\\n")
+    sys.exit(1)
+sys.exit(subprocess.call([sys.executable, os.path.join(here, "changelog_real.py"), *sys.argv[1:]]))
+'''
+
+
+def _snapshot(repo_dir: Path) -> dict:
+    return {
+        "head": _rev(repo_dir, "HEAD"),
+        "status": subprocess.run(["git", "status", "--porcelain"], cwd=str(repo_dir), capture_output=True,
+                                 text=True, encoding="utf-8").stdout,
+        "manifest": (repo_dir / "plugins" / "alpha" / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"),
+        "changelog": (repo_dir / "CHANGELOG.md").read_text(encoding="utf-8"),
+        "tags": _tags(repo_dir),
+    }
+
+
+@_POSIX_ONLY
+def test_a_failed_plugin_validation_puts_the_tree_back(release_branch, tmp_path):
+    (tmp_path / "bin").mkdir()
+    claude = tmp_path / "bin" / "claude"
+    claude.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    claude.chmod(0o755)
+    before = _snapshot(release_branch)
+    proc = _run_real(release_branch, tmp_path, "alpha", "0.2.0", "--prepare")
+    out = _out(proc)
+    assert proc.returncode != 0 and "plugin validation failed" in out, out
+    assert "restored" in out, "the refusal must say the tree was put back"
+    assert _snapshot(release_branch) == before, "the manifest, changelog, index and HEAD are as they were"
+
+
+@_POSIX_ONLY
+def test_a_failed_changelog_cut_puts_the_tree_back(release_branch, tmp_path):
+    scripts = release_branch / "scripts"
+    (scripts / "changelog_real.py").write_text((scripts / "changelog.py").read_text(encoding="utf-8"),
+                                               encoding="utf-8")
+    (scripts / "changelog.py").write_text(_CHANGELOG_WRAPPER, encoding="utf-8")
+    _git(release_branch, "add", "-A")
+    _git(release_branch, "commit", "-q", "-m", "test: a changelog cut that fails half way")
+    before = _snapshot(release_branch)
+    proc = _run_real(release_branch, tmp_path, "alpha", "0.2.0", "--prepare")
+    out = _out(proc)
+    assert proc.returncode != 0 and "changelog cut failed" in out, out
+    assert "restored" in out
+    after = _snapshot(release_branch)
+    assert "PARTIAL WRITE" not in after["changelog"], "the half-written changelog must be put back"
+    assert after == before
+
+
+@_POSIX_ONLY
+def test_a_restore_that_cannot_finish_says_so_instead_of_claiming_it_did(release_branch, tmp_path):
+    """`fail()` swallowed the errors of its own `git reset` / `git checkout` and then printed
+    'restored'. With the index locked neither can run, the manifest stays modified, and the
+    message must not claim otherwise."""
+    (tmp_path / "bin").mkdir()
+    claude = tmp_path / "bin" / "claude"
+    claude.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    claude.chmod(0o755)
+    lock = release_branch / ".git" / "index.lock"
+    lock.write_text("", encoding="utf-8")
+    try:
+        proc = _run_real(release_branch, tmp_path, "alpha", "0.2.0", "--prepare")
+    finally:
+        lock.unlink()
+    out = _out(proc)
+    assert proc.returncode != 0 and "restore incomplete" in out, out
+    assert "were restored" not in out

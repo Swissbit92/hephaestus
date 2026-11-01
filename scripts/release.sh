@@ -86,14 +86,14 @@ if [[ "$PREPARE" == "1" ]]; then
   git rev-parse --verify --quiet "refs/heads/$TARGET" >/dev/null \
     || die "--prepare needs a local '$TARGET' branch to check this branch against (git fetch origin $TARGET:$TARGET)"
   git merge-base --is-ancestor "$TARGET" HEAD \
-    || die "--prepare: '$branch' does not contain '$TARGET' — cut the release branch off '$TARGET', or merge '$TARGET' into it, so the release PR carries everything that is on '$TARGET'"
+    || die "--prepare: '$branch' does not contain '$TARGET' — cut the release branch off '$TARGET', or merge '$TARGET' into it, so the release PR carries everything that is on '$TARGET' (in a shallow clone, run 'git fetch --unshallow' first)"
   # The check above is against the LOCAL $TARGET, which passes vacuously when it is behind
   # origin: the release PR would then omit work already merged there. Best-effort fetch (an
   # offline run just compares what it last saw), then hold the branch to origin/$TARGET too.
   git fetch -q origin "$TARGET" >/dev/null 2>&1 || true
   if git rev-parse --verify --quiet "refs/remotes/origin/$TARGET" >/dev/null; then
     git merge-base --is-ancestor "origin/$TARGET" HEAD \
-      || die "--prepare: origin/$TARGET has commits '$branch' lacks (your local '$TARGET' is behind it) — update '$TARGET', then cut the release branch again or merge origin/$TARGET into this one"
+      || die "--prepare: origin/$TARGET has commits '$branch' lacks (your local '$TARGET' is behind it) — update '$TARGET', then cut the release branch again or merge origin/$TARGET into this one (in a shallow clone, run 'git fetch --unshallow' first)"
   fi
 # A dry run changes nothing, so it may preview from any branch (crucible's promote step runs
 # it before integration has reached main); a real release must start from main.
@@ -226,7 +226,8 @@ done
 # --no-merges: a merge subject ("Merge pull request #7 from ...") tells a reader nothing
 # about what shipped, and the commits it brought in are already in the range.
 NOTES="$(git log ${RANGE:+"$RANGE"} --no-merges --pretty='- %s' -- "${PATHSPEC[@]}" 2>/dev/null \
-         | grep -vi '^- Co-Authored' | grep -vi '^- Claude-Session' || true)"
+         | grep -vi '^- Co-Authored' | grep -vi '^- Claude-Session' \
+         | grep -v '^- Release [A-Za-z0-9_.-]*-v[0-9][A-Za-z0-9_.+-]*$' || true)"
 if [[ -z "$NOTES" ]]; then
   # Say which of the two this is. "Maintenance release" reads as a deliberate choice, and
   # for three releases it was silently covering for a filter that matched nothing.
@@ -264,14 +265,32 @@ with open(p, 'w', encoding="utf-8") as f:
     f.write('\n')
 PY
 
+# --prepare made its first write above (the manifest). A failure from here on used to leave a
+# dirty tree and a message asking the operator to clean up. --prepare starts from a clean tree
+# (checked at the top), so putting back exactly the two files it can have touched is exact; it
+# is deliberately NOT `git checkout -- .`, which would also discard anything else.
+fail() {
+  if [[ "$PREPARE" == "1" ]]; then
+    git reset -q -- "$MANIFEST" "$REPO_ROOT/CHANGELOG.md" 2>/dev/null || true
+    git checkout -- "$MANIFEST" "$REPO_ROOT/CHANGELOG.md" 2>/dev/null || true
+    # The two commands above swallow their own errors (a stale .git/index.lock makes both fail),
+    # so check the result instead of assuming it.
+    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+      die "$1 — restore incomplete: the tree is not clean (another git process, or a stale .git/index.lock?). Check 'git status'; nothing was committed"
+    fi
+    die "$1 — the manifest and changelog were restored; nothing was committed"
+  fi
+  die "$1 — check 'git diff', then 'git checkout -- .' before retrying"
+}
+
 if command -v claude >/dev/null 2>&1; then
   claude plugin validate "$PLUGIN_DIR" >/dev/null \
     && echo "✔ plugin validates" \
-    || die "plugin validation failed — check 'git diff', then 'git checkout -- .' before retrying"
+    || fail "plugin validation failed"
 fi
 
 if [[ "$CUT_NEEDED" == "1" ]]; then
-  "$PY" "$CL" --root "$REPO_ROOT" cut "$PLUGIN" "$NEW" || die "changelog cut failed — check 'git diff', then 'git checkout -- .' before retrying"
+  "$PY" "$CL" --root "$REPO_ROOT" cut "$PLUGIN" "$NEW" || fail "changelog cut failed"
   git add "$REPO_ROOT/CHANGELOG.md"
 fi
 
@@ -284,7 +303,7 @@ git add "$MANIFEST"
 if git diff --cached --quiet; then
   echo "note: manifest already at $NEW — nothing to commit; tagging HEAD"
 else
-  git commit -q -m "Release $TAG"
+  git commit -q -m "Release $TAG" || fail "the release commit failed (a hook?)"
 fi
 if [[ "$PREPARE" == "1" ]]; then
   # Stop before the tag and the push: this commit is not released until the PR carrying it

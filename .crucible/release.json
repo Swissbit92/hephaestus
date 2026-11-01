@@ -2,7 +2,49 @@
   "from": "dev",
   "to": "main",
   "via": "pr",
-  "prepare": ["scripts/release.sh", "{plugin}", "{version}", "--prepare"],
-  "command": ["scripts/release.sh", "{plugin}", "{version}"],
-  "dry_run": ["scripts/release.sh", "{plugin}", "{version}", "--dry-run"]
+  "prepare": [
+    "scripts/release.sh",
+    "{plugin}",
+    "{version}",
+    "--prepare"
+  ],
+  "open_pr": [
+    "gh",
+    "pr",
+    "create",
+    "--base",
+    "{to}",
+    "--head",
+    "{branch}",
+    "--title",
+    "Release {plugin} v{version}",
+    "--body-file",
+    ".github/pull_request_template.md"
+  ],
+  "pr_view": [
+    "gh",
+    "pr",
+    "list",
+    "--head",
+    "{branch}",
+    "--base",
+    "{to}",
+    "--state",
+    "open",
+    "--json",
+    "url",
+    "--jq",
+    ".[0].url // empty"
+  ],
+  "command": [
+    "scripts/release.sh",
+    "{plugin}",
+    "{version}"
+  ],
+  "dry_run": [
+    "scripts/release.sh",
+    "{plugin}",
+    "{version}",
+    "--dry-run"
+  ]
 }
