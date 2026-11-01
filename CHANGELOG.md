@@ -4,6 +4,15 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added
+
+- **A test for the hung-push path.** A `git push` that hangs (a `pre-push` hook standing in for a credential prompt) is killed and reported as *could not determine* (exit 2) instead of a plain failure, and a re-run recovers. The 120 s limit is now the module constant `PUSH_TIMEOUT` so the test does not wait for it.
+- **`tests/test_eval_forbidden_commands.py`** pins the forbidden-command checks of the two scenarios that must not act: about 25 read-only commands they must not flag (including the ones that tripped the first live run) and about 40 spellings of the mutations they must catch (`git -c k=v push`, `git tag v1 HEAD`, `git tag --annotate`, `bash -c 'scripts/release.sh …'`, …). It fails on the previous patterns.
+
+### Fixed
+
+- **Two of the three `finish-branch` eval scenarios added in 1.9.0/1.10.0 failed on their own checks, not on the agent.** First live run (claude-opus-5-5, CLI 2.1.316, k=3): `promote-plans-but-does-not-act-without-a-go` 0/3 because the forbidden-command regex matched `git tag -l` (a read-only listing); `opening-a-pr-runs-the-review-gate-not-the-merge` 1/3 because it matched `git merge-base`. Both patterns now match mutating forms and not read-only ones (see the test above). After the fix: promote scenario **3/3 on each of two reruns**; `states-the-pr-base-explicitly` **3/3**; review-gate scenario **13/15 runs** (2/3, 4/4, 2/3, 5/5) — a rate-gated capability scenario (minimum 0.6), so it passes, but **the two misses were never explained** (their per-run detail was not captured, and none of the 9 later runs that were captured missed). These are measurements for one model and CLI version, not guarantees.
+
 ## [crucible-v1.10.0] — 2026-11-01
 
 ### Added
