@@ -4,6 +4,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [crucible-v1.9.0] — 2026-11-01
+
 ### Added
 
 - **`release.sh --prepare`: the release commit is made by the script, on a branch cut off `dev`.** On a release branch that contains `dev`, it bumps `plugin.json`, cuts the changelog and makes one `Release <tag>` commit; it never tags or pushes, and it refuses `main`, `dev` itself, a detached HEAD, a branch missing `dev`, an unchanged version, an unknown flag and `--dry-run` together. The PR-route text no longer tells you to edit the manifest by hand. Route: branch off `dev` → `--prepare` → PR into `main` → merge commit, never a squash → re-run on `main` to tag.
